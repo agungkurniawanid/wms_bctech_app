@@ -486,10 +486,7 @@ class GrinController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-
-    Future.delayed(Duration.zero, () {
-      loadGrinData();
-    });
+    ever(isSearching, (_) => _logger.d('Search state changed'));
   }
 
   Future<void> refreshData() async {
