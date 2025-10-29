@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "506727576074",
+    "project_id": "wms-bct-dev",
+    "storage_bucket": "wms-bct-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:506727576074:android:9e2ae3ed83daf8877025f3",
+        "android_client_info": {
+          "package_name": "id.co.cp.wms_bct"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCaq3GavsiyZBBc69O17DbflGRWI98FDkQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

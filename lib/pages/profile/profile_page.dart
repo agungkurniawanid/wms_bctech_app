@@ -1,0 +1,856 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:wms_bctech/constants/theme_constant.dart';
+import 'package:wms_bctech/helpers/text_helper.dart';
+import 'package:wms_bctech/pages/login_page.dart';
+import 'package:wms_bctech/controllers/auth_controller.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:wms_bctech/models/user/user_model.dart';
+
+class ProfilePage extends StatefulWidget {
+  const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  final NewAuthController _authController = Get.find<NewAuthController>();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
+      GlobalKey<RefreshIndicatorState>();
+
+  NewUserModel? _userData;
+  String? _userName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      await _authController.loadUserId();
+      final String currentUserId = _authController.userId.value;
+
+      if (currentUserId.isEmpty) {
+        debugPrint("User ID is empty");
+        return;
+      }
+      debugPrint("Loading data for user: $currentUserId");
+
+      final DocumentSnapshot roleDocument = await _firestore
+          .collection('role')
+          .doc(currentUserId)
+          .get();
+
+      if (roleDocument.exists) {
+        setState(() {
+          _userData = NewUserModel.fromMap(
+            roleDocument.data() as Map<String, dynamic>,
+          );
+        });
+        debugPrint("Role data loaded successfully");
+      } else {
+        debugPrint("Role document not found for user: $currentUserId");
+      }
+      final DocumentSnapshot userDocument = await _firestore
+          .collection('user')
+          .doc(currentUserId)
+          .get();
+
+      if (userDocument.exists) {
+        setState(() {
+          _userName = userDocument.get('name') as String?;
+        });
+        debugPrint("User name loaded: $_userName");
+      } else {
+        setState(() {
+          _userName = currentUserId;
+        });
+        debugPrint("User document not found, using userId as name");
+      }
+    } catch (e) {
+      debugPrint("Failed to load user data: $e");
+    }
+  }
+
+  Future<void> _refreshData() async {
+    try {
+      debugPrint("Refreshing profile data...");
+      await _loadUserData();
+      await Future.delayed(const Duration(seconds: 1));
+      debugPrint("Profile data refreshed successfully");
+    } catch (e) {
+      debugPrint("Error refreshing profile data: $e");
+      Get.snackbar(
+        'Error',
+        'Gagal memuat ulang data',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  void _triggerRefresh() {
+    _refreshIndicatorKey.currentState?.show();
+  }
+
+  Widget _buildProfileHeader(double fem, double ffem) {
+    final String currentUserId = _authController.userId.value;
+    final String displayName = _userName ?? currentUserId;
+    final String firstLetter = currentUserId.isNotEmpty
+        ? currentUserId[0].toUpperCase()
+        : 'U';
+
+    return Container(
+      width: double.infinity,
+      height: 280 * fem,
+      padding: const EdgeInsets.only(top: 24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [hijauGojek, hijauGojek.withValues(alpha: 0.9)],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(40 * fem),
+          bottomRight: Radius.circular(40 * fem),
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -50 * fem,
+            top: -50 * fem,
+            child: Container(
+              width: 200 * fem,
+              height: 200 * fem,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 120 * fem,
+                  height: 120 * fem,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3 * fem),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 8 * fem,
+                        offset: Offset(0, 4 * fem),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        height: double.infinity,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: hijauGojek,
+                        ),
+                      ),
+                      Center(
+                        child: Text(
+                          firstLetter,
+                          style: TextStyle(
+                            fontFamily: 'MonaSans',
+                            fontSize: 42 * ffem,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 16 * fem),
+                Text(
+                  TextHelper.formatUserName(displayName),
+                  style: TextStyle(
+                    fontFamily: 'MonaSans',
+                    fontSize: 24 * ffem,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: 4 * fem),
+                Text(
+                  '@$currentUserId',
+                  style: TextStyle(
+                    fontFamily: 'MonaSans',
+                    fontSize: 14 * ffem,
+                    color: Colors.white.withValues(alpha: 0.8),
+                  ),
+                ),
+                if (_userData != null)
+                  Container(
+                    margin: EdgeInsets.only(top: 8 * fem),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 12 * fem,
+                      vertical: 4 * fem,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (_userData?.active == 'Y')
+                          ? Colors.green
+                          : Colors.red,
+                      borderRadius: BorderRadius.circular(12 * fem),
+                    ),
+                    child: Text(
+                      (_userData?.active == 'Y') ? 'Active' : 'Inactive',
+                      style: TextStyle(
+                        fontFamily: 'MonaSans',
+                        fontSize: 12 * ffem,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserInfoSection(double fem, double ffem) {
+    final String currentUserId = _authController.userId.value;
+
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16 * fem),
+      padding: EdgeInsets.all(16 * fem),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16 * fem),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8 * fem,
+            offset: Offset(0, 2 * fem),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Informasi Pengguna',
+                style: TextStyle(
+                  fontFamily: 'MonaSans',
+                  fontSize: 18 * ffem,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              IconButton(
+                onPressed: _triggerRefresh,
+                icon: Icon(
+                  Icons.refresh_rounded,
+                  color: hijauGojek,
+                  size: 20 * ffem,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: BoxConstraints(
+                  minWidth: 40 * fem,
+                  minHeight: 40 * fem,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12 * fem),
+          _buildInfoItem(
+            fem,
+            ffem,
+            Icons.person_outline,
+            'Username',
+            currentUserId,
+          ),
+          _buildInfoItem(
+            fem,
+            ffem,
+            Icons.badge_outlined,
+            'Nama',
+            TextHelper.formatUserName(_userName ?? ''),
+          ),
+          _buildInfoItem(
+            fem,
+            ffem,
+            Icons.verified_user_outlined,
+            'Status',
+            (_userData?.active == 'Y') ? 'Aktif' : 'Tidak Aktif',
+          ),
+          if (_userData?.updatedby != null && _userData!.updatedby.isNotEmpty)
+            _buildInfoItem(
+              fem,
+              ffem,
+              Icons.update_outlined,
+              'Terakhir Diupdate Oleh',
+              _userData!.updatedby,
+            ),
+          if (_userData?.updated != null && _userData!.updated.isNotEmpty)
+            _buildInfoItem(
+              fem,
+              ffem,
+              Icons.calendar_today_outlined,
+              'Terakhir Diupdate',
+              _userData!.updated,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccessListSection(double fem, double ffem) {
+    final accessList = _userData?.inList ?? [];
+
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16 * fem),
+      padding: EdgeInsets.all(16 * fem),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16 * fem),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8 * fem,
+            offset: Offset(0, 2 * fem),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.location_on_outlined,
+                color: hijauGojek,
+                size: 20 * ffem,
+              ),
+              SizedBox(width: 8 * fem),
+              Text(
+                'Lokasi Perusahaan',
+                style: TextStyle(
+                  fontFamily: 'MonaSans',
+                  fontSize: 18 * ffem,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+
+          SizedBox(height: 12 * fem),
+          if (accessList.isEmpty)
+            Container(
+              padding: EdgeInsets.all(16 * fem),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8 * fem),
+              ),
+              child: Center(
+                child: Text(
+                  'Tidak ada akses aplikasi',
+                  style: TextStyle(
+                    fontFamily: 'MonaSans',
+                    fontSize: 14 * ffem,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+            )
+          else
+            ...accessList.map((access) => _buildAccessItem(fem, ffem, access)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccessItem(double fem, double ffem, String access) {
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: 8 * fem),
+      padding: EdgeInsets.all(12 * fem),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8 * fem),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 4 * fem,
+            height: 24 * fem,
+            decoration: BoxDecoration(
+              color: hijauGojek,
+              borderRadius: BorderRadius.circular(2 * fem),
+            ),
+          ),
+
+          SizedBox(width: 12 * fem),
+          Expanded(
+            child: Text(
+              access,
+              style: TextStyle(
+                fontFamily: 'MonaSans',
+                fontSize: 14 * ffem,
+                color: Colors.black87,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Icon(Icons.verified_outlined, color: Colors.green, size: 16 * ffem),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoItem(
+    double fem,
+    double ffem,
+    IconData icon,
+    String title,
+    String value,
+  ) {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 8 * fem),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: hijauGojek, size: 20 * ffem),
+          SizedBox(width: 12 * fem),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'MonaSans',
+                    fontSize: 12 * ffem,
+                    color: Colors.grey[600],
+                  ),
+                ),
+
+                SizedBox(height: 2 * fem),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontFamily: 'MonaSans',
+                    fontSize: 14 * ffem,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton(double fem, double ffem) {
+    return Container(
+      margin: EdgeInsets.fromLTRB(20 * fem, 0, 20 * fem, 16 * fem),
+      child: Material(
+        borderRadius: BorderRadius.circular(16 * fem),
+        color: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16 * fem),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                const Color(0xfff44236).withValues(alpha: 0.1),
+                const Color(0xfff44236).withValues(alpha: 0.05),
+              ],
+            ),
+            border: Border.all(
+              color: const Color(0xfff44236).withValues(alpha: 0.3),
+              width: 1.5,
+            ),
+          ),
+          child: InkWell(
+            onTap: _handleLogout,
+            borderRadius: BorderRadius.circular(16 * fem),
+            splashColor: const Color(0xfff44236).withValues(alpha: 0.2),
+            highlightColor: const Color(0xfff44236).withValues(alpha: 0.1),
+            child: Container(
+              padding: EdgeInsets.all(20 * fem),
+              width: double.infinity,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 44 * fem,
+                        height: 44 * fem,
+                        decoration: BoxDecoration(
+                          color: const Color(0xfff44236).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(
+                              0xfff44236,
+                            ).withValues(alpha: 0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.logout_rounded,
+                          color: const Color(0xfff44236),
+                          size: 20 * ffem,
+                        ),
+                      ),
+
+                      SizedBox(width: 16 * fem),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Keluar Akun',
+                            style: TextStyle(
+                              fontFamily: 'MonaSans',
+                              fontSize: 16 * ffem,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xfff44236),
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+
+                          SizedBox(height: 2 * fem),
+                          Text(
+                            'Keluar dari aplikasi',
+                            style: TextStyle(
+                              fontFamily: 'MonaSans',
+                              fontSize: 12 * ffem,
+                              fontWeight: FontWeight.w400,
+                              color: const Color(
+                                0xfff44236,
+                              ).withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  Container(
+                    width: 32 * fem,
+                    height: 32 * fem,
+                    decoration: BoxDecoration(
+                      color: const Color(0xfff44236).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      color: const Color(0xfff44236),
+                      size: 14 * ffem,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildManualRefreshButton(double fem, double ffem) {
+    return Container(
+      margin: EdgeInsets.fromLTRB(20 * fem, 0, 20 * fem, 16 * fem),
+      child: Material(
+        borderRadius: BorderRadius.circular(16 * fem),
+        color: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16 * fem),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                hijauGojek.withValues(alpha: 0.1),
+                hijauGojek.withValues(alpha: 0.05),
+              ],
+            ),
+            border: Border.all(
+              color: hijauGojek.withValues(alpha: 0.3),
+              width: 1.5,
+            ),
+          ),
+          child: InkWell(
+            onTap: _triggerRefresh,
+            borderRadius: BorderRadius.circular(16 * fem),
+            splashColor: hijauGojek.withValues(alpha: 0.2),
+            highlightColor: hijauGojek.withValues(alpha: 0.1),
+            child: Container(
+              padding: EdgeInsets.all(20 * fem),
+              width: double.infinity,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 44 * fem,
+                        height: 44 * fem,
+                        decoration: BoxDecoration(
+                          color: hijauGojek.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: hijauGojek.withValues(alpha: 0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.refresh_rounded,
+                          color: hijauGojek,
+                          size: 20 * ffem,
+                        ),
+                      ),
+
+                      SizedBox(width: 16 * fem),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Refresh Data',
+                            style: TextStyle(
+                              fontFamily: 'MonaSans',
+                              fontSize: 16 * ffem,
+                              fontWeight: FontWeight.w600,
+                              color: hijauGojek,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          SizedBox(height: 2 * fem),
+                          Text(
+                            'Muat ulang data profil',
+                            style: TextStyle(
+                              fontFamily: 'MonaSans',
+                              fontSize: 12 * ffem,
+                              fontWeight: FontWeight.w400,
+                              color: hijauGojek.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  Container(
+                    width: 32 * fem,
+                    height: 32 * fem,
+                    decoration: BoxDecoration(
+                      color: hijauGojek.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      color: hijauGojek,
+                      size: 14 * ffem,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleLogout() async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: const Color(0xfff44236).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.logout_rounded,
+                      size: 40,
+                      color: Color(0xfff44236),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+                  Text(
+                    'Keluar Aplikasi?',
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+                  Text(
+                    'Apakah Anda yakin ingin keluar dari aplikasi? '
+                    'Anda perlu login kembali untuk menggunakan aplikasi.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      height: 1.4,
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.grey[700],
+                            side: BorderSide(color: Colors.grey[300]!),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            backgroundColor: Colors.grey[50],
+                          ),
+                          child: const Text(
+                            'Batal',
+                            style: TextStyle(
+                              fontFamily: 'MonaSans',
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            Navigator.of(context).pop();
+                            await _authController.logout();
+                            Get.offAll(const LoginPage());
+                          },
+                          style: ElevatedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: const Color(0xfff44236),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                            shadowColor: Colors.transparent,
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.logout_rounded, size: 18),
+                              SizedBox(width: 6),
+                              Text(
+                                'Keluar',
+                                style: TextStyle(
+                                  fontFamily: 'MonaSans',
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double baseWidth = 360;
+    final double fem = MediaQuery.of(context).size.width / baseWidth;
+    final double ffem = fem * 0.97;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: RefreshIndicator(
+        key: _refreshIndicatorKey,
+        onRefresh: _refreshData,
+        color: hijauGojek,
+        backgroundColor: Colors.white,
+        strokeWidth: 2.0,
+        displacement: 40.0,
+        child: SingleChildScrollView(
+          physics:
+              const AlwaysScrollableScrollPhysics(), // Penting untuk RefreshIndicator
+          child: Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(color: Colors.white),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _buildProfileHeader(fem, ffem),
+                const SizedBox(height: 24),
+                _buildUserInfoSection(fem, ffem),
+                const SizedBox(height: 16),
+                _buildAccessListSection(fem, ffem),
+                const SizedBox(height: 24),
+                _buildLogoutButton(fem, ffem),
+                _buildManualRefreshButton(fem, ffem),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
