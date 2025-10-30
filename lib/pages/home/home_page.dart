@@ -13,7 +13,6 @@ import 'package:wms_bctech/pages/grin/grin_page.dart';
 import 'package:wms_bctech/pages/out/out_page.dart';
 import 'package:wms_bctech/widgets/clipper.dart';
 import 'package:wms_bctech/widgets/home/home_appbar_widget.dart';
-import 'package:wms_bctech/widgets/home/home_category_section_widget.dart';
 import 'package:wms_bctech/widgets/home/home_menu_card_widget.dart';
 import 'package:wms_bctech/widgets/home/home_more_options_bottom_sheet_widget.dart';
 import 'package:wms_bctech/widgets/home/home_recent_order_carousel_widget.dart';

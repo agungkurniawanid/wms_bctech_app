@@ -96,8 +96,6 @@ class _InDetailPageState extends State<InDetailPage>
   double typeIndexkg = 0.0;
   String datetime = "";
 
-  bool _manualInputFromQR = false;
-
   final List<TextEditingController> listpcsinput = [];
   final List<TextEditingController> listctninput = [];
   final List<TextEditingController> listpallet = [];
@@ -2678,7 +2676,6 @@ class _InDetailPageState extends State<InDetailPage>
       // Reset state ketika bottom sheet ditutup
       setState(() {
         isScanning = false;
-        _manualInputFromQR = false;
       });
     });
   }
