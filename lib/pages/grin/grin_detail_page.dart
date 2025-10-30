@@ -44,9 +44,7 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
   List<Map<String, dynamic>> _detailItems = [];
   List<Map<String, dynamic>> _filteredItems = [];
   final Map<String, String> _productNames = {};
-  String _grinStatus = 'Belum Dikirim'; // Default
-
-  // Variabel untuk mengelola item yang sedang diedit
+  String _grinStatus = 'Belum Dikirim';
   Map<String, dynamic>? _editingItem;
   int _originalQuantity = 0;
 
@@ -70,7 +68,6 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
         _isLoading = true;
       });
 
-      // Load GR IN data
       final grinDoc = await _firestore
           .collection('gr_in')
           .doc(widget.grId)

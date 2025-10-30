@@ -289,51 +289,51 @@ class _OutPageState extends State<OutPage> {
     );
   }
 
-  Widget _buildChoiceChips() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: _listChoice.map((choice) {
-        final isSelected = _selectedChoiceId == choice['id'];
-        final labelText = choice['labelName']!;
+  // Widget _buildChoiceChips() {
+  //   return Row(
+  //     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+  //     children: _listChoice.map((choice) {
+  //       final isSelected = _selectedChoiceId == choice['id'];
+  //       final labelText = choice['labelName']!;
 
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: _getChoiceChipColor(
-                        choice['label']!,
-                      ).withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: ChoiceChip(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            label: Text(
-              labelText,
-              style: TextStyle(
-                color: isSelected ? Colors.white : _textSecondaryColor,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            backgroundColor: Colors.grey.shade100,
-            selected: isSelected,
-            selectedColor: _getChoiceChipColor(choice['label']!),
-            elevation: 0,
-            checkmarkColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            onSelected: (_) => _handleChoiceSelection(choice),
-          ),
-        );
-      }).toList(),
-    );
-  }
+  //       return Container(
+  //         decoration: BoxDecoration(
+  //           borderRadius: BorderRadius.circular(20),
+  //           boxShadow: isSelected
+  //               ? [
+  //                   BoxShadow(
+  //                     color: _getChoiceChipColor(
+  //                       choice['label']!,
+  //                     ).withValues(alpha: 0.3),
+  //                     blurRadius: 8,
+  //                     offset: const Offset(0, 2),
+  //                   ),
+  //                 ]
+  //               : null,
+  //         ),
+  //         child: ChoiceChip(
+  //           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+  //           label: Text(
+  //             labelText,
+  //             style: TextStyle(
+  //               color: isSelected ? Colors.white : _textSecondaryColor,
+  //               fontWeight: FontWeight.w500,
+  //             ),
+  //           ),
+  //           backgroundColor: Colors.grey.shade100,
+  //           selected: isSelected,
+  //           selectedColor: _getChoiceChipColor(choice['label']!),
+  //           elevation: 0,
+  //           checkmarkColor: Colors.white,
+  //           shape: RoundedRectangleBorder(
+  //             borderRadius: BorderRadius.circular(20),
+  //           ),
+  //           onSelected: (_) => _handleChoiceSelection(choice),
+  //         ),
+  //       );
+  //     }).toList(),
+  //   );
+  // }
 
   Color _getChoiceChipColor(String choice) {
     switch (choice) {
@@ -801,7 +801,7 @@ class _OutPageState extends State<OutPage> {
               title: _isSearching
                   ? _buildSearchField()
                   : Text(
-                      "GR In Purchase Order",
+                      "DO Sales Order",
                       style: TextStyle(
                         fontFamily: 'MonaSans',
                         color: Colors.white,
@@ -832,10 +832,10 @@ class _OutPageState extends State<OutPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Filter Chips (tetap ditampilkan tapi fungsinya dinonaktifkan)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: _buildChoiceChips(),
-                    ),
+                    // Padding(
+                    //   padding: const EdgeInsets.only(bottom: 16),
+                    //   child: _buildChoiceChips(),
+                    // ),
                     // Header dengan info dan sort
                     _buildHeader(),
                     const SizedBox(height: 16),

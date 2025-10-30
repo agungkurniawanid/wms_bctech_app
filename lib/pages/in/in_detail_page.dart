@@ -96,6 +96,8 @@ class _InDetailPageState extends State<InDetailPage>
   double typeIndexkg = 0.0;
   String datetime = "";
 
+  bool _manualInputFromQR = false;
+
   final List<TextEditingController> listpcsinput = [];
   final List<TextEditingController> listctninput = [];
   final List<TextEditingController> listpallet = [];
@@ -733,7 +735,6 @@ class _InDetailPageState extends State<InDetailPage>
       );
 
       if (!mounted) return;
-      // Tutup dialog camera juga untuk kasus tidak ditemukan
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
@@ -1034,6 +1035,7 @@ class _InDetailPageState extends State<InDetailPage>
             });
             Navigator.of(context).pop();
           },
+          openManualInput: () => _startManualInput(product, fromQR: true),
         ),
       );
     }
@@ -2229,6 +2231,8 @@ class _InDetailPageState extends State<InDetailPage>
     final progress = qtyOrdered > 0 ? (qtyEntered / qtyOrdered) : 0.0;
     // final progressPercentage = (progress * 100).toInt();
 
+    final isSNInput = indetail.isSN;
+
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -2466,24 +2470,25 @@ class _InDetailPageState extends State<InDetailPage>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.qr_code_scanner_rounded,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                        onPressed: () => _startQRScan(indetail),
-                        tooltip: "Scan QR Code",
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.keyboard,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                        onPressed: () => _startManualInput(indetail),
-                        tooltip: "Input Manual",
-                      ),
+                      isSNInput == "Y"
+                          ? IconButton(
+                              icon: Icon(
+                                Icons.qr_code_scanner_rounded,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                              onPressed: () => _startQRScan(indetail),
+                              tooltip: "Scan QR Code",
+                            )
+                          : IconButton(
+                              icon: Icon(
+                                Icons.keyboard,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                              onPressed: () => _startManualInput(indetail),
+                              tooltip: "Input Manual",
+                            ),
                     ],
                   ),
                 ),
@@ -2642,10 +2647,15 @@ class _InDetailPageState extends State<InDetailPage>
     );
   }
 
-  void _startManualInput(InDetail product) {
+  void _startManualInput(InDetail product, {bool fromQR = false}) {
     // Reset controllers untuk MANUAL MODE
     _serialNumberController.clear();
-    _resetQuantityForMode(false); // Set quantity editable untuk manual
+
+    if (fromQR) {
+      _resetQuantityForMode(true); // Quantity fixed = 1 untuk scan QR
+    } else {
+      _resetQuantityForMode(false); // Quantity editable untuk manual biasa
+    }
 
     // Set product info
     _productNameController.text = product.maktxUI ?? product.mProductId ?? "";
@@ -2654,24 +2664,26 @@ class _InDetailPageState extends State<InDetailPage>
         : _getCurrentInModel().documentno ?? "";
 
     // Tampilkan bottom sheet untuk input manual
-    _showManualInputBottomSheet(product);
+    _showManualInputBottomSheet(product, fromQR: fromQR);
   }
 
-  void _showManualInputBottomSheet(InDetail product) {
+  void _showManualInputBottomSheet(InDetail product, {bool fromQR = false}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _buildManualInputBottomSheet(product),
+      builder: (context) =>
+          _buildManualInputBottomSheet(product, fromQR: fromQR),
     ).then((_) {
       // Reset state ketika bottom sheet ditutup
       setState(() {
         isScanning = false;
+        _manualInputFromQR = false;
       });
     });
   }
 
-  Widget _buildManualInputBottomSheet(InDetail product) {
+  Widget _buildManualInputBottomSheet(InDetail product, {bool fromQR = false}) {
     return Container(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.85,
@@ -2723,7 +2735,7 @@ class _InDetailPageState extends State<InDetailPage>
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Input Manual',
+                            fromQR ? 'Input Manual SN' : 'Input Tanpa SN',
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
@@ -2774,19 +2786,27 @@ class _InDetailPageState extends State<InDetailPage>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Input Manual',
+                                  fromQR
+                                      ? 'Manual dari QR Scan'
+                                      : 'Input Manual',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.orange.shade700,
+                                    color: fromQR
+                                        ? Colors.orange.shade700
+                                        : Colors.blue.shade700,
                                     fontSize: 13,
                                   ),
                                 ),
                                 SizedBox(height: 2),
                                 Text(
-                                  'Quantity dapat disesuaikan, serial number opsional',
+                                  fromQR
+                                      ? 'Quantity otomatis 1 per serial number untuk scan QR code'
+                                      : 'Quantity dapat disesuaikan, serial number opsional',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Colors.orange.shade800,
+                                    color: fromQR
+                                        ? Colors.orange.shade800
+                                        : Colors.blue.shade800,
                                     height: 1.3,
                                   ),
                                 ),
@@ -2856,8 +2876,11 @@ class _InDetailPageState extends State<InDetailPage>
                         SizedBox(height: 8),
                         TextFormField(
                           controller: _serialNumberController,
+                          enabled: fromQR,
                           decoration: InputDecoration(
-                            hintText: "Kosongkan jika tidak ada serial number",
+                            hintText: fromQR
+                                ? "Masukkan serial number"
+                                : "Kosongkan jika tidak ada serial number",
                             hintStyle: TextStyle(
                               color: Colors.grey.shade500,
                               fontSize: 13,
@@ -2990,13 +3013,17 @@ class _InDetailPageState extends State<InDetailPage>
                                             horizontal: 8,
                                           ),
                                         ),
-                                        onChanged: (value) {
-                                          final qty = int.tryParse(value) ?? 1;
-                                          _quantity.value = qty.clamp(
-                                            1,
-                                            999999,
-                                          );
-                                        },
+                                        readOnly: fromQR,
+                                        onChanged: fromQR
+                                            ? null // Tidak bisa diubah jika fromQR
+                                            : (value) {
+                                                final qty =
+                                                    int.tryParse(value) ?? 1;
+                                                _quantity.value = qty.clamp(
+                                                  1,
+                                                  999999,
+                                                );
+                                              },
                                       ),
                                     ),
                                   ),
@@ -3015,14 +3042,19 @@ class _InDetailPageState extends State<InDetailPage>
                                     child: IconButton(
                                       icon: Icon(
                                         Icons.add_rounded,
-                                        color: hijauGojek,
+                                        color: !fromQR
+                                            ? hijauGojek
+                                            : Colors.grey.shade400,
                                         size: 20,
                                       ),
-                                      onPressed: () {
-                                        _quantity.value++;
-                                        _qtyController.text = _quantity.value
-                                            .toString();
-                                      },
+                                      onPressed: !fromQR
+                                          ? () {
+                                              _quantity.value++;
+                                              _qtyController.text = _quantity
+                                                  .value
+                                                  .toString();
+                                            }
+                                          : null,
                                     ),
                                   ),
                                 ],

@@ -46,7 +46,7 @@ class GrinAppbarWidget extends StatelessWidget implements PreferredSizeWidget {
                   onSearchChanged ?? grinController.updateSearchQueryGrinPage,
             )
           : Text(
-              "Good Receive IN",
+              "List Good Receive",
               style: TextStyle(
                 fontFamily: 'MonaSans',
                 color: Colors.white,
