@@ -12,7 +12,7 @@ import 'package:wms_bctech/models/stock_detail_model.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
 import 'package:wms_bctech/controllers/in_controller.dart';
 import 'package:wms_bctech/controllers/pid_controller.dart';
-import 'package:wms_bctech/widgets/text_widget.dart';
+import 'package:wms_bctech/components/text_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:logger/logger.dart';

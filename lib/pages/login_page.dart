@@ -5,8 +5,8 @@ import 'package:wms_bctech/constants/app_constant.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/controllers/auth_controller.dart';
 import 'package:wms_bctech/controllers/firebase_controller.dart';
-import 'package:wms_bctech/widgets/button_widget.dart';
-import 'package:wms_bctech/widgets/text_field_widget.dart';
+import 'package:wms_bctech/components/button_widget.dart';
+import 'package:wms_bctech/components/text_field_widget.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,12 +17,12 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final _usernameFieldKey = GlobalKey<FormFieldState<String>>();
+  final _emailFieldKey = GlobalKey<FormFieldState<String>>();
   final _passwordFieldKey = GlobalKey<FormFieldState<String>>();
   final FirebaseController _firebaseController = FirebaseController();
   final NewAuthController _authController = NewAuthController();
 
-  String _username = '', _password = '', token = '';
+  String _email = '', _password = '', token = '';
 
   @override
   void initState() {
@@ -101,15 +101,15 @@ class _LoginPageState extends State<LoginPage> {
 
                             const SizedBox(height: 20),
                             TextFieldWidget(
-                              fieldKey: _usernameFieldKey,
-                              keyboardType: TextInputType.text,
+                              fieldKey: _emailFieldKey,
+                              keyboardType: TextInputType.emailAddress,
                               isPasswordField: false,
-                              prefixIcon: const Icon(Icons.person),
-                              labelText: 'Username',
+                              prefixIcon: const Icon(Icons.email),
+                              labelText: 'Email',
                               validator: (input) => input?.isEmpty == true
-                                  ? 'Username tidak boleh kosong'
+                                  ? 'Email tidak boleh kosong'
                                   : null,
-                              onSaved: (input) => _username = input ?? '',
+                              onSaved: (input) => _email = input ?? '',
                             ),
 
                             const SizedBox(height: 10),
@@ -131,7 +131,7 @@ class _LoginPageState extends State<LoginPage> {
                                 if (_formKey.currentState?.validate() == true) {
                                   _formKey.currentState?.save();
                                   _authController.loginFunction(
-                                    _username,
+                                    _email,
                                     _password,
                                     context,
                                   );

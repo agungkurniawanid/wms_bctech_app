@@ -7,8 +7,8 @@ import 'package:wms_bctech/controllers/global_controller.dart';
 import 'package:wms_bctech/controllers/in_controller.dart';
 import 'package:wms_bctech/controllers/stock_check_controlller.dart';
 import 'package:wms_bctech/controllers/weborder_controller.dart';
-import 'package:wms_bctech/widgets/out_card_widget.dart';
-import 'package:wms_bctech/widgets/text_widget.dart';
+import 'package:wms_bctech/components/out_card_widget.dart';
+import 'package:wms_bctech/components/text_widget.dart';
 
 class StockCheckPage extends StatefulWidget {
   const StockCheckPage({super.key});

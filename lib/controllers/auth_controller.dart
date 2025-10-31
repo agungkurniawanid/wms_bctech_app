@@ -12,7 +12,7 @@ import 'package:wms_bctech/controllers/global_controller.dart';
 import 'package:wms_bctech/models/user/user_model.dart';
 import 'package:wms_bctech/pages/app_bottom_navigation_page.dart';
 import 'package:wms_bctech/pages/login_page.dart';
-import 'package:wms_bctech/widgets/awesome_snackbar_widget.dart';
+import 'package:wms_bctech/components/awesome_snackbar_widget.dart';
 import 'package:logger/web.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -30,16 +30,20 @@ class NewAuthController extends GetxController {
   // Reactive variables
   var userData = Rxn<NewUserModel>();
   var userName = RxnString();
+  var userEmail = RxnString(); // Tambahan untuk menyimpan email
 
   Future<void> loadUserId() async {
     final prefs = await SharedPreferences.getInstance();
     userId.value = prefs.getString('userid') ?? '';
+    userEmail.value = prefs.getString('useremail') ?? '';
   }
 
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('userid');
+    await prefs.remove('useremail');
     userId.value = '';
+    userEmail.value = null;
   }
 
   Future<String?> getUserId() async {
@@ -67,35 +71,97 @@ class NewAuthController extends GetxController {
     }
   }
 
-  Future<String> checkLdap(String username) async {
-    final uri = Uri.parse(AppConstants.ldapCheckUrl);
-    final body = jsonEncode({'username': username, 'password': ''});
+  Future<Map<String, dynamic>?> authenticateWithLdap(
+    String email,
+    String password,
+  ) async {
+    try {
+      final uri = Uri.parse(AppConstants.ldapCheckUrl);
+      final body = jsonEncode({'username': email, 'password': password});
 
-    final res = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: body,
-    );
+      final res = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
 
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      if (data is Map && data.containsKey('message')) {
-        return data['message'].toString();
+      if (res.statusCode == 200) {
+        if (res.body.isEmpty) {
+          return {'status': -1, 'message': 'Empty response'};
+        }
+
+        final data = jsonDecode(res.body);
+        return data;
       } else {
-        return 'Unexpected response';
+        debugPrint('LDAP HTTP ${res.statusCode} → ${res.body}');
+        return {'status': -1, 'message': 'HTTP ${res.statusCode}'};
       }
-    } else {
-      debugPrint('LDAP HTTP ${res.statusCode} → ${res.body}');
-      return 'HTTP ${res.statusCode}';
+    } catch (e) {
+      _logger.e('LDAP authentication error: $e');
+      return {'status': -1, 'message': 'Connection error'};
     }
   }
 
-  Future<void> loginFunction(String username, String password, context) async {
+  Future<bool> checkUserInFirestore(String email) async {
+    try {
+      // Cari user berdasarkan email di collection role
+      final querySnapshot = await _firestore
+          .collection('role')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        return false;
+      }
+
+      final roleDoc = querySnapshot.docs.first;
+      final roleData = roleDoc.data();
+
+      // Check jika user aktif
+      if (roleData['active']?.toString().toUpperCase() != 'Y') {
+        return false;
+      }
+
+      // Simpan user data untuk penggunaan selanjutnya
+      userData.value = NewUserModel.fromMap(roleData);
+      userName.value = roleData['username']?.toString() ?? '';
+      userEmail.value = email;
+
+      return true;
+    } catch (e) {
+      _logger.e('Error checking user in Firestore: $e');
+      return false;
+    }
+  }
+
+  Future<bool> verifyBypassPassword(String password) async {
+    try {
+      final authDoc = await _firestore.collection('auth').doc('bisi').get();
+      if (!authDoc.exists) {
+        return false;
+      }
+
+      final authData = authDoc.data() ?? {};
+      final bypass = authData['bypass']?.toString() ?? '';
+
+      return bypass == password;
+    } catch (e) {
+      _logger.e('Error verifying bypass password: $e');
+      return false;
+    }
+  }
+
+  Future<void> loginFunction(
+    String email,
+    String password,
+    BuildContext context,
+  ) async {
     if (!await _connectivityController.checkConnection()) {
       AwesomeSnackbarWidget.show(
         context: context,
         msg: 'Tidak ada koneksi internet!',
-        type: ContentType.success,
+        type: ContentType.failure,
         top: true,
       );
       return;
@@ -105,85 +171,62 @@ class NewAuthController extends GetxController {
     try {
       final tokenValue = _firebaseController.token ?? '';
 
-      final ldapRes = await http.post(
-        Uri.parse('https://srm.cp.co.id/api/ldap/check'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'username': username, 'password': ''}),
-      );
+      // Authenticate dengan LDAP
+      final ldapResult = await authenticateWithLdap(email, password);
 
-      final data = jsonDecode(ldapRes.body);
-      final message = data['message']?.toString() ?? '';
-
-      _logger.i("LDAP response: $message (status: ${ldapRes.statusCode})");
-
-      if (message == 'LDAP User is not found') {
+      if (ldapResult == null) {
         AwesomeSnackbarWidget.show(
           context: context,
-          msg: 'User belum terdaftar di LDAP.',
+          msg: 'Gagal terhubung ke server.',
+          type: ContentType.failure,
+          top: true,
+        );
+        return;
+      }
+
+      final status = ldapResult['status'] as int?;
+      final message = ldapResult['message']?.toString() ?? '';
+      final ldapEmail = ldapResult['email']?.toString() ?? '';
+
+      _logger.i(
+        "LDAP response - Status: $status, Message: $message, Email: $ldapEmail",
+      );
+
+      // Handle empty response (user tidak ditemukan di LDAP)
+      if (status == -1 && message == 'Empty response') {
+        AwesomeSnackbarWidget.show(
+          context: context,
+          msg: 'User tidak ditemukan di sistem.',
           type: ContentType.warning,
           top: true,
         );
         return;
       }
 
-      if (message == 'Wrong password') {
-        final roleDoc = await _firestore.collection('role').doc(username).get();
-        if (!roleDoc.exists) {
+      // Handle case 1: Login failed di LDAP tapi user ada
+      if (status == 1 && message.contains('FAILED')) {
+        // Check jika user ada di Firestore berdasarkan email
+        final userExists = await checkUserInFirestore(ldapEmail);
+
+        if (!userExists) {
           AwesomeSnackbarWidget.show(
             context: context,
-            msg: 'User belum terdaftar di Firestore.',
+            msg: 'User belum terdaftar di aplikasi.',
             type: ContentType.warning,
             top: true,
           );
           return;
         }
 
-        final roleData = roleDoc.data() ?? {};
-        if (roleData['active']?.toString().toUpperCase() != 'Y') {
-          AwesomeSnackbarWidget.show(
-            context: context,
-            msg: 'User belum aktif.',
-            type: ContentType.warning,
-            top: true,
-          );
-          return;
-        }
+        // Verify bypass password
+        final isBypassValid = await verifyBypassPassword(password);
 
-        final authDoc = await _firestore.collection('auth').doc('bisi').get();
-        if (!authDoc.exists) {
-          AwesomeSnackbarWidget.show(
-            context: context,
-            msg: 'Auth document "bisi" not found.',
-            type: ContentType.warning,
-            top: true,
-          );
-          return;
-        }
-
-        final authData = authDoc.data() ?? {};
-        final bypass = authData['bypass'] ?? '';
-
-        if (bypass == password) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('userid', username);
-
-          await _firestore.collection('auth').doc('bisi').update({
-            'lastLogin': DateTime.now(),
-            'lastToken': tokenValue,
-          });
-
-          _logger.i('Login sukses untuk $username');
-          AwesomeSnackbarWidget.show(
-            context: context,
-            msg: 'Login sukses.',
-            type: ContentType.success,
-            top: true,
-          );
-
-          await Future.delayed(const Duration(seconds: 2));
-          Navigator.pushReplacement(
+        if (isBypassValid) {
+          await _completeLogin(
+            userName.value ?? '',
+            ldapEmail,
+            tokenValue,
             context,
-            MaterialPageRoute(builder: (_) => const AppBottomNavigation()),
           );
         } else {
           AwesomeSnackbarWidget.show(
@@ -195,9 +238,35 @@ class NewAuthController extends GetxController {
         }
         return;
       }
+
+      // Handle case 2: Login success di LDAP
+      if (status == 0 && message.contains('SUCCESS')) {
+        // Check jika user ada di Firestore berdasarkan email
+        final userExists = await checkUserInFirestore(ldapEmail);
+
+        if (!userExists) {
+          AwesomeSnackbarWidget.show(
+            context: context,
+            msg: 'User belum terdaftar di aplikasi.',
+            type: ContentType.warning,
+            top: true,
+          );
+          return;
+        }
+
+        await _completeLogin(
+          userName.value ?? '',
+          ldapEmail,
+          tokenValue,
+          context,
+        );
+        return;
+      }
+
+      // Handle other cases
       AwesomeSnackbarWidget.show(
         context: context,
-        msg: 'Terjadi kesalahan.',
+        msg: 'Terjadi kesalahan: $message',
         type: ContentType.failure,
         top: true,
       );
@@ -205,12 +274,82 @@ class NewAuthController extends GetxController {
       _logger.e('Login error: $e', stackTrace: st);
       AwesomeSnackbarWidget.show(
         context: context,
-        msg: 'Terjadi kesalahan.',
+        msg: 'Terjadi kesalahan sistem.',
         type: ContentType.failure,
         top: true,
       );
     } finally {
       EasyLoading.dismiss();
+    }
+  }
+
+  Future<void> _completeLogin(
+    String username,
+    String email,
+    String tokenValue,
+    BuildContext context,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('userid', username);
+      await prefs.setString('useremail', email);
+
+      globalVM.username.value = username;
+
+      await _firestore.collection('auth').doc('bisi').update({
+        'lastLogin': FieldValue.serverTimestamp(),
+        'lastToken': tokenValue,
+      });
+
+      _logger.i('Login sukses untuk $username ($email)');
+
+      AwesomeSnackbarWidget.show(
+        context: context,
+        msg: 'Login sukses.',
+        type: ContentType.success,
+        top: true,
+      );
+
+      await Future.delayed(const Duration(seconds: 2));
+
+      if (context.mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AppBottomNavigation()),
+        );
+      }
+    } catch (e) {
+      _logger.e('Error completing login: $e');
+      rethrow;
+    }
+  }
+
+  Future<NewUserModel?> getUserData() async {
+    try {
+      await loadUserId();
+      final String currentUserId = userId.value;
+      if (currentUserId.isEmpty) return null;
+
+      final qs = await _firestore
+          .collection('role')
+          .where('username', isEqualTo: currentUserId)
+          .limit(1)
+          .get();
+
+      if (qs.docs.isEmpty) return null;
+
+      final roleData = qs.docs.first.data();
+      final model = NewUserModel.fromMap(roleData);
+
+      // SIMPAN ke variabel reactive
+      userData.value = model;
+      userName.value = roleData['username']?.toString() ?? '';
+      userEmail.value = roleData['email']?.toString() ?? '';
+
+      return model;
+    } catch (e) {
+      _logger.e('Error getUserData: $e');
+      return null;
     }
   }
 

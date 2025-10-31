@@ -4,8 +4,8 @@ import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/models/stock_take_model.dart';
 import 'package:wms_bctech/pages/stock_take_header_page.dart';
 import 'package:wms_bctech/controllers/stock_tick_controller.dart';
-import 'package:wms_bctech/widgets/out_card_widget.dart';
-import 'package:wms_bctech/widgets/text_widget.dart';
+import 'package:wms_bctech/components/out_card_widget.dart';
+import 'package:wms_bctech/components/text_widget.dart';
 
 class StockTickPage extends StatefulWidget {
   const StockTickPage({super.key});

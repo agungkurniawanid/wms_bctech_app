@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:wms_bctech/controllers/in_controller.dart';
 import 'package:wms_bctech/pages/in/in_detail_page.dart';
-import 'package:wms_bctech/widgets/home/home_recent_order_card_widget.dart';
+import 'package:wms_bctech/components/home/home_recent_order_card_widget.dart';
 
 class HomeRecentOrderCarouselWidget extends StatefulWidget {
   final List<Map<String, dynamic>> data;
@@ -51,7 +51,7 @@ class _HomeRecentOrderCarouselWidgetState
             "recent", // from - gunakan nilai khusus untuk mode recent
             matchingPO, // flag - data PO yang akan ditampilkan
             null, // grId - tidak perlu GR ID di mode read-only
-            isReadOnlyMode: true, // ✅ PARAMETER READ-ONLY
+            isReadOnlyMode: false, // ✅ PARAMETER READ-ONLY
           ),
         ),
       );

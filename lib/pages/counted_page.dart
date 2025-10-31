@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:wms_bctech/models/stock_take_detail_model.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
 import 'package:wms_bctech/controllers/stock_tick_controller.dart';
-import 'package:wms_bctech/widgets/text_widget.dart';
+import 'package:wms_bctech/components/text_widget.dart';
 
 class CountedPage extends StatefulWidget {
   final int index;

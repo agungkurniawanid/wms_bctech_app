@@ -4,7 +4,6 @@ import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
 import 'package:wms_bctech/pages/login_page.dart';
 import 'package:wms_bctech/controllers/auth_controller.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:wms_bctech/models/user/user_model.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -16,12 +15,8 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final NewAuthController _authController = Get.find<NewAuthController>();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
-
-  NewUserModel? _userData;
-  String? _userName;
 
   @override
   void initState() {
@@ -31,46 +26,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadUserData() async {
     try {
-      await _authController.loadUserId();
-      final String currentUserId = _authController.userId.value;
-
-      if (currentUserId.isEmpty) {
-        debugPrint("User ID is empty");
-        return;
-      }
-      debugPrint("Loading data for user: $currentUserId");
-
-      final DocumentSnapshot roleDocument = await _firestore
-          .collection('role')
-          .doc(currentUserId)
-          .get();
-
-      if (roleDocument.exists) {
-        setState(() {
-          _userData = NewUserModel.fromMap(
-            roleDocument.data() as Map<String, dynamic>,
-          );
-        });
-        debugPrint("Role data loaded successfully");
-      } else {
-        debugPrint("Role document not found for user: $currentUserId");
-      }
-      final DocumentSnapshot userDocument = await _firestore
-          .collection('user')
-          .doc(currentUserId)
-          .get();
-
-      if (userDocument.exists) {
-        setState(() {
-          _userName = userDocument.get('name') as String?;
-        });
-        debugPrint("User name loaded: $_userName");
-      } else {
-        setState(() {
-          _userName = currentUserId;
-        });
-        debugPrint("User document not found, using userId as name");
-      }
+      await _authController.getUserData();
     } catch (e) {
       debugPrint("Failed to load user data: $e");
     }
@@ -98,104 +54,108 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildProfileHeader(double fem, double ffem) {
-    final String currentUserId = _authController.userId.value;
-    final String displayName = _userName ?? currentUserId;
-    final String firstLetter = currentUserId.isNotEmpty
-        ? currentUserId[0].toUpperCase()
-        : 'U';
+    return Obx(() {
+      final username =
+          _authController.userName.value ?? _authController.userId.value;
+      final email = _authController.userEmail.value ?? '';
+      final isActive = _authController.userData.value?.active == 'Y';
 
-    return Container(
-      width: double.infinity,
-      height: 280 * fem,
-      padding: const EdgeInsets.only(top: 24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [hijauGojek, hijauGojek.withValues(alpha: 0.9)],
+      final String firstLetter = username.isNotEmpty
+          ? username[0].toUpperCase()
+          : 'U';
+
+      return Container(
+        width: double.infinity,
+        height: 280 * fem,
+        padding: const EdgeInsets.only(top: 24),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [hijauGojek, hijauGojek.withValues(alpha: 0.9)],
+          ),
+          borderRadius: BorderRadius.only(
+            bottomLeft: Radius.circular(40 * fem),
+            bottomRight: Radius.circular(40 * fem),
+          ),
         ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(40 * fem),
-          bottomRight: Radius.circular(40 * fem),
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -50 * fem,
-            top: -50 * fem,
-            child: Container(
-              width: 200 * fem,
-              height: 200 * fem,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
+        child: Stack(
+          children: [
+            Positioned(
+              right: -50 * fem,
+              top: -50 * fem,
+              child: Container(
+                width: 200 * fem,
+                height: 200 * fem,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
               ),
             ),
-          ),
 
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 120 * fem,
-                  height: 120 * fem,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3 * fem),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 8 * fem,
-                        offset: Offset(0, 4 * fem),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        height: double.infinity,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: hijauGojek,
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 120 * fem,
+                    height: 120 * fem,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3 * fem),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 8 * fem,
+                          offset: Offset(0, 4 * fem),
                         ),
-                      ),
-                      Center(
-                        child: Text(
-                          firstLetter,
-                          style: TextStyle(
-                            fontFamily: 'MonaSans',
-                            fontSize: 42 * ffem,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                      ],
+                    ),
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          height: double.infinity,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: hijauGojek,
                           ),
                         ),
+                        Center(
+                          child: Text(
+                            firstLetter,
+                            style: TextStyle(
+                              fontFamily: 'MonaSans',
+                              fontSize: 42 * ffem,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 16 * fem),
+                  Text(
+                    TextHelper.formatUserName(username),
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 24 * ffem,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 4 * fem),
+                  if (email.isNotEmpty)
+                    Text(
+                      email,
+                      style: TextStyle(
+                        fontFamily: 'MonaSans',
+                        fontSize: 14 * ffem,
+                        color: Colors.white.withValues(alpha: 0.8),
                       ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 16 * fem),
-                Text(
-                  TextHelper.formatUserName(displayName),
-                  style: TextStyle(
-                    fontFamily: 'MonaSans',
-                    fontSize: 24 * ffem,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-                SizedBox(height: 4 * fem),
-                Text(
-                  '@$currentUserId',
-                  style: TextStyle(
-                    fontFamily: 'MonaSans',
-                    fontSize: 14 * ffem,
-                    color: Colors.white.withValues(alpha: 0.8),
-                  ),
-                ),
-                if (_userData != null)
+                    ),
                   Container(
                     margin: EdgeInsets.only(top: 8 * fem),
                     padding: EdgeInsets.symmetric(
@@ -203,13 +163,11 @@ class _ProfilePageState extends State<ProfilePage> {
                       vertical: 4 * fem,
                     ),
                     decoration: BoxDecoration(
-                      color: (_userData?.active == 'Y')
-                          ? Colors.green
-                          : Colors.red,
+                      color: isActive ? Colors.green : Colors.red,
                       borderRadius: BorderRadius.circular(12 * fem),
                     ),
                     child: Text(
-                      (_userData?.active == 'Y') ? 'Active' : 'Inactive',
+                      isActive ? 'Active' : 'Inactive',
                       style: TextStyle(
                         fontFamily: 'MonaSans',
                         fontSize: 12 * ffem,
@@ -218,168 +176,174 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildUserInfoSection(double fem, double ffem) {
-    final String currentUserId = _authController.userId.value;
+    return Obx(() {
+      final username =
+          _authController.userName.value ?? _authController.userId.value;
+      final email = _authController.userEmail.value ?? '';
+      final userData = _authController.userData.value;
+      final isActive = userData?.active == 'Y';
 
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16 * fem),
-      padding: EdgeInsets.all(16 * fem),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16 * fem),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8 * fem,
-            offset: Offset(0, 2 * fem),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Informasi Pengguna',
-                style: TextStyle(
-                  fontFamily: 'MonaSans',
-                  fontSize: 18 * ffem,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+      return Container(
+        margin: EdgeInsets.symmetric(horizontal: 16 * fem),
+        padding: EdgeInsets.all(16 * fem),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16 * fem),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 8 * fem,
+              offset: Offset(0, 2 * fem),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Informasi Pengguna',
+                  style: TextStyle(
+                    fontFamily: 'MonaSans',
+                    fontSize: 18 * ffem,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
                 ),
-              ),
-              IconButton(
-                onPressed: _triggerRefresh,
-                icon: Icon(
-                  Icons.refresh_rounded,
-                  color: hijauGojek,
-                  size: 20 * ffem,
+                IconButton(
+                  onPressed: _triggerRefresh,
+                  icon: Icon(
+                    Icons.refresh_rounded,
+                    color: hijauGojek,
+                    size: 20 * ffem,
+                  ),
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints(
+                    minWidth: 40 * fem,
+                    minHeight: 40 * fem,
+                  ),
                 ),
-                padding: EdgeInsets.zero,
-                constraints: BoxConstraints(
-                  minWidth: 40 * fem,
-                  minHeight: 40 * fem,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 12 * fem),
-          _buildInfoItem(
-            fem,
-            ffem,
-            Icons.person_outline,
-            'Username',
-            currentUserId,
-          ),
-          _buildInfoItem(
-            fem,
-            ffem,
-            Icons.badge_outlined,
-            'Nama',
-            TextHelper.formatUserName(_userName ?? ''),
-          ),
-          _buildInfoItem(
-            fem,
-            ffem,
-            Icons.verified_user_outlined,
-            'Status',
-            (_userData?.active == 'Y') ? 'Aktif' : 'Tidak Aktif',
-          ),
-          if (_userData?.updatedby != null && _userData!.updatedby.isNotEmpty)
+              ],
+            ),
+            SizedBox(height: 12 * fem),
             _buildInfoItem(
               fem,
               ffem,
-              Icons.update_outlined,
-              'Terakhir Diupdate Oleh',
-              _userData!.updatedby,
+              Icons.person_outline,
+              'Username',
+              username,
             ),
-          if (_userData?.updated != null && _userData!.updated.isNotEmpty)
+            if (email.isNotEmpty)
+              _buildInfoItem(fem, ffem, Icons.email_outlined, 'Email', email),
             _buildInfoItem(
               fem,
               ffem,
-              Icons.calendar_today_outlined,
-              'Terakhir Diupdate',
-              _userData!.updated,
+              Icons.verified_user_outlined,
+              'Status',
+              isActive ? 'Aktif' : 'Tidak Aktif',
             ),
-        ],
-      ),
-    );
+            if (userData?.updatedby != null && userData!.updatedby.isNotEmpty)
+              _buildInfoItem(
+                fem,
+                ffem,
+                Icons.update_outlined,
+                'Terakhir Diupdate Oleh',
+                userData.updatedby,
+              ),
+            if (userData?.updated != null && userData!.updated.isNotEmpty)
+              _buildInfoItem(
+                fem,
+                ffem,
+                Icons.calendar_today_outlined,
+                'Terakhir Diupdate',
+                userData.updated,
+              ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildAccessListSection(double fem, double ffem) {
-    final accessList = _userData?.inList ?? [];
+    return Obx(() {
+      final accessList = _authController.userData.value?.inList ?? [];
 
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16 * fem),
-      padding: EdgeInsets.all(16 * fem),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16 * fem),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8 * fem,
-            offset: Offset(0, 2 * fem),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.location_on_outlined,
-                color: hijauGojek,
-                size: 20 * ffem,
-              ),
-              SizedBox(width: 8 * fem),
-              Text(
-                'Lokasi Perusahaan',
-                style: TextStyle(
-                  fontFamily: 'MonaSans',
-                  fontSize: 18 * ffem,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+      return Container(
+        margin: EdgeInsets.symmetric(horizontal: 16 * fem),
+        padding: EdgeInsets.all(16 * fem),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16 * fem),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 8 * fem,
+              offset: Offset(0, 2 * fem),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  color: hijauGojek,
+                  size: 20 * ffem,
                 ),
-              ),
-            ],
-          ),
-
-          SizedBox(height: 12 * fem),
-          if (accessList.isEmpty)
-            Container(
-              padding: EdgeInsets.all(16 * fem),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(8 * fem),
-              ),
-              child: Center(
-                child: Text(
-                  'Tidak ada akses aplikasi',
+                SizedBox(width: 8 * fem),
+                Text(
+                  'Lokasi Perusahaan',
                   style: TextStyle(
                     fontFamily: 'MonaSans',
-                    fontSize: 14 * ffem,
-                    color: Colors.grey[600],
+                    fontSize: 18 * ffem,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
                 ),
+              ],
+            ),
+
+            SizedBox(height: 12 * fem),
+            if (accessList.isEmpty)
+              Container(
+                padding: EdgeInsets.all(16 * fem),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8 * fem),
+                ),
+                child: Center(
+                  child: Text(
+                    'Tidak ada akses aplikasi',
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 14 * ffem,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
+              )
+            else
+              ...accessList.map(
+                (access) => _buildAccessItem(fem, ffem, access),
               ),
-            )
-          else
-            ...accessList.map((access) => _buildAccessItem(fem, ffem, access)),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildAccessItem(double fem, double ffem, String access) {
@@ -829,8 +793,7 @@ class _ProfilePageState extends State<ProfilePage> {
         strokeWidth: 2.0,
         displacement: 40.0,
         child: SingleChildScrollView(
-          physics:
-              const AlwaysScrollableScrollPhysics(), // Penting untuk RefreshIndicator
+          physics: const AlwaysScrollableScrollPhysics(),
           child: Container(
             width: double.infinity,
             decoration: const BoxDecoration(color: Colors.white),

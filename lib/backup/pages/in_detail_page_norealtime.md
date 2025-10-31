@@ -8,20 +8,19 @@ import 'package:flutter/cupertino.dart';
 import 'package:wms_bctech/config/global_variable_config.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/constants/utils_constant.dart';
-import 'package:wms_bctech/controllers/grin/grin_controller.dart';
 import 'package:wms_bctech/helpers/date_helper.dart';
 import 'package:wms_bctech/helpers/number_helper.dart';
 import 'package:wms_bctech/models/category_model.dart';
 import 'package:wms_bctech/models/grin/good_receive_serial_number_detail_model.dart';
+import 'package:wms_bctech/models/grin/good_receive_serial_number_model.dart';
 import 'package:wms_bctech/models/in/in_detail_model.dart';
 import 'package:wms_bctech/models/in/in_model.dart';
 import 'package:wms_bctech/models/item_choice_model.dart';
-import 'package:wms_bctech/pages/grin/grin_page.dart';
 import 'package:wms_bctech/pages/my_dialog_page.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
 import 'package:wms_bctech/controllers/in_controller.dart';
-import 'package:wms_bctech/components/product_detail_bottomsheet_widget.dart';
-import 'package:wms_bctech/components/scanner_dialog_widget.dart';
+import 'package:wms_bctech/widgets/product_detail_bottomsheet_widget.dart';
+import 'package:wms_bctech/widgets/scanner_dialog_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:logger/logger.dart';
@@ -34,18 +33,8 @@ class InDetailPage extends StatefulWidget {
   final int index;
   final String from;
   final InModel? flag;
-  final String? grId;
-  final bool isReadOnlyMode;
 
-  const InDetailPage(
-    this.index,
-    this.from,
-    this.flag,
-    this.grId, {
-
-    super.key,
-    this.isReadOnlyMode = false,
-  });
+  const InDetailPage(this.index, this.from, this.flag, {super.key});
 
   @override
   State<InDetailPage> createState() => _InDetailPageState();
@@ -76,20 +65,12 @@ class _InDetailPageState extends State<InDetailPage>
   final TextEditingController containerinput = TextEditingController();
   final descriptioninputkey = GlobalKey<FormFieldState<String>>();
   final formKey = GlobalKey<FormState>();
-  final RxBool _isSendingToKafka = false.obs;
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   TextEditingController? _controllerctn;
   TextEditingController? _controllerpcs;
   TextEditingController? _controllerkg;
-  bool _isDisposed = false;
-  late bool isReadOnlyMode;
-
-  // ✅ VARIABLE PENAMPUNG GR ID DAN STATUS
-  String? _currentGrId; // Menyimpan grId yang pertama kali digenerate
-  bool _isGrIdSavedToFirestore =
-      false; // Status apakah grId sudah disimpan ke Firestore
-  final List<GoodReceiveSerialNumberDetailModel> _pendingGrDetails =
-      []; // Menampung detail sementara
 
   int typeIndexctn = 0;
   int typeIndexpcs = 0;
@@ -124,8 +105,6 @@ class _InDetailPageState extends State<InDetailPage>
   String? ebeln;
   String? barcodeScanRes;
 
-  final _inController = Get.find<InVM>();
-
   final RxList<InDetail> detailsList = <InDetail>[].obs;
   final RxBool isDetailsLoading = false.obs;
   final RxString detailsError = ''.obs;
@@ -153,14 +132,6 @@ class _InDetailPageState extends State<InDetailPage>
   final TextEditingController _documentNoController = TextEditingController();
   final ValueNotifier<int> _quantity = ValueNotifier<int>(1);
 
-  StreamSubscription<List<InDetail>>? _detailsStreamSubscription;
-  StreamSubscription<InModel?>? _poDataStreamSubscription;
-  // Observable untuk data realtime
-  final RxList<InDetail> _realtimeDetailsList = <InDetail>[].obs;
-  final Rx<InModel?> _realtimeInModel = Rx<InModel?>(null);
-
-  final _logger = Logger();
-
   @override
   void initState() {
     super.initState();
@@ -171,101 +142,11 @@ class _InDetailPageState extends State<InDetailPage>
     _serialNumberController.addListener(_onSerialNumberChanged);
     _qtyController.text = "1";
 
-    _currentGrId = widget.grId;
-    _isGrIdSavedToFirestore = widget.grId != null;
-
-    isReadOnlyMode = widget.isReadOnlyMode;
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeWithRealData();
-      _startRealtimeListeners();
     });
 
     _loadDetails();
-  }
-
-  // Method untuk memulai realtime listeners
-  void _startRealtimeListeners() {
-    final String documentNo =
-        widget.flag?.documentno ??
-        (widget.from == "sync"
-            ? widget.flag?.documentno ?? ""
-            : (getCurrentInModel()?.documentno ?? ""));
-
-    if (documentNo.isEmpty) {
-      debugPrint('Document number tidak ditemukan untuk realtime listener');
-      return;
-    }
-
-    // Cancel previous subscriptions
-    _detailsStreamSubscription?.cancel();
-    _poDataStreamSubscription?.cancel();
-
-    try {
-      // Start details stream dengan error handling
-      _detailsStreamSubscription = inVM
-          .getDetailsByDocumentNoWithFilter(documentNo)
-          .listen(
-            (List<InDetail> details) {
-              if (mounted) {
-                setState(() {
-                  _realtimeDetailsList.assignAll(details);
-                  detailsList.assignAll(details);
-                });
-              }
-            },
-            onError: (error) {
-              debugPrint('Error dalam details stream: $error');
-              if (mounted) {
-                setState(() {
-                  detailsError.value = 'Error realtime: $error';
-                });
-              }
-            },
-            cancelOnError: false,
-          );
-
-      // Start PO data stream dengan safe check
-      _poDataStreamSubscription = inVM
-          .getPODataStream(documentNo)
-          .listen(
-            (InModel? updatedModel) {
-              if (mounted && updatedModel != null) {
-                // Validasi data sebelum update
-                if (_isValidInModel(updatedModel)) {
-                  setState(() {
-                    _realtimeInModel.value = updatedModel;
-
-                    // Update widget.flag jika dari sync
-                    if (widget.from == "sync" && widget.flag != null) {
-                      _updateFlagWithNewData(updatedModel);
-                    }
-                  });
-                }
-              }
-            },
-            onError: (error) {
-              debugPrint('Error dalam PO data stream: $error');
-            },
-            cancelOnError: false,
-          );
-    } catch (e) {
-      debugPrint('Error starting realtime listeners: $e');
-    }
-  }
-
-  bool _isValidInModel(InModel model) {
-    return model.documentno != null && model.documentno!.isNotEmpty;
-  }
-
-  // Update flag dengan data baru dari realtime
-  void _updateFlagWithNewData(InModel updatedModel) {
-    // Update properti yang diperlukan
-    widget.flag?.details = updatedModel.details;
-    widget.flag?.dateordered = updatedModel.dateordered;
-    widget.flag?.cBpartnerId = updatedModel.cBpartnerId;
-    widget.flag?.docstatus = updatedModel.docstatus;
-    // Tambahkan properti lain yang perlu diupdate
   }
 
   // Fungsi untuk memuat details berdasarkan documentno dari flag
@@ -280,17 +161,14 @@ class _InDetailPageState extends State<InDetailPage>
         return;
       }
 
-      // Untuk initial load, gunakan method biasa
       final List<InDetail> details = await inVM.getDetailsByDocumentNo(
         documentNo,
       );
 
       detailsList.assignAll(details);
-      _realtimeDetailsList.assignAll(details);
 
       if (details.isEmpty) {
-        detailsError.value =
-            'No pending items found (all items are fully delivered)';
+        detailsError.value = 'No details found for this document';
       }
     } catch (e) {
       detailsError.value = 'Error loading details: $e';
@@ -302,18 +180,33 @@ class _InDetailPageState extends State<InDetailPage>
 
   Future<void> _handleRefresh() async {
     try {
+      // Tampilkan loading indicator
       setState(() {
         isDetailsLoading.value = true;
       });
 
-      // Restart realtime listeners
-      _startRealtimeListeners();
-
-      // Juga lakukan manual refresh untuk memastikan data terbaru
+      // Reload data details
       await _loadDetails();
 
-      Logger().i('Data berhasil diperbarui dengan realtime listeners.');
+      // Juga reload data utama jika diperlukan
+      if (widget.from == "sync") {
+        // Untuk data sync, reload dari flag
+        if (widget.flag != null) {
+          setState(() {
+            // Refresh data lokal dari flag
+            listindetaillocal.clear();
+            listindetaillocal.addAll(widget.flag?.details ?? []);
+          });
+        }
+      } else {
+        // Untuk data normal, trigger reload di controller
+        await inVM.refreshData();
+      }
+
+      // Tampilkan feedback sukses
+      Logger().i('Data berhasil diperbarui.');
     } catch (e) {
+      // Tampilkan feedback error
       Logger().e('Error during refresh: $e');
     } finally {
       if (mounted) {
@@ -444,38 +337,9 @@ class _InDetailPageState extends State<InDetailPage>
   }
 
   InModel _getCurrentInModel() {
-    // Prioritaskan data realtime jika ada dan valid
-    if (_realtimeInModel.value != null &&
-        _isValidInModel(_realtimeInModel.value!)) {
-      return _realtimeInModel.value!;
-    }
-
     if (widget.from == "sync") {
       return widget.flag!;
     } else {
-      // Safe access dengan fallback
-      final currentModel = getCurrentInModel();
-      if (currentModel != null) {
-        return currentModel;
-      } else {
-        // Fallback ke data awal atau buat default
-        debugPrint('Fallback to initial data');
-        return InModel(); // atau return default empty model
-      }
-    }
-  }
-
-  InModel? getCurrentInModel() {
-    if (widget.from == "sync") {
-      return widget.flag;
-    } else {
-      // Safe check untuk index
-      if (inVM.tolistPO.length <= widget.index) {
-        debugPrint(
-          'Index out of bounds: ${widget.index}, list length: ${inVM.tolistPO.length}',
-        );
-        return null;
-      }
       return inVM.tolistPO[widget.index];
     }
   }
@@ -501,7 +365,7 @@ class _InDetailPageState extends State<InDetailPage>
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _startCameraScanImproved();
+              _startCameraScanImproved(); // Panggil method yang diperbaiki
             },
             child: const Text("Kamera HP"),
           ),
@@ -510,6 +374,7 @@ class _InDetailPageState extends State<InDetailPage>
     );
   }
 
+  // Method baru untuk camera scan yang lebih baik
   Future<void> _startCameraScanImproved() async {
     if (isScanning) return;
 
@@ -596,16 +461,16 @@ class _InDetailPageState extends State<InDetailPage>
   }
 
   List<InDetail> _findProductByBarcode(String barcode) {
-    // Gunakan realtime details list
-    final allProducts = _realtimeDetailsList;
+    // Gunakan detailsList yang sudah di-load dari API
+    final allProducts = detailsList;
 
     if (allProducts.isEmpty) {
-      debugPrint('Realtime details list is empty');
+      debugPrint('Details list is empty');
       return [];
     }
 
     debugPrint('Searching for barcode: $barcode');
-    debugPrint('Total products in realtime list: ${allProducts.length}');
+    debugPrint('Total products in list: ${allProducts.length}');
 
     final foundProducts = allProducts.where((product) {
       final productId = product.mProductId?.toLowerCase() ?? '';
@@ -733,6 +598,7 @@ class _InDetailPageState extends State<InDetailPage>
       );
 
       if (!mounted) return;
+      // Tutup dialog camera juga untuk kasus tidak ditemukan
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
@@ -954,14 +820,10 @@ class _InDetailPageState extends State<InDetailPage>
 
   @override
   void dispose() {
-    // Hentikan semua stream subscriptions
-    _detailsStreamSubscription?.cancel();
-    _poDataStreamSubscription?.cancel();
     _searchQuery.dispose();
     _mobileScannerController?.dispose();
     _serialNumberController.dispose();
     _qtyController.dispose();
-    _isDisposed = true;
     _productNameController.dispose();
     _documentNoController.dispose();
     _quantity.dispose();
@@ -976,11 +838,7 @@ class _InDetailPageState extends State<InDetailPage>
 
   // Update method untuk menghitung total dari detailsList
   String _calculateTotalPcs() {
-    final displayList = _realtimeDetailsList.isNotEmpty
-        ? _realtimeDetailsList
-        : detailsList;
-
-    final total = displayList.fold<double>(
+    final total = detailsList.fold<double>(
       0,
       (currentSum, item) => currentSum + (item.qtuom ?? 0),
     );
@@ -1009,9 +867,10 @@ class _InDetailPageState extends State<InDetailPage>
       scannedSerialNumber = "";
     });
 
-    // Reset controllers untuk SCAN MODE
+    // Reset controllers
     _serialNumberController.clear();
-    _resetQuantityForMode(true); // Set quantity fixed untuk scan
+    _qtyController.text = "1";
+    _quantity.value = 1;
 
     // Set product info
     _productNameController.text = product.maktxUI ?? product.mProductId ?? "";
@@ -1025,24 +884,15 @@ class _InDetailPageState extends State<InDetailPage>
         barrierDismissible: false,
         builder: (context) => QRScannerDialog(
           onQRCodeDetected: (qrCode) {
+            // Process QR code and show bottom sheet
             _processQRCodeResult(qrCode, product);
+
           },
           onClose: () {
             setState(() {
               isScanning = false;
             });
             Navigator.of(context).pop();
-          },
-          // Di dalam QRScannerDialog atau method yang memanggil manual input dari QR
-          openManualInput: () {
-            // Tutup dialog scanner terlebih dahulu
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-            // Tunggu sebentar lalu buka manual input
-            Future.delayed(const Duration(milliseconds: 300), () {
-              _startManualInput(product, fromQR: true);
-            });
           },
         ),
       );
@@ -1054,430 +904,194 @@ class _InDetailPageState extends State<InDetailPage>
   }
 
   Widget _buildScanResultBottomSheet(InDetail product) {
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.85,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header dengan drag indicator
-          Container(
-            width: 40,
-            height: 4,
-            margin: EdgeInsets.only(top: 8, bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
+    return SingleChildScrollView(
+      child: Container(
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        padding: EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
           ),
-
-          Expanded(
-            child: SingleChildScrollView(
-              physics: ClampingScrollPhysics(),
-              child: Container(
-                padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(24),
-                    topRight: Radius.circular(24),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Hasil Scan QR Code',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: hijauGojek,
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header dengan close button
-                    Container(
-                      padding: EdgeInsets.only(top: 8, bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 0,
-                            offset: Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Hasil Scan QR Code',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: hijauGojek,
-                              fontFamily: 'MonaSans',
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            icon: Container(
-                              padding: EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.close_rounded,
-                                color: Colors.grey.shade600,
-                                size: 20,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    SizedBox(height: 24),
-
-                    // Informasi Card
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.green.shade100),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.qr_code_scanner_rounded,
-                                color: hijauGojek,
-                                size: 18,
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                'Scan QR Code Berhasil',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: hijauGojek,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Quantity otomatis 1 per serial number untuk scan QR code',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.green.shade800,
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    SizedBox(height: 24),
-
-                    // Document No
-                    _buildModernInfoField(
-                      label: "Document No PO",
-                      value: _documentNoController.text,
-                      icon: Icons.description_outlined,
-                    ),
-
-                    SizedBox(height: 16),
-
-                    // Product Name
-                    _buildModernInfoField(
-                      label: "Nama Product",
-                      value: _productNameController.text,
-                      icon: Icons.inventory_2_outlined,
-                    ),
-
-                    SizedBox(height: 16),
-
-                    // Serial Number Section
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Serial Number",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade700,
-                            fontFamily: 'MonaSans',
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 16,
-                                  ),
-                                  child: Text(
-                                    _serialNumberController.text.isEmpty
-                                        ? 'Tidak ada serial number'
-                                        : _serialNumberController.text,
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      color:
-                                          _serialNumberController.text.isEmpty
-                                          ? Colors.grey.shade500
-                                          : Colors.grey.shade800,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                width: 1,
-                                height: 24,
-                                color: Colors.grey.shade300,
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.camera_alt_rounded,
-                                  color: hijauGojek,
-                                  size: 20,
-                                ),
-                                onPressed: () => _restartScanner(product),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    SizedBox(height: 20),
-
-                    // Quantity Section
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Quantity",
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                "Scan QR Code",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: hijauGojek.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: hijauGojek.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.confirmation_number_outlined,
-                                  color: hijauGojek,
-                                  size: 16,
-                                ),
-                                SizedBox(width: 6),
-                                Text(
-                                  "1",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: hijauGojek,
-                                    fontSize: 16,
-                                    fontFamily: 'MonaSans',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Spacer untuk memberikan ruang di atas button
-                    SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Fixed Bottom Action Buttons
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(20, 16, 20, 32),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                top: BorderSide(color: Colors.grey.shade200, width: 1),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: Offset(0, -2),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: Icon(Icons.close, color: Colors.grey),
                 ),
               ],
             ),
-            child: SafeArea(
-              top: false,
-              child: Row(
-                children: [
-                  // Close button
-                  Expanded(
-                    flex: 2,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        _resetForm();
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        side: BorderSide(color: Colors.grey.shade400),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        backgroundColor: Colors.transparent,
-                      ),
-                      child: Text(
-                        'Tutup',
-                        style: TextStyle(
-                          color: Colors.grey.shade700,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                  ),
 
-                  SizedBox(width: 12),
+            SizedBox(height: 20),
 
-                  // Save & Scan Again button
-                  Expanded(
-                    flex: 3,
-                    child: ElevatedButton(
-                      onPressed: () => _saveScanResult(product),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: hijauGojek,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                        shadowColor: Colors.transparent,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.save_alt_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          SizedBox(width: 6),
-                          Text(
-                            'Simpan & Scan Lagi',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                              fontFamily: 'MonaSans',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            // Document No
+            _buildReadOnlyField(
+              label: "Document No PO",
+              value: _documentNoController.text,
+              icon: Icons.description,
             ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildModernInfoField({
-    required String label,
-    required String value,
-    required IconData icon,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade700,
-            fontFamily: 'MonaSans',
-          ),
-        ),
-        SizedBox(height: 8),
-        Container(
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: Colors.grey.shade600, size: 20),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  value.isEmpty ? 'Tidak tersedia' : value,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: value.isEmpty
-                        ? Colors.grey.shade500
-                        : Colors.grey.shade800,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+            SizedBox(height: 16),
+
+            // Product Name
+            _buildReadOnlyField(
+              label: "Nama Product",
+              value: _productNameController.text,
+              icon: Icons.inventory_2,
+            ),
+
+            SizedBox(height: 16),
+
+            // Serial Number
+            TextFormField(
+              controller: _serialNumberController,
+              decoration: InputDecoration(
+                labelText: "Serial Number",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.qr_code_2),
+                suffixIcon: IconButton(
+                  icon: Icon(Icons.camera_alt),
+                  onPressed: () => _restartScanner(product),
                 ),
               ),
-            ],
-          ),
+              readOnly: true, // Make it read-only since it comes from scanner
+            ),
+
+            SizedBox(height: 16),
+
+            // Quantity Section
+            Text(
+              "Quantity",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+
+            SizedBox(height: 12),
+
+            ValueListenableBuilder<int>(
+              valueListenable: _quantity,
+              builder: (context, quantity, child) {
+                return Row(
+                  children: [
+                    // Decrement button
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: IconButton(
+                        icon: Icon(Icons.remove),
+                        onPressed: () {
+                          if (quantity > 1) {
+                            _quantity.value--;
+                            _qtyController.text = _quantity.value.toString();
+                          }
+                        },
+                      ),
+                    ),
+
+                    SizedBox(width: 16),
+
+                    // Quantity input
+                    Expanded(
+                      child: TextFormField(
+                        controller: _qtyController,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: "Jumlah",
+                        ),
+                        onChanged: (value) {
+                          final qty = int.tryParse(value) ?? 1;
+                          _quantity.value = qty;
+                        },
+                      ),
+                    ),
+
+                    SizedBox(width: 16),
+
+                    // Increment button
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: IconButton(
+                        icon: Icon(Icons.add),
+                        onPressed: () {
+                          _quantity.value++;
+                          _qtyController.text = _quantity.value.toString();
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+
+            SizedBox(height: 30),
+
+            // Action Buttons
+            Row(
+              children: [
+                // Close button
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _resetForm();
+                    },
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(color: hijauGojek),
+                    ),
+                    child: Text('Close', style: TextStyle(color: hijauGojek)),
+                  ),
+                ),
+
+                SizedBox(width: 12),
+
+                // Save button
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _saveScanResult(product),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: hijauGojek,
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(
+                      'Save & Scan Lagi',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -1493,11 +1107,8 @@ class _InDetailPageState extends State<InDetailPage>
 
   void _saveScanResult(InDetail product) async {
     final serialNumber = _serialNumberController.text.trim();
+    final quantity = _quantity.value;
 
-    // ✅ UNTUK SCAN QR: QUANTITY SELALU 1
-    final quantity = 1; // Fixed quantity untuk scan QR
-
-    // Validasi input
     if (serialNumber.isEmpty) {
       Fluttertoast.showToast(
         msg: "Serial number tidak boleh kosong untuk scan QR",
@@ -1506,91 +1117,42 @@ class _InDetailPageState extends State<InDetailPage>
       return;
     }
 
-    // Validasi format serial number
-    if (serialNumber.length < 2) {
+    if (quantity <= 0) {
       Fluttertoast.showToast(
-        msg: "Serial number terlalu pendek. Minimal 2 karakter.",
+        msg: "Quantity harus lebih dari 0",
         backgroundColor: Colors.orange,
       );
       return;
     }
 
     try {
+      // Show loading
       setState(() {
         isScanning = false;
       });
 
-      // ✅ VALIDASI SERIAL NUMBER UNIK SECARA GLOBAL
-      _logger.d('🔍 Memvalidasi serial number: $serialNumber');
-      final isSerialNumberUnique = await _validateSerialNumberBeforeSave(
-        serialNumber,
-      );
+      // Save to Firestore
+      await _saveToFirestore(product, serialNumber, quantity);
 
-      if (!isSerialNumberUnique) {
-        return; // Stop execution if validation fails
-      }
-
-      _logger.d('✅ Serial number valid, menampilkan konfirmasi...');
-
-      // ✅ TAMPILKAN DIALOG KONFIRMASI SEBELUM MENYIMPAN
-      _showSaveConfirmationDialog(
-        product,
-        serialNumber,
-        quantity,
-        fromQR: true,
-        shouldCloseBottomSheet: true, // ✅ TUTUP BOTTOM SHEET SETELAH SIMPAN
-        shouldNavigate: false, // ✅ JANGAN NAVIGASI
-        onAfterSave: () {
-          // ✅ CALLBACK SETELAH SIMPAN BERHASIL - TAMPILKAN KEMBALI CAMERA SCANNING
-          _logger.d('🔄 Menampilkan kembali camera scanning setelah simpan...');
-
-          // Tunggu sebentar untuk memastikan bottom sheet tertutup
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) {
-              _startQRScan(product);
-            }
-          });
-        },
-      );
-    } catch (e) {
+      // Show success message
       Fluttertoast.showToast(
-        msg: "Gagal memvalidasi: $e",
+        msg: "Serial number berhasil disimpan: $serialNumber x$quantity",
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+
+      // Restart scanner for next item
+      _restartScanner(product);
+    } catch (e) {
+      // Show error message
+      Fluttertoast.showToast(
+        msg: "Gagal menyimpan: $e",
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
-    }
-  }
 
-  void _restartQRScanner(InDetail product) async {
-    _logger.d('🔄 Restart QR Scanner...');
-
-    // Reset form terlebih dahulu
-    _resetForm();
-
-    // Set state untuk scanning
-    setState(() {
-      isScanning = true;
-      scannedSerialNumber = "";
-    });
-
-    // Tunggu sebentar sebelum memulai scanner
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    if (mounted) {
-      _logger.d('📷 Memulai ulang QR Scanner...');
-      await _startQRScan(product);
-    }
-  }
-
-  void _resetQuantityForMode(bool isScanMode) {
-    if (isScanMode) {
-      // Untuk scan mode, set quantity ke 1 dan disable controls
-      _quantity.value = 1;
-      _qtyController.text = "1";
-    } else {
-      // Untuk manual mode, set quantity ke 1 tapi biarkan editable
-      _quantity.value = 1;
-      _qtyController.text = "1";
+      // Restart scanner anyway
+      _restartScanner(product);
     }
   }
 
@@ -1599,6 +1161,42 @@ class _InDetailPageState extends State<InDetailPage>
     _qtyController.text = "1";
     _quantity.value = 1;
     scannedSerialNumber = "";
+  }
+
+  Widget _buildReadOnlyField({
+    required String label,
+    required String value,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.grey.shade600),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _processQRCodeResult(String qrCode, InDetail product) {
@@ -1612,7 +1210,6 @@ class _InDetailPageState extends State<InDetailPage>
     // Close scanner dialog first
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
-      _logger.d('📱 Dialog scanner ditutup sebelum menampilkan bottom sheet');
     }
 
     // Wait a bit then show bottom sheet
@@ -1642,24 +1239,22 @@ class _InDetailPageState extends State<InDetailPage>
     final query = search.toLowerCase();
 
     if (search.isEmpty) {
-      // Reset ke semua data realtime
-      if (_realtimeDetailsList.isNotEmpty) {
-        detailsList.assignAll(_realtimeDetailsList);
-      }
+      // Reset ke semua data
+      _loadDetails();
       return;
     }
 
-    final sourceList = _realtimeDetailsList.isNotEmpty
-        ? _realtimeDetailsList
-        : detailsList;
-
-    final filteredList = sourceList.where((e) {
+    final filteredList = detailsList.where((e) {
       final name = e.maktxUI?.toLowerCase() ?? '';
       final sku = e.mProductId?.toLowerCase() ?? '';
       return name.contains(query) || sku.contains(query);
     }).toList();
 
-    detailsList.assignAll(filteredList);
+    // Untuk sementara, kita assign filtered list ke observable
+    // Dalam implementasi real, Anda mungkin ingin membuat list terpisah untuk filtered data
+    if (filteredList.isNotEmpty) {
+      detailsList.assignAll(filteredList);
+    }
   }
 
   String calculateTotalCtn() {
@@ -1798,31 +1393,31 @@ class _InDetailPageState extends State<InDetailPage>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.check_circle_outline,
+                  Icons.inventory_2_outlined,
                   size: 80,
-                  color: Colors.green[400],
+                  color: Colors.grey[400],
                 ),
                 SizedBox(height: 16),
                 Text(
-                  'All Items Fully Delivered',
+                  'No Products Found',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Colors.green[600],
+                    color: Colors.grey[600],
                   ),
                 ),
                 SizedBox(height: 8),
                 Text(
                   detailsError.value.isNotEmpty
                       ? detailsError.value
-                      : 'All purchase order items have been completely delivered',
+                      : 'No product details available for this purchase order',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                 ),
                 SizedBox(height: 20),
                 if (detailsError.value.isNotEmpty)
                   ElevatedButton.icon(
-                    onPressed: _handleRefresh,
+                    onPressed: _handleRefresh, // Gunakan method refresh
                     icon: Icon(Icons.refresh),
                     label: Text('Retry'),
                     style: ElevatedButton.styleFrom(
@@ -2240,23 +1835,12 @@ class _InDetailPageState extends State<InDetailPage>
   }
 
   Widget _buildModernProductCard(InDetail indetail, int index) {
-    final qtyEntered = indetail.qtyEntered?.toInt() ?? 0;
-    final qtyOrdered = indetail.qtyordered?.toInt() ?? 0;
-    final remainingQty = qtyOrdered - qtyEntered;
-    final progress = qtyOrdered > 0 ? (qtyEntered / qtyOrdered) : 0.0;
-    // final progressPercentage = (progress * 100).toInt();
-
-    final isSNInput = indetail.isSN;
-
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: hijauGojek.withValues(alpha: 0.3), width: 2),
-        boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-        ],
       ),
       child: Container(
         decoration: BoxDecoration(
@@ -2270,19 +1854,13 @@ class _InDetailPageState extends State<InDetailPage>
         child: Stack(
           children: [
             Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: isReadOnlyMode ? 16 : 60,
-                top: 16,
-                bottom: 16,
-              ),
+              padding: EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Product Icon dengan status realtime
                       Container(
                         width: 50,
                         height: 50,
@@ -2290,33 +1868,10 @@ class _InDetailPageState extends State<InDetailPage>
                           color: hijauGojek.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Stack(
-                          children: [
-                            Center(
-                              child: Icon(
-                                Icons.inventory_2,
-                                color: hijauGojek,
-                                size: 24,
-                              ),
-                            ),
-                            // Indicator realtime
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: Colors.green,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: Icon(
+                          Icons.inventory_2,
+                          color: hijauGojek,
+                          size: 24,
                         ),
                       ),
                       SizedBox(width: 12),
@@ -2324,9 +1879,8 @@ class _InDetailPageState extends State<InDetailPage>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Product Name
                             Text(
-                              indetail.mProductName ?? "Product Name",
+                              indetail.maktxUI ?? "Product Name",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -2335,7 +1889,6 @@ class _InDetailPageState extends State<InDetailPage>
                               overflow: TextOverflow.ellipsis,
                             ),
                             SizedBox(height: 4),
-                            // SKU
                             Text(
                               indetail.mProductId ?? "SKU",
                               style: TextStyle(
@@ -2343,55 +1896,6 @@ class _InDetailPageState extends State<InDetailPage>
                                 fontSize: 14,
                               ),
                             ),
-                            SizedBox(height: 12),
-
-                            // PROGRESS BAR realtime
-                            // _buildProgressBarChart(
-                            //   qtyEntered,
-                            //   qtyOrdered,
-                            //   progressPercentage,
-                            // ),
-                            SizedBox(height: 8),
-
-                            // STATUS BADGE realtime
-                            if (progress > 0)
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _getStatusColor(
-                                    progress,
-                                  ).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: _getStatusColor(
-                                      progress,
-                                    ).withValues(alpha: 0.3),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _getStatusIcon(progress),
-                                      size: 12,
-                                      color: _getStatusColor(progress),
-                                    ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      _getStatusText(progress),
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: _getStatusColor(progress),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
                           ],
                         ),
                       ),
@@ -2399,8 +1903,6 @@ class _InDetailPageState extends State<InDetailPage>
                   ),
 
                   SizedBox(height: 12),
-
-                  // QUANTITY CHIPS SECTION realtime
                   Container(
                     padding: EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -2408,71 +1910,45 @@ class _InDetailPageState extends State<InDetailPage>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      mainAxisAlignment: MainAxisAlignment.start,
                       children: [
-                        _buildQuantityChipWithLabel(
-                          "Total Pesanan",
-                          "$qtyOrdered",
-                          Icons.shopping_cart,
+                        // todo: dont delete this
+                        // _buildQuantityChip("CTN", "${indetail.qtctn ?? 0}"),
+                        _buildQuantityChip(
+                          "UNIT",
+                          "${indetail.qtyordered?.toInt() ?? 0}",
                         ),
-                        _buildQuantityChipWithLabel(
-                          "Sudah Dikirim",
-                          "$qtyEntered",
-                          Icons.check_circle,
-                        ),
-                        _buildQuantityChipWithLabel(
-                          "Sisa Kirim",
-                          "$remainingQty",
-                          Icons.pending_actions,
-                        ),
+
+                        // todo: dont delete this
+                        // if (indetail.vfdat?.isNotEmpty ?? false)
+                        //   _buildQuantityChip(
+                        //     "EXP",
+                        //     _formatDate(indetail.vfdat!),
+                        //   ),
                       ],
                     ),
                   ),
-
-                  // DESCRIPTION realtime
                   if (indetail.descr?.isNotEmpty ?? false) ...[
                     SizedBox(height: 8),
-                    Container(
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(6),
+                    Text(
+                      indetail.descr!,
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.note,
-                            size: 14,
-                            color: Colors.blue.shade600,
-                          ),
-                          SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              indetail.descr!,
-                              style: TextStyle(
-                                color: Colors.blue.shade800,
-                                fontSize: 11,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ],
               ),
             ),
-
-            // ACTION BUTTONS
-            if (widget.from != "history" && !isReadOnlyMode)
+            if (widget.from != "history")
               Positioned(
                 right: 0,
                 top: 0,
                 bottom: 0,
                 child: Container(
-                  width: 50,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.only(
                       topRight: Radius.circular(12),
@@ -2485,25 +1961,17 @@ class _InDetailPageState extends State<InDetailPage>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      isSNInput == "Y"
-                          ? IconButton(
-                              icon: Icon(
-                                Icons.qr_code_scanner_rounded,
-                                color: Colors.white,
-                                size: 28,
-                              ),
-                              onPressed: () => _startQRScan(indetail),
-                              tooltip: "Scan QR Code",
-                            )
-                          : IconButton(
-                              icon: Icon(
-                                Icons.keyboard,
-                                color: Colors.white,
-                                size: 28,
-                              ),
-                              onPressed: () => _startManualInput(indetail),
-                              tooltip: "Input Manual",
-                            ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.qr_code_scanner_rounded,
+                          color: Colors.white,
+                        ),
+                        onPressed: () => _startQRScan(indetail),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.keyboard, color: Colors.white),
+                        onPressed: () => _startManualInput(indetail),
+                      ),
                     ],
                   ),
                 ),
@@ -2514,163 +1982,11 @@ class _InDetailPageState extends State<InDetailPage>
     );
   }
 
-  // Progress Bar menggunakan progress_bar_chart
-  // Widget _buildProgressBarChart(
-  //   int qtyEntered,
-  //   int qtyOrdered,
-  //   int progressPercentage,
-  // ) {
-  //   final remainingQty = qtyOrdered - qtyEntered;
-  //   final remainingPercentage = 100 - progressPercentage;
-
-  //   final List<StatisticsItem> progressStats = [
-  //     StatisticsItem(
-  //       hijauGojek,
-  //       progressPercentage.toDouble(),
-  //       title: 'Terkirim',
-  //     ),
-
-  //     if (remainingPercentage > 0)
-  //       StatisticsItem(
-  //         Colors.grey.shade400,
-  //         remainingPercentage.toDouble(),
-  //         title: 'Sisa',
-  //       ),
-  //   ];
-
-  //   return Column(
-  //     children: [
-  //       ProgressBarChart(
-  //         values: progressStats,
-  //         height: 25,
-  //         borderRadius: 12,
-  //         totalPercentage: 100.0,
-  //         unitLabel: '%',
-  //       ),
-
-  //       SizedBox(height: 6),
-
-  //       // Legend untuk progress information
-  //       Row(
-  //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //         children: [
-  //           // Completed - HIJAU
-  //           Row(
-  //             children: [
-  //               Container(
-  //                 width: 12,
-  //                 height: 12,
-  //                 decoration: BoxDecoration(
-  //                   color: hijauGojek,
-  //                   shape: BoxShape.circle,
-  //                 ),
-  //               ),
-  //               SizedBox(width: 4),
-  //               Text(
-  //                 'Selesai: $progressPercentage% ($qtyEntered)',
-  //                 style: TextStyle(
-  //                   fontSize: 11,
-  //                   color: Colors.green.shade700,
-  //                   fontWeight: FontWeight.w500,
-  //                 ),
-  //               ),
-  //             ],
-  //           ),
-
-  //           // Remaining - ABU-ABU
-  //           if (remainingQty > 0)
-  //             Row(
-  //               children: [
-  //                 Container(
-  //                   width: 12,
-  //                   height: 12,
-  //                   decoration: BoxDecoration(
-  //                     color: Colors.grey.shade400,
-  //                     shape: BoxShape.circle,
-  //                   ),
-  //                 ),
-  //                 SizedBox(width: 4),
-  //                 Text(
-  //                   'Sisa: $remainingPercentage% ($remainingQty)',
-  //                   style: TextStyle(
-  //                     fontSize: 11,
-  //                     color: Colors.grey.shade600,
-  //                     fontWeight: FontWeight.w500,
-  //                   ),
-  //                 ),
-  //               ],
-  //             ),
-  //         ],
-  //       ),
-  //     ],
-  //   );
-  // }
-
-  Color _getStatusColor(double progress) {
-    if (progress >= 1.0) return Colors.green;
-    if (progress >= 0.7) return Colors.blue;
-    if (progress >= 0.3) return Colors.orange;
-    return Colors.grey; // Default color untuk progress 0%
-  }
-
-  IconData _getStatusIcon(double progress) {
-    if (progress >= 1.0) return Icons.check_circle;
-    if (progress >= 0.7) return Icons.download_done;
-    if (progress >= 0.3) return Icons.pending;
-    return Icons.inventory_2; // Default icon untuk progress 0%
-  }
-
-  String _getStatusText(double progress) {
-    if (progress >= 1.0) return "Selesai 100%";
-    if (progress >= 0.7) return "Progress Baik";
-    if (progress >= 0.3) return "Dalam Proses";
-    return "Menunggu"; // Default text untuk progress 0%
-  }
-
-  // Updated Quantity Chip dengan Label
-  Widget _buildQuantityChipWithLabel(
-    String label,
-    String value,
-    IconData icon,
-  ) {
-    return Column(
-      children: [
-        Container(
-          padding: EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: Icon(icon, size: 16, color: hijauGojek),
-        ),
-        SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-            color: hijauGojek,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
-  void _startManualInput(InDetail product, {bool fromQR = false}) {
-    // Reset controllers untuk MANUAL MODE
+  void _startManualInput(InDetail product) {
+    // Reset controllers untuk input manual
     _serialNumberController.clear();
-
-    if (fromQR) {
-      _resetQuantityForMode(true); // Quantity fixed = 1 untuk scan QR
-    } else {
-      _resetQuantityForMode(false); // Quantity editable untuk manual biasa
-    }
+    _qtyController.text = "1";
+    _quantity.value = 1;
 
     // Set product info
     _productNameController.text = product.maktxUI ?? product.mProductId ?? "";
@@ -2679,16 +1995,15 @@ class _InDetailPageState extends State<InDetailPage>
         : _getCurrentInModel().documentno ?? "";
 
     // Tampilkan bottom sheet untuk input manual
-    _showManualInputBottomSheet(product, fromQR: fromQR);
+    _showManualInputBottomSheet(product);
   }
 
-  void _showManualInputBottomSheet(InDetail product, {bool fromQR = false}) {
+  void _showManualInputBottomSheet(InDetail product) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) =>
-          _buildManualInputBottomSheet(product, fromQR: fromQR),
+      builder: (context) => _buildManualInputBottomSheet(product),
     ).then((_) {
       // Reset state ketika bottom sheet ditutup
       setState(() {
@@ -2697,604 +2012,199 @@ class _InDetailPageState extends State<InDetailPage>
     });
   }
 
-  Widget _buildManualInputBottomSheet(InDetail product, {bool fromQR = false}) {
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.85,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header dengan drag indicator
-          Container(
-            width: 40,
-            height: 4,
-            margin: EdgeInsets.only(top: 8, bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
+  Widget _buildManualInputBottomSheet(InDetail product) {
+    return SingleChildScrollView(
+      child: Container(
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        padding: EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
           ),
-
-          Expanded(
-            child: SingleChildScrollView(
-              physics: ClampingScrollPhysics(),
-              child: Container(
-                padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(24),
-                    topRight: Radius.circular(24),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Input Manual Serial Number',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: hijauGojek,
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header dengan close button
-                    Container(
-                      padding: EdgeInsets.only(top: 8, bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 0,
-                            offset: Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            fromQR ? 'Input Manual SN' : 'Input Tanpa SN',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: hijauGojek,
-                              fontFamily: 'MonaSans',
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            icon: Container(
-                              padding: EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.close_rounded,
-                                color: Colors.grey.shade600,
-                                size: 20,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    SizedBox(height: 24),
-
-                    // Informasi Card untuk Input Manual
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.orange.shade100),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.edit_note_rounded,
-                            color: Colors.orange.shade700,
-                            size: 18,
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  fromQR
-                                      ? 'Manual dari QR Scan'
-                                      : 'Input Manual',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: fromQR
-                                        ? Colors.orange.shade700
-                                        : Colors.blue.shade700,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  fromQR
-                                      ? 'Quantity otomatis 1 per serial number untuk scan QR code'
-                                      : 'Quantity dapat disesuaikan, serial number opsional',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: fromQR
-                                        ? Colors.orange.shade800
-                                        : Colors.blue.shade800,
-                                    height: 1.3,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    SizedBox(height: 24),
-
-                    // Document No
-                    _buildModernInfoField(
-                      label: "Document No PO",
-                      value: _documentNoController.text,
-                      icon: Icons.description_outlined,
-                    ),
-
-                    SizedBox(height: 16),
-
-                    // Product Name
-                    _buildModernInfoField(
-                      label: "Nama Product",
-                      value: _productNameController.text,
-                      icon: Icons.inventory_2_outlined,
-                    ),
-
-                    SizedBox(height: 20),
-
-                    // Serial Number Section (Editable)
-                    // Serial Number Section (Editable)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              "Serial Number",
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade700,
-                                fontFamily: 'MonaSans',
-                              ),
-                            ),
-                            SizedBox(width: 6),
-                            // ✅ TAMPILKAN "WAJIB DIISI" JIKA fromQR = true
-                            if (fromQR)
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade50,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                    color: Colors.red.shade200,
-                                  ),
-                                ),
-                                child: Text(
-                                  "Wajib diisi",
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.red.shade600,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              )
-                            else
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade200,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  "Opsional",
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.grey.shade600,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        SizedBox(height: 8),
-                        TextFormField(
-                          controller: _serialNumberController,
-                          enabled: fromQR,
-                          decoration: InputDecoration(
-                            hintText: fromQR
-                                ? "Masukkan serial number (wajib diisi)"
-                                : "Tidak Perlu diisi",
-                            hintStyle: TextStyle(
-                              color: fromQR
-                                  ? Colors.red.shade400
-                                  : Colors.grey.shade500,
-                              fontSize: 13,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: fromQR
-                                    ? Colors.red.shade300
-                                    : Colors.grey.shade300,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: fromQR ? Colors.red : hijauGojek,
-                                width: 1.5,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: fromQR
-                                    ? Colors.red.shade300
-                                    : Colors.grey.shade300,
-                              ),
-                            ),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
-                            ),
-                            prefixIcon: Icon(
-                              Icons.qr_code_2_outlined,
-                              color: fromQR
-                                  ? Colors.red.shade400
-                                  : Colors.grey.shade600,
-                              size: 20,
-                            ),
-                            // ✅ TAMBAHKAN VALIDATION ERROR JIKA fromQR
-                            errorText:
-                                fromQR && _serialNumberController.text.isEmpty
-                                ? "Serial number wajib diisi untuk input manual QR"
-                                : null,
-                          ),
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Colors.grey.shade800,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          // ✅ AUTOVALIDATE MODE UNTUK fromQR
-                          autovalidateMode: fromQR
-                              ? AutovalidateMode.onUserInteraction
-                              : AutovalidateMode.disabled,
-                          validator: fromQR
-                              ? (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return "Serial number wajib diisi";
-                                  }
-                                  if (value.trim().length < 2) {
-                                    return "Serial number terlalu pendek";
-                                  }
-                                  return null;
-                                }
-                              : null,
-                        ),
-                      ],
-                    ),
-
-                    SizedBox(height: 24),
-
-                    // Quantity Section
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Quantity",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade700,
-                            fontFamily: 'MonaSans',
-                          ),
-                        ),
-                        SizedBox(height: 12),
-                        ValueListenableBuilder<int>(
-                          valueListenable: _quantity,
-                          builder: (context, quantity, child) {
-                            return Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  // Decrement Button
-                                  Container(
-                                    width: 54,
-                                    height: 54,
-                                    decoration: BoxDecoration(
-                                      color: quantity > 1
-                                          ? Colors.grey.shade50
-                                          : Colors.grey.shade100,
-                                      borderRadius: BorderRadius.only(
-                                        topLeft: Radius.circular(12),
-                                        bottomLeft: Radius.circular(12),
-                                      ),
-                                    ),
-                                    child: IconButton(
-                                      icon: Icon(
-                                        Icons.remove_rounded,
-                                        color: quantity > 1
-                                            ? hijauGojek
-                                            : Colors.grey.shade400,
-                                        size: 20,
-                                      ),
-                                      onPressed: quantity > 1
-                                          ? () {
-                                              _quantity.value--;
-                                              _qtyController.text = _quantity
-                                                  .value
-                                                  .toString();
-                                            }
-                                          : null,
-                                    ),
-                                  ),
-
-                                  // Quantity Input
-                                  Expanded(
-                                    child: Container(
-                                      height: 54,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        border: Border.symmetric(
-                                          vertical: BorderSide(
-                                            color: Colors.grey.shade300,
-                                          ),
-                                        ),
-                                      ),
-                                      child: TextFormField(
-                                        controller: _qtyController,
-                                        keyboardType: TextInputType.number,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                          color: hijauGojek,
-                                          fontFamily: 'MonaSans',
-                                        ),
-                                        decoration: InputDecoration(
-                                          border: InputBorder.none,
-                                          hintText: "0",
-                                          hintStyle: TextStyle(
-                                            color: Colors.grey.shade400,
-                                          ),
-                                          contentPadding: EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                          ),
-                                        ),
-                                        readOnly: fromQR,
-                                        onChanged: fromQR
-                                            ? null // Tidak bisa diubah jika fromQR
-                                            : (value) {
-                                                final qty =
-                                                    int.tryParse(value) ?? 1;
-                                                _quantity.value = qty.clamp(
-                                                  1,
-                                                  999999,
-                                                );
-                                              },
-                                      ),
-                                    ),
-                                  ),
-
-                                  // Increment Button
-                                  Container(
-                                    width: 54,
-                                    height: 54,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade50,
-                                      borderRadius: BorderRadius.only(
-                                        topRight: Radius.circular(12),
-                                        bottomRight: Radius.circular(12),
-                                      ),
-                                    ),
-                                    child: IconButton(
-                                      icon: Icon(
-                                        Icons.add_rounded,
-                                        color: !fromQR
-                                            ? hijauGojek
-                                            : Colors.grey.shade400,
-                                        size: 20,
-                                      ),
-                                      onPressed: !fromQR
-                                          ? () {
-                                              _quantity.value++;
-                                              _qtyController.text = _quantity
-                                                  .value
-                                                  .toString();
-                                            }
-                                          : null,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          "Tekan + / - atau ketik langsung jumlah quantity",
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // Spacer untuk memberikan ruang di atas button
-                    SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Fixed Bottom Action Buttons
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(20, 16, 20, 32),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                top: BorderSide(color: Colors.grey.shade200, width: 1),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: Offset(0, -2),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: Icon(Icons.close, color: Colors.grey),
                 ),
               ],
             ),
-            child: SafeArea(
-              top: false,
-              child: Row(
-                children: [
-                  // Close button
-                  Expanded(
-                    flex: 2,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        _resetForm();
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        side: BorderSide(color: Colors.grey.shade400),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        backgroundColor: Colors.transparent,
-                      ),
-                      child: Text(
-                        'Batal',
-                        style: TextStyle(
-                          color: Colors.grey.shade700,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                  ),
 
-                  SizedBox(width: 12),
+            SizedBox(height: 20),
 
-                  // Save button
-                  // Save button
-                  Expanded(
-                    flex: 3,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // ✅ VALIDASI FORM JIKA fromQR = true
-                        if (fromQR) {
-                          final serialNumber = _serialNumberController.text
-                              .trim();
-                          if (serialNumber.isEmpty) {
-                            Fluttertoast.showToast(
-                              msg:
-                                  "Serial number wajib diisi untuk input manual QR",
-                              backgroundColor: Colors.orange,
-                            );
-                            return;
-                          }
-                          if (serialNumber.length < 2) {
-                            Fluttertoast.showToast(
-                              msg:
-                                  "Serial number terlalu pendek. Minimal 2 karakter.",
-                              backgroundColor: Colors.orange,
-                            );
-                            return;
-                          }
-                        }
-                        _saveManualInput(product, fromQR: fromQR);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: hijauGojek,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                        shadowColor: Colors.transparent,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.save_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          SizedBox(width: 6),
-                          Text(
-                            'Simpan Data',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                              fontFamily: 'MonaSans',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            // Document No
+            _buildReadOnlyField(
+              label: "Document No PO",
+              value: _documentNoController.text,
+              icon: Icons.description,
             ),
-          ),
-        ],
+
+            SizedBox(height: 16),
+
+            // Product Name
+            _buildReadOnlyField(
+              label: "Nama Product",
+              value: _productNameController.text,
+              icon: Icons.inventory_2,
+            ),
+
+            SizedBox(height: 16),
+
+            // Serial Number (bisa kosong/null)
+            TextFormField(
+              controller: _serialNumberController,
+              decoration: InputDecoration(
+                labelText: "Serial Number (Opsional)",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.qr_code_2),
+                hintText: "Kosongkan jika tidak ada serial number",
+              ),
+              // Bisa dikosongkan untuk input manual
+            ),
+
+            SizedBox(height: 16),
+
+            // Quantity Section
+            Text(
+              "Quantity",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+
+            SizedBox(height: 12),
+
+            ValueListenableBuilder<int>(
+              valueListenable: _quantity,
+              builder: (context, quantity, child) {
+                return Row(
+                  children: [
+                    // Decrement button
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: IconButton(
+                        icon: Icon(Icons.remove),
+                        onPressed: () {
+                          if (quantity > 1) {
+                            _quantity.value--;
+                            _qtyController.text = _quantity.value.toString();
+                          }
+                        },
+                      ),
+                    ),
+
+                    SizedBox(width: 16),
+
+                    // Quantity input
+                    Expanded(
+                      child: TextFormField(
+                        controller: _qtyController,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: "Jumlah",
+                        ),
+                        onChanged: (value) {
+                          final qty = int.tryParse(value) ?? 1;
+                          _quantity.value = qty;
+                        },
+                      ),
+                    ),
+
+                    SizedBox(width: 16),
+
+                    // Increment button
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: IconButton(
+                        icon: Icon(Icons.add),
+                        onPressed: () {
+                          _quantity.value++;
+                          _qtyController.text = _quantity.value.toString();
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+
+            SizedBox(height: 30),
+
+            // Action Buttons
+            Row(
+              children: [
+                // Close button
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _resetForm();
+                    },
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(color: hijauGojek),
+                    ),
+                    child: Text('Close', style: TextStyle(color: hijauGojek)),
+                  ),
+                ),
+
+                SizedBox(width: 12),
+
+                // Save button
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _saveManualInput(product),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: hijauGojek,
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text('Save', style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  void _saveManualInput(InDetail product, {bool fromQR = false}) async {
+  void _saveManualInput(InDetail product) async {
     final serialNumber = _serialNumberController.text.trim();
     final quantity = _quantity.value;
-
-    // ✅ VALIDASI KHUSUS UNTUK MANUAL INPUT DARI QR (fromQR = true)
-    if (fromQR && serialNumber.isEmpty) {
-      Fluttertoast.showToast(
-        msg: "Serial number harus diisi untuk input manual dari QR",
-        backgroundColor: Colors.orange,
-        textColor: Colors.white,
-      );
-      return;
-    }
 
     if (quantity <= 0) {
       Fluttertoast.showToast(
         msg: "Quantity harus lebih dari 0",
-        backgroundColor: Colors.orange,
-      );
-      return;
-    }
-
-    final bool hasSerialNumber = serialNumber.isNotEmpty;
-
-    // Jika ada serial number, validasi format
-    if (hasSerialNumber && serialNumber.length < 2) {
-      Fluttertoast.showToast(
-        msg: "Serial number terlalu pendek. Minimal 2 karakter.",
         backgroundColor: Colors.orange,
       );
       return;
@@ -3306,627 +2216,303 @@ class _InDetailPageState extends State<InDetailPage>
         isScanning = false;
       });
 
-      // ✅ VALIDASI SERIAL NUMBER UNIK JIKA ADA
-      if (hasSerialNumber) {
-        debugPrint('🔍 Validasi serial number manual: $serialNumber');
-        final isSerialNumberUnique = await _checkSerialNumberUniqueOptimized(
-          serialNumber,
-        );
+      // Simpan data sebelumnya untuk cek apakah akan update atau create
+      final String productId = product.mProductId ?? "";
+      final String poNumber = widget.from == "sync"
+          ? widget.flag?.documentno ?? ""
+          : _getCurrentInModel().documentno ?? "";
 
-        if (!isSerialNumberUnique) {
-          Fluttertoast.showToast(
-            msg:
-                "Serial number '$serialNumber' sudah digunakan di sistem. Harus unik secara global!",
-            backgroundColor: Colors.orange,
-            textColor: Colors.white,
-            toastLength: Toast.LENGTH_LONG,
+      bool isUpdate = false;
+
+      // Cek apakah ini akan update quantity (hanya untuk kasus tanpa SN dan productId sama)
+      if ((serialNumber.isEmpty) && poNumber.isNotEmpty) {
+        final grQuery = await _firestore
+            .collection('gr_in')
+            .where('ponumber', isEqualTo: poNumber)
+            .limit(1)
+            .get();
+
+        if (grQuery.docs.isNotEmpty) {
+          final existingGr = GoodReceiveSerialNumberModel.fromFirestore(
+            grQuery.docs.first,
+            null,
           );
-          return;
+          final existingWithoutSn = existingGr.details.firstWhere(
+            (detail) =>
+                (detail.sn == null || detail.sn!.isEmpty) &&
+                detail.productid == productId,
+            orElse: () => GoodReceiveSerialNumberDetailModel(
+              sn: null,
+              productid: '',
+              qty: 0,
+            ),
+          );
+
+          isUpdate = existingWithoutSn.productid == productId;
         }
-        debugPrint('✅ Serial number manual valid: $serialNumber');
       }
 
-      // ✅ TAMPILKAN DIALOG KONFIRMASI SEBELUM MENYIMPAN
-      _showSaveConfirmationDialog(
+      // Save to Firestore (serialNumber bisa empty string, akan dihandle menjadi null)
+      await _saveToFirestore(
         product,
-        hasSerialNumber ? serialNumber : null,
+        serialNumber.isEmpty ? null : serialNumber,
         quantity,
-        fromQR: fromQR,
-        shouldCloseBottomSheet: true, // ✅ TUTUP BOTTOM SHEET SETELAH SIMPAN
-        shouldNavigate: false, // ✅ JANGAN NAVIGASI
-        onAfterSave: () {
-          // ✅ CALLBACK SETELAH SIMPAN BERHASIL - TUTUP BOTTOM SHEET
-          _logger.d('✅ Data manual berhasil disimpan, menutup bottom sheet...');
-
-          // Reset form
-          _resetForm();
-
-          // Tampilkan toast sukses
-          Fluttertoast.showToast(
-            msg: "Data berhasil disimpan",
-            backgroundColor: Colors.green,
-            textColor: Colors.white,
-          );
-        },
       );
+
+      // Show appropriate success message
+      if (isUpdate) {
+        Fluttertoast.showToast(
+          msg: "Berhasil update quantity +$quantity untuk product $productId",
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      } else {
+        Fluttertoast.showToast(
+          msg:
+              "Data berhasil disimpan: ${serialNumber.isEmpty ? "Tanpa Serial Number" : serialNumber} x$quantity",
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      }
+
+      // Close bottom sheet
+      if (!mounted) return;
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+
+      _resetForm();
     } catch (e) {
       // Show error message
       Fluttertoast.showToast(
-        msg: "Gagal memvalidasi: $e",
+        msg: "Gagal menyimpan: $e",
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
     }
   }
 
-  Future<String?> _generateAndStoreGrId() async {
-    // ✅ JIKA SUDAH ADA GR ID DARI PARAMETER, GUNAKAN ITU
-    if (_currentGrId != null && _currentGrId!.isNotEmpty) {
-      debugPrint('✅ Menggunakan GR ID dari parameter: $_currentGrId');
-      return _currentGrId;
-    }
-
-    // ✅ JIKA SUDAH ADA GR ID YANG SUDAH DIGENERATE SEBELUMNYA
-    if (_currentGrId != null && _isGrIdSavedToFirestore) {
-      return _currentGrId;
-    }
-
+  Future<void> _saveToFirestore(
+    InDetail product,
+    String? serialNumber,
+    int quantity,
+  ) async {
     try {
       final String poNumber = widget.from == "sync"
           ? widget.flag?.documentno ?? ""
           : _getCurrentInModel().documentno ?? "";
 
+      final String productId = product.mProductId ?? "";
+
+      // Tambahkan: Ambil username dari global controller
       final String currentUser = globalVM.username.value;
 
       if (poNumber.isEmpty) {
         throw Exception("PO Number tidak ditemukan");
       }
 
-      final grinController = Get.find<GrinController>();
-
-      final result = await grinController.saveGrWithGeneratedId(
-        poNumber: poNumber,
-        details: [],
-        currentUser: currentUser,
-      );
-
-      if (result['success'] == true && result['grId'] != null) {
-        final newGrId = result['grId'] as String;
-
-        _safeSetState(() {
-          _currentGrId = newGrId;
-          _isGrIdSavedToFirestore = true;
-        });
-
-        debugPrint('✅ GR ID baru dibuat dan disimpan: $newGrId');
-        return newGrId;
-      } else {
-        throw Exception(result['error'] ?? 'Gagal generate GR ID');
-      }
-    } catch (e) {
-      debugPrint('❌ Error generating GR ID: $e');
-      _showErrorDialog('Gagal generate GR ID: $e');
-      return null;
-    }
-  }
-
-  bool _isSameProductWithoutSerial(
-    GoodReceiveSerialNumberDetailModel existingDetail,
-    GoodReceiveSerialNumberDetailModel newDetail,
-  ) {
-    // Product ID harus sama
-    if (existingDetail.productid != newDetail.productid) {
-      return false;
-    }
-
-    // Keduanya harus tanpa serial number (null atau empty)
-    final existingHasNoSerial =
-        existingDetail.sn == null || existingDetail.sn!.isEmpty;
-    final newHasNoSerial = newDetail.sn == null || newDetail.sn!.isEmpty;
-
-    return existingHasNoSerial && newHasNoSerial;
-  }
-
-  // ✅ METHOD UNTUK MENJUMLAHKAN QUANTITY PADA DETAIL YANG SAMA
-  List<GoodReceiveSerialNumberDetailModel> _mergeDuplicateDetails(
-    List<GoodReceiveSerialNumberDetailModel> existingDetails,
-    GoodReceiveSerialNumberDetailModel newDetail,
-  ) {
-    final mergedDetails = List<GoodReceiveSerialNumberDetailModel>.from(
-      existingDetails,
-    );
-    bool isMerged = false;
-
-    for (int i = 0; i < mergedDetails.length; i++) {
-      final existingDetail = mergedDetails[i];
-
-      // Cek apakah detail sama (product id sama & tanpa serial number)
-      if (_isSameProductWithoutSerial(existingDetail, newDetail)) {
-        // Jumlahkan quantity
-        mergedDetails[i] = GoodReceiveSerialNumberDetailModel(
-          sn: null, // Tetap tanpa serial number
-          productid: existingDetail.productid,
-          qty: existingDetail.qty + newDetail.qty,
-        );
-        isMerged = true;
-        debugPrint(
-          '✅ Quantity digabungkan: ${existingDetail.productid} (${existingDetail.qty} + ${newDetail.qty} = ${existingDetail.qty + newDetail.qty})',
-        );
-        break;
-      }
-    }
-
-    // Jika tidak ada yang bisa digabungkan, tambahkan sebagai detail baru
-    if (!isMerged) {
-      mergedDetails.add(newDetail);
-      debugPrint(
-        '✅ Detail baru ditambahkan: ${newDetail.productid} (qty: ${newDetail.qty})',
-      );
-    }
-
-    return mergedDetails;
-  }
-
-  // ✅ METHOD OPTIMIZED UNTUK VALIDASI SERIAL NUMBER DENGAN FIRESTORE QUERY
-  Future<bool> _checkSerialNumberUniqueOptimized(String serialNumber) async {
-    try {
-      final trimmedSerial = serialNumber.trim();
-
-      if (trimmedSerial.isEmpty) {
-        return true; // No serial number means no uniqueness check needed
+      if (productId.isEmpty) {
+        throw Exception("Product ID tidak ditemukan");
       }
 
-      if (trimmedSerial.length < 2) {
-        debugPrint('❌ Serial number terlalu pendek: $trimmedSerial');
-        return false;
-      }
+      // === VALIDASI SERIAL NUMBER UNIK SECARA GLOBAL ===
+      if (serialNumber != null && serialNumber.isNotEmpty) {
+        // Cek di SEMUA document gr_in, tidak peduli PO mana
+        final allGrQuery = await _firestore.collection('gr_in').get();
 
-      // --- START FIX: USE GRINCONTROLLER'S GLOBAL CHECK ---
-      final grinController = Get.find<GrinController>();
-      final isUnique = await grinController.isSerialNumberUnique(trimmedSerial);
-
-      if (!isUnique) {
-        debugPrint('❌ SERIAL NUMBER DUPLIKAT DITEMUKAN: $trimmedSerial');
-      } else {
-        debugPrint('✅ Serial number unik secara global: $trimmedSerial');
-      }
-
-      return isUnique;
-      // --- END FIX ---
-    } catch (e) {
-      debugPrint('❌ Error during serial number check: $e');
-      // Jika ada error, anggap tidak unik untuk mencegah duplikasi
-      return false;
-    }
-  }
-
-  // ✅ METHOD UNTUK CEK APAKAH ADA DATA YANG SUDAH DIINPUT
-  bool _hasAnyDataInput() {
-    return _pendingGrDetails.isNotEmpty;
-  }
-
-  // ✅ METHOD UNTUK CEK APAKAH ADA DATA DENGAN SERIAL NUMBER
-  bool _hasSerialNumberData() {
-    return _pendingGrDetails.any(
-      (detail) => detail.sn != null && detail.sn!.isNotEmpty,
-    );
-  }
-
-  // ✅ METHOD UNTUK CEK APAKAH ADA DATA TANPA SERIAL NUMBER
-  bool _hasNonSerialNumberData() {
-    return _pendingGrDetails.any(
-      (detail) => detail.sn == null || detail.sn!.isEmpty,
-    );
-  }
-
-  Future<void> _saveToFirestore(
-    InDetail product,
-    String? serialNumber,
-    int quantity, {
-    bool shouldCloseBottomSheet = true,
-    bool shouldNavigate = true, // ✅ PARAMETER BARU UNTUK KONTROL NAVIGASI
-  }) async {
-    try {
-      final String productId = product.mProductId ?? "";
-
-      // ✅ VALIDASI DASAR
-      if (productId.isEmpty) throw Exception("Product ID tidak ditemukan");
-      if (quantity <= 0) throw Exception("Quantity harus lebih dari 0");
-
-      final String? trimmedSerial = serialNumber?.trim();
-      final bool hasSerialNumber =
-          trimmedSerial != null && trimmedSerial.isNotEmpty;
-
-      // ✅ VALIDASI SERIAL NUMBER UNIK GLOBALLY (jika ada serial number)
-      if (hasSerialNumber) {
-        _logger.d('🔍 Memulai validasi serial number: $trimmedSerial');
-
-        if (trimmedSerial.length < 2) {
-          throw Exception("Serial number terlalu pendek. Minimal 2 karakter.");
-        }
-
-        // Validasi unik secara global
-        final isSerialNumberUnique = await _validateSerialNumberBeforeSave(
-          trimmedSerial,
-        );
-
-        if (!isSerialNumberUnique) {
-          return; // Stop execution if validation fails
-        }
-        _logger.d('✅ : $trimmedSerial');
-      }
-
-      final grinController = Get.find<GrinController>();
-
-      // ✅ BUAT DETAIL DATA
-      final newDetail = GoodReceiveSerialNumberDetailModel(
-        sn: hasSerialNumber ? trimmedSerial : null,
-        productid: productId,
-        qty: quantity,
-      );
-
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text(
-                hasSerialNumber
-                    ? "Validasi & menyimpan serial number..."
-                    : "Menyimpan data...",
-              ),
-            ],
-          ),
-        ),
-      );
-
-      // ✅ STEP 1: GENERATE GR ID JIKA BELUM ADA
-      String? grIdToUse = _currentGrId;
-      if (grIdToUse == null) {
-        grIdToUse = await _generateAndStoreGrId();
-        if (grIdToUse == null) {
-          throw Exception('Gagal generate GR ID');
-        }
-      }
-
-      // ✅ STEP 2: TAMBAH DETAIL KE GR YANG SUDAH ADA DENGAN VALIDASI
-      final existingGr = await grinController.getGrinById(grIdToUse);
-      if (existingGr != null) {
-        // ✅ VALIDASI TAMBAHAN: CEK DUPLIKAT SERIAL NUMBER DALAM GR YANG SAMA
-        if (hasSerialNumber) {
-          final isDuplicateInSameGr = existingGr.details.any(
-            (detail) =>
-                detail.sn != null &&
-                detail.sn!.trim().toLowerCase() == trimmedSerial.toLowerCase(),
+        for (final doc in allGrQuery.docs) {
+          final existingGr = GoodReceiveSerialNumberModel.fromFirestore(
+            doc,
+            null,
+          );
+          final existingWithSameSn = existingGr.details.firstWhere(
+            (detail) => detail.sn == serialNumber,
+            orElse: () => GoodReceiveSerialNumberDetailModel(
+              sn: null,
+              productid: '',
+              qty: 0,
+            ),
           );
 
-          if (isDuplicateInSameGr) {
+          if (existingWithSameSn.sn == serialNumber) {
             throw Exception(
-              "Serial number '$trimmedSerial' sudah digunakan dalam GR ini ($grIdToUse). "
-              "Serial number harus unik.",
+              "Serial Number '$serialNumber' sudah digunakan untuk product '${existingWithSameSn.productid}' di PO '${existingGr.poNumber}'",
             );
           }
         }
+      }
 
-        // Gunakan logika merge untuk menggabungkan quantity jika product sama tanpa serial
-        final updatedDetails = _mergeDuplicateDetails(
-          existingGr.details,
-          newDetail,
+      // Cek apakah document sudah ada untuk PO ini
+      final grQuery = await _firestore
+          .collection('gr_in')
+          .where('ponumber', isEqualTo: poNumber)
+          .limit(1)
+          .get();
+
+      String grId;
+      GoodReceiveSerialNumberModel? existingGr;
+
+      if (grQuery.docs.isNotEmpty) {
+        // Document sudah ada, update yang existing
+        final doc = grQuery.docs.first;
+        grId = doc.id;
+        existingGr = GoodReceiveSerialNumberModel.fromFirestore(doc, null);
+
+        // === LOGIKA UNTUK DATA TANPA SERIAL NUMBER ===
+        if (serialNumber == null || serialNumber.isEmpty) {
+          // Cari data dengan productId yang sama TANPA serial number dalam PO yang sama
+          final existingWithoutSnIndex = existingGr.details.indexWhere(
+            (detail) =>
+                (detail.sn == null || detail.sn!.isEmpty) &&
+                detail.productid == productId,
+          );
+
+          if (existingWithoutSnIndex != -1) {
+            // Jika ditemukan productId yang sama tanpa SN dalam PO yang sama, UPDATE quantity (jumlahkan)
+            final updatedDetails =
+                List<GoodReceiveSerialNumberDetailModel>.from(
+                  existingGr.details,
+                );
+            updatedDetails[existingWithoutSnIndex] =
+                GoodReceiveSerialNumberDetailModel(
+                  sn: null, // Tetap null/kosong
+                  productid: productId,
+                  qty: updatedDetails[existingWithoutSnIndex].qty + quantity,
+                );
+
+            await _firestore.collection('gr_in').doc(grId).update({
+              'details': updatedDetails
+                  .map((detail) => detail.toMap())
+                  .toList(),
+            });
+
+            debugPrint(
+              'Berhasil UPDATE quantity untuk product $productId tanpa SN di PO $poNumber: +$quantity',
+            );
+            return; // Keluar dari method setelah update
+          }
+        }
+
+        // === TAMBAH DATA BARU ===
+        // Jika sampai sini, berarti:
+        // 1. Ada SN dan SN unik secara global, ATAU
+        // 2. Tidak ada SN dan productId berbeda dalam PO yang sama (buat baru)
+        final newDetail = GoodReceiveSerialNumberDetailModel(
+          sn: serialNumber?.isEmpty ?? true ? null : serialNumber,
+          productid: productId,
+          qty: quantity,
         );
 
-        // Update GR dengan detail yang baru (setelah merge) menggunakan method dengan validasi
-        final updateResult = await grinController.updateGrDetailsWithValidation(
-          grId: grIdToUse,
-          newDetails: updatedDetails,
-        );
+        final updatedDetails = [...existingGr.details, newDetail];
 
-        if (mounted) {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          }
-        }
-
-        if (updateResult['success'] == true) {
-          // ✅ UPDATE PENAMPUNG SEMENTARA DENGAN DATA TERBARU
-          _safeSetState(() {
-            _pendingGrDetails.clear();
-            _pendingGrDetails.addAll(updatedDetails);
-            _isGrIdSavedToFirestore = true;
-          });
-
-          _logger.d('✅ Detail berhasil diproses ke GR: $grIdToUse');
-          if (hasSerialNumber) {
-            _logger.d('✅ Serial number berhasil disimpan: $trimmedSerial');
-          }
-
-          if (hasSerialNumber) {
-            await grinController.saveSerialNumberGlobal(
-              serialNumber: trimmedSerial,
-              grId: grIdToUse,
-              productId: productId,
-            );
-          }
-
-          if (shouldCloseBottomSheet &&
-              mounted &&
-              Navigator.of(context).canPop()) {
-            _closeBottomSheet();
-          }
-
-          // ✅ MODIFIKASI: KONTROL NAVIGASI BERDASARKAN PARAMETER
-          if (shouldNavigate) {
-            _showSuccessDialog(
-              grIdToUse,
-              _pendingGrDetails.length,
-              hasSerialNumber ? trimmedSerial : null,
-            );
-          } else {
-            // ✅ JIKA TIDAK PERLU NAVIGASI, HANYA TAMPILKAN TOAST SUKSES
-            Fluttertoast.showToast(
-              msg: hasSerialNumber
-                  ? "Serial number berhasil disimpan: $trimmedSerial"
-                  : "Data berhasil disimpan ke GR",
-              backgroundColor: Colors.green,
-              textColor: Colors.white,
-            );
-          }
-        } else {
-          throw Exception(updateResult['error'] ?? 'Gagal menambah detail');
-        }
+        await _firestore.collection('gr_in').doc(grId).update({
+          'details': updatedDetails.map((detail) => detail.toMap()).toList(),
+        });
       } else {
-        throw Exception('GR tidak ditemukan di Firestore');
+        // === BUAT DOCUMENT BARU ===
+        grId = await _generateGrId();
+
+        final newDetail = GoodReceiveSerialNumberDetailModel(
+          sn: serialNumber?.isEmpty ?? true ? null : serialNumber,
+          productid: productId,
+          qty: quantity,
+        );
+
+        final newGr = GoodReceiveSerialNumberModel(
+          grId: grId,
+          poNumber: poNumber,
+          createdBy: currentUser,
+          createdAt: DateTime.now(),
+          details: [newDetail],
+        );
+
+        await _firestore.collection('gr_in').doc(grId).set(newGr.toFirestore());
       }
+
+      debugPrint(
+        'Berhasil menyimpan ke Firestore: $productId - ${serialNumber ?? "NO_SN"} x$quantity',
+      );
+      debugPrint('GR ID: $grId | PO: $poNumber');
     } catch (e) {
-      if (mounted) {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
+      debugPrint('Error saving to Firestore: $e');
+      rethrow;
+    }
+  }
+
+  Future<String> _generateGrId() async {
+    final now = DateTime.now();
+    final currentYear = now.year.toString();
+
+    try {
+      // Cari GR ID terakhir untuk tahun ini
+      final lastGrQuery = await _firestore
+          .collection('gr_in')
+          .where('grid', isGreaterThanOrEqualTo: 'GR$currentYear')
+          .where('grid', isLessThan: 'GR${int.parse(currentYear) + 1}')
+          .orderBy('grid', descending: true)
+          .limit(1)
+          .get();
+
+      int nextSequence = 1; // Default mulai dari 1
+
+      if (lastGrQuery.docs.isNotEmpty) {
+        final lastGrId = lastGrQuery.docs.first.id;
+
+        // Extract sequence number dari GR ID terakhir
+        // Format: GR202400000123 -> sequence = 123
+        final sequenceMatch = RegExp(r'GR\d+(\d{7})$').firstMatch(lastGrId);
+        if (sequenceMatch != null) {
+          final lastSequence = int.tryParse(sequenceMatch.group(1)!) ?? 0;
+          nextSequence = lastSequence + 1;
         }
       }
 
-      _logger.e('❌ Error saving to Firestore: $e');
-
-      if (shouldCloseBottomSheet && mounted && Navigator.of(context).canPop()) {
-        _closeBottomSheet();
-      }
-
-      _showErrorDialog('Gagal menyimpan: $e');
+      // Format: GR + tahun + sequence 7 digit
+      final sequenceString = nextSequence.toString().padLeft(7, '0');
+      return 'GR$currentYear$sequenceString';
+    } catch (e) {
+      // Fallback jika error
+      debugPrint('Error generating GR ID: $e');
+      final timestamp = now.millisecondsSinceEpoch;
+      return 'GR$currentYear$timestamp.toString().substring(timestamp.toString().length - 7)';
     }
   }
 
-  void _closeBottomSheet() {
-    if (!mounted) return;
-
-    _logger.d('🚪 Menutup bottom sheet...');
-
-    // Cek apakah masih ada bottom sheet yang terbuka
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-      _logger.d('✅ Bottom sheet berhasil ditutup');
-    } else {
-      _logger.d('ℹ️ Tidak ada bottom sheet yang terbuka');
-    }
-
-    // Reset state
-    setState(() {
-      checkingscan = false;
-      isScanning = false;
-    });
-
-    _resetForm();
-
-    // ✅ TIDAK ADA NAVIGASI DI SINI - TETAP DI HALAMAN IN_DETAIL_PAGE
-  }
-
-  // ✅ DIALOG SUKSES DENGAN GR ID
-  // ✅ DIALOG SUKSES DENGAN INFORMASI SERIAL NUMBER
-  void _showSuccessDialog(String grId, int totalItems, String? serialNumber) {
-    // Hitung total quantity untuk ditampilkan
-    final totalQuantity = _pendingGrDetails.fold<int>(
-      0,
-      (currentSum, detail) => currentSum + detail.qty,
-    );
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green),
-            SizedBox(width: 8),
-            Text("Berhasil Disimpan"),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Data berhasil disimpan dengan:"),
-            SizedBox(height: 8),
-            // GR ID Info
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.confirmation_number, color: Colors.green),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "GR ID: $grId",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green.shade800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
-
-            // Serial Number Info (jika ada)
-            if (serialNumber != null) ...[
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.qr_code, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Serial Number:",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.blue.shade600,
-                            ),
-                          ),
-                          Text(
-                            serialNumber,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue.shade800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 12),
-            ],
-
-            // Summary Info
-            Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Total item: $totalItems",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange.shade800,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    "Total quantity: $totalQuantity",
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.orange.shade600,
-                    ),
-                  ),
-                  if (serialNumber != null) ...[
-                    SizedBox(height: 4),
-                    Text(
-                      "Serial number: $serialNumber",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.orange.shade600,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          // ✅ OPSI UTAMA: TETAP DI HALAMAN INI UNTUK INPUT LEBIH LANJUT
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Tetap di halaman ini untuk input lebih lanjut
-              _safeSetState(() {
-                checkingscan = false;
-              });
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: hijauGojek),
-            child: Text("Tambah Lagi"),
+  Widget _buildQuantityChip(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: hijauGojek,
           ),
-
-          // OPSI SEKUNDER: LIHAT GRIN (HANYA JIKA DIPERLUKAN)
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _navigateToGrinPage();
-            },
-            child: Text("Lihat GRIN"),
-          ),
-        ],
-      ),
+        ),
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        ),
+      ],
     );
   }
 
-  void _navigateToGrinPage() {
-    // ✅ KOSONGKAN VARIABLE PENAMPUNG SEBELUM NAVIGASI
-    _resetGrData();
+  // todo: dont delete this
+  // void _onEditPressed(InDetail indetail) {
+  //   setState(() {
+  //     pcs.value = indetail.qtuom?.toInt() ?? 0;
+  //     ctn.value = indetail.qtctn ?? 0;
+  //     kg.value = indetail.qtuom ?? 0.0;
+  //     expireddate.value = indetail.vfdat ?? "";
+  //     descriptioninput.text = indetail.descr ?? "";
 
-    _logger.d('✅ Navigate to GrinPage with GR ID: $_currentGrId');
-    Get.offAll(() => GrinPage());
-  }
-
-  // ✅ METHOD UNTUK KOSONGKAN VARIABLE PENAMPUNG
-  void _safeSetState(VoidCallback fn) {
-    if (!_isDisposed && mounted) {
-      setState(fn);
-    }
-  }
-
-  // ✅ PERBAIKI _resetGrData DENGAN SAFE SETSTATE
-  void _resetGrData() {
-    _safeSetState(() {
-      _currentGrId = null;
-      _isGrIdSavedToFirestore = false;
-      _pendingGrDetails.clear();
-    });
-    debugPrint('🔄 GR data reset - variables cleared');
-  }
-
-  // ✅ DIALOG ERROR
-  void _showErrorDialog(String error) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.error, color: Colors.red),
-            SizedBox(width: 8),
-            Text("Gagal Menyimpan"),
-          ],
-        ),
-        content: Text(error),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text("OK"),
-          ),
-        ],
-      ),
-    );
-  }
+  //     showModalBottomSheet(
+  //       context: context,
+  //       isScrollControlled: true,
+  //       builder: (context) => modalBottomSheet(indetail),
+  //     );
+  //   });
+  // }
 
   void _onDeletePressed(InDetail indetail) {
     showDialog(
@@ -4133,7 +2719,76 @@ class _InDetailPageState extends State<InDetailPage>
               onRefresh: _handleRefresh,
               child: Column(
                 children: [
-                  _buildRealtimeHeader(),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(24),
+                        bottomRight: Radius.circular(24),
+                      ),
+                      gradient: LinearGradient(
+                        colors: [hijauGojek, hijauGojek],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  Icons.arrow_back,
+                                  color: Colors.white,
+                                ),
+                                onPressed: _handleBackPress,
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.from == "sync"
+                                          ? "${widget.flag?.documentno}"
+                                          : "${_getCurrentInModel().documentno}",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      "Purchase Order Details",
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              ..._buildActions(),
+                            ],
+                          ),
+                        ),
+                        if (_isSearching)
+                          Container(
+                            padding: EdgeInsets.all(16),
+                            color: hijauGojek.withValues(alpha: 0.8),
+                            child: _buildSearchField(),
+                          ),
+                      ],
+                    ),
+                  ),
                   Expanded(
                     child: Obx(() {
                       // Tampilkan loading shimmer
@@ -4179,157 +2834,6 @@ class _InDetailPageState extends State<InDetailPage>
     );
   }
 
-  Widget _buildRealtimeHeader() {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-        gradient: LinearGradient(
-          colors: [hijauGojek, hijauGojek],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: _handleBackPress,
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Tampilkan status realtime
-                      Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: isReadOnlyMode
-                                  ? Colors.grey
-                                  : Colors.blueAccent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            isReadOnlyMode
-                                ? "View Only"
-                                : "Realtime", // ✅ TAMPILKAN STATUS MODE
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        widget.from == "sync"
-                            ? "${widget.flag?.documentno}"
-                            : "${_getCurrentInModel().documentno}",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        isReadOnlyMode
-                            ? "Purchase Order Details (View Only)" // ✅ TEKS BERBEDA UNTUK MODE READ-ONLY
-                            : "Purchase Order Details",
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                // ✅ SEMBUNYIKAN ACTION BUTTONS DI MODE READ-ONLY
-                if (!isReadOnlyMode) ..._buildActions(),
-              ],
-            ),
-          ),
-          if (_isSearching &&
-              !isReadOnlyMode) // ✅ HANYA TAMPILKAN SEARCH JIKA BUKAN READ-ONLY
-            Container(
-              padding: EdgeInsets.all(16),
-              color: hijauGojek.withValues(alpha: 0.8),
-              child: _buildSearchField(),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<bool> _validateSerialNumberBeforeSave(String serialNumber) async {
-    try {
-      if (serialNumber.trim().isEmpty) {
-        return true; // No serial number is allowed
-      }
-
-      final grinController = Get.find<GrinController>();
-      final isUnique = await grinController.isSerialNumberUnique(serialNumber);
-
-      if (!isUnique) {
-        _showSerialNumberErrorDialog(serialNumber);
-        return false;
-      }
-
-      return true;
-    } catch (e) {
-      _logger.e('❌ Error validasi serial number: $e');
-      return false;
-    }
-  }
-
-  void _showSerialNumberErrorDialog(String serialNumber) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.error, color: Colors.red),
-            SizedBox(width: 8),
-            Text("Serial Number Sudah Digunakan"),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Serial number '$serialNumber' sudah digunakan di sistem."),
-            SizedBox(height: 8),
-            Text(
-              "Serial number harus unik secara global untuk semua product dan GR.",
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.orange.shade700,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text("OK"),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildModernHeaderInfo() {
     return Container(
       margin: EdgeInsets.all(16),
@@ -4362,8 +2866,7 @@ class _InDetailPageState extends State<InDetailPage>
             ],
           ),
           SizedBox(height: 16),
-          // ✅ SEMBUNYIKAN CONTAINER INPUT DI MODE READ-ONLY
-          if (widget.from != "history" && !isReadOnlyMode)
+          if (widget.from != "history")
             Container(
               padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -4419,101 +2922,10 @@ class _InDetailPageState extends State<InDetailPage>
     );
   }
 
-  Future<void> _sendToCperpWithLoading() async {
-    if (_currentGrId == null) return;
-
-    try {
-      _isSendingToKafka.value = true;
-
-      await _inController.sendToKafkaForGR(_currentGrId!);
-
-      // Tunggu sebentar untuk memastikan status terupdate
-      await Future.delayed(Duration(seconds: 2));
-
-      Fluttertoast.showToast(
-        msg: "Data berhasil dikirim ke CPERP",
-        backgroundColor: Colors.green,
-        textColor: Colors.white,
-      );
-    } catch (e) {
-      Fluttertoast.showToast(
-        msg: "Gagal mengirim ke CPERP: $e",
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-      );
-    } finally {
-      _isSendingToKafka.value = false;
-    }
-  }
-
   Widget _buildModernBottomActionBar() {
     return Obx(() {
-      final displayList = _realtimeDetailsList.isNotEmpty
-          ? _realtimeDetailsList
-          : detailsList;
-
-      final totalItems = displayList.length;
+      final totalItems = detailsList.length;
       final totalQty = _calculateTotalQtyOrdered();
-
-      final int totalInputItems = _pendingGrDetails.length;
-      final int withSerialCount = _pendingGrDetails
-          .where((d) => d.sn != null && d.sn!.isNotEmpty)
-          .length;
-      final int withoutSerialCount = totalInputItems - withSerialCount;
-
-      if (isReadOnlyMode) {
-        return Container(
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 8,
-                offset: Offset(0, -2),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildSummaryItem("Items", "$totalItems"),
-                  _buildSummaryItem(
-                    "Total QTY",
-                    NumberHelper.formatNumber(double.tryParse(totalQty)),
-                  ),
-                ],
-              ),
-              SizedBox(height: 8),
-              Container(
-                padding: EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.visibility, color: Colors.grey, size: 16),
-                    SizedBox(width: 4),
-                    Text(
-                      "View Only Mode",
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      }
 
       return Container(
         padding: EdgeInsets.all(16),
@@ -4530,105 +2942,6 @@ class _InDetailPageState extends State<InDetailPage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ✅ TAMPILKAN INFO GR JIKA SUDAH ADA
-            if (_currentGrId != null || totalInputItems > 0)
-              Container(
-                padding: EdgeInsets.all(12),
-                margin: EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: _isGrIdSavedToFirestore
-                      ? Colors.green.shade50
-                      : Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: _isGrIdSavedToFirestore
-                        ? Colors.green.shade200
-                        : Colors.blue.shade200,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // GR ID Info
-                    if (_currentGrId != null)
-                      Row(
-                        children: [
-                          Icon(
-                            _isGrIdSavedToFirestore
-                                ? Icons.check_circle
-                                : Icons.pending,
-                            color: _isGrIdSavedToFirestore
-                                ? Colors.green
-                                : Colors.blue,
-                            size: 20,
-                          ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              "GR ID: $_currentGrId",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: _isGrIdSavedToFirestore
-                                    ? Colors.green.shade800
-                                    : Colors.blue.shade800,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                    // Data Input Summary
-                    if (totalInputItems > 0) ...[
-                      if (_currentGrId != null) SizedBox(height: 8),
-                      Container(
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              "Data Input:",
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orange.shade800,
-                              ),
-                            ),
-                            Row(
-                              children: [
-                                if (withSerialCount > 0)
-                                  Text(
-                                    "$withSerialCount SN",
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.orange.shade600,
-                                    ),
-                                  ),
-                                if (withSerialCount > 0 &&
-                                    withoutSerialCount > 0)
-                                  Text(" • ", style: TextStyle(fontSize: 11)),
-                                if (withoutSerialCount > 0)
-                                  Text(
-                                    "$withoutSerialCount Non-SN",
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.orange.shade600,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-            // Summary Items
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -4639,132 +2952,49 @@ class _InDetailPageState extends State<InDetailPage>
                 ),
               ],
             ),
-
             SizedBox(height: 16),
-
-            // ✅ TOMBOL ACTION
             if (widget.from != "history")
               Row(
                 children: [
-                  // Tombol Cancel / Kembali ke GRIN
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: _handleCancelPress,
-                      icon: Icon(
-                        Icons.cancel,
-                        color: _isGrIdSavedToFirestore
-                            ? hijauGojek
-                            : Colors.grey,
-                      ),
+                      icon: Icon(Icons.cancel, color: hijauGojek),
                       label: Text(
-                        _isGrIdSavedToFirestore ? "Kembali ke GRIN" : "Cancel",
-                        style: TextStyle(
-                          color: _isGrIdSavedToFirestore
-                              ? hijauGojek
-                              : Colors.grey,
-                        ),
+                        "Cancel",
+                        style: TextStyle(color: hijauGojek),
                       ),
                       style: OutlinedButton.styleFrom(
                         padding: EdgeInsets.symmetric(vertical: 12),
-                        side: BorderSide(
-                          color: _isGrIdSavedToFirestore
-                              ? hijauGojek
-                              : Colors.grey,
+                        side: BorderSide(color: hijauGojek),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                     ),
                   ),
-                  if (_currentGrId != null && _isGrIdSavedToFirestore) ...[
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('gr_in')
-                            .doc(_currentGrId)
-                            .get(),
-                        builder: (context, snapshot) {
-                          if (!snapshot.hasData || !snapshot.data!.exists) {
-                            return SizedBox.shrink();
-                          }
-
-                          final data =
-                              snapshot.data!.data() as Map<String, dynamic>? ??
-                              {};
-                          final kafkaStatus = data['lastSeenToKafkaLogStatus'];
-                          final bool isSent = kafkaStatus == "success";
-
-                          return Obx(() {
-                            // TAMPILKAN LOADING STATE DI BUTTON
-                            if (_isSendingToKafka.value) {
-                              return Container(
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: hijauGojek.withValues(alpha: 0.8),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
-                                      ),
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Mengirim...',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-
-                            // TAMPILKAN BUTTON NORMAL
-                            return ElevatedButton.icon(
-                              onPressed: isSent
-                                  ? null
-                                  : _sendToCperpWithLoading,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isSent
-                                    ? Colors.grey
-                                    : hijauGojek,
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              icon: Icon(
-                                isSent
-                                    ? Icons.check_circle
-                                    : Icons.send_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                              label: Text(
-                                isSent ? 'Sudah Terkirim' : 'Kirim CPERP',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            );
-                          });
-                        },
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: containerinput.text.isEmpty
+                          ? null
+                          : () => _handleApprovePress(widget.from == "sync"),
+                      icon: Icon(Icons.check_circle, color: Colors.white),
+                      label: Text(
+                        "Approve",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: containerinput.text.isEmpty
+                            ? Colors.grey
+                            : hijauGojek,
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                     ),
-                  ],
+                  ),
                 ],
               ),
           ],
@@ -4789,6 +3019,165 @@ class _InDetailPageState extends State<InDetailPage>
           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
       ],
+    );
+  }
+
+  Future<void> _showMyDialogReject(InModel indetail) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        elevation: 8,
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: 400,
+            maxHeight: MediaQuery.of(context).size.height * 0.5,
+          ),
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.white, Colors.grey.shade50],
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon Warning dengan animasi
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.orange.shade50,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.orange.withValues(alpha: 0.3),
+                      blurRadius: 20,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.warning_rounded,
+                  size: 48,
+                  color: Colors.orange.shade600,
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Title
+              Text(
+                'Discard Changes?',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Description
+              Text(
+                'Are you sure you want to discard all changes made in this purchase order?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Action Buttons
+              Row(
+                children: [
+                  // Cancel Button
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(color: Colors.grey.shade300, width: 2),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.close, color: Colors.grey.shade700),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  // Confirm Button
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final clonedData = cloned.tData ?? [];
+                        final forCloseData = forclose.tData ?? [];
+
+                        if (clonedData.isNotEmpty && widget.from != "sync") {
+                          final tDataList =
+                              inVM.tolistPO[widget.index].tData ?? [];
+                          tDataList
+                            ..clear()
+                            ..addAll(forCloseData);
+                        }
+
+                        Navigator.of(context).pop();
+                        Navigator.of(context).pop();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade500,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.delete_outline, color: Colors.white),
+                          SizedBox(width: 8),
+                          Text(
+                            'Discard',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -6557,16 +4946,10 @@ class _InDetailPageState extends State<InDetailPage>
   }
 
   String _calculateTotalQtyOrdered() {
-    final displayList = _realtimeDetailsList.isNotEmpty
-        ? _realtimeDetailsList
-        : detailsList;
-
-    final total = displayList.fold<double>(0, (currentSum, item) {
-      final qtyEntered = item.qtyEntered ?? 0.0;
-      final qtyOrdered = item.qtyordered ?? 0.0;
-      final remainingQty = qtyOrdered - qtyEntered;
-      return currentSum + (remainingQty > 0 ? remainingQty : 0);
-    });
+    final total = detailsList.fold<double>(
+      0,
+      (currentSum, item) => currentSum + (item.qtyordered ?? 0),
+    );
     return total.toStringAsFixed(2);
   }
 
@@ -6761,200 +5144,18 @@ class _InDetailPageState extends State<InDetailPage>
         : 0;
   }
 
-  Future<void> _handleBackPress() async {
-    // ✅ JIKA DALAM MODE READ-ONLY, LANGSUNG KEMBALI KE HOME PAGE
-    if (isReadOnlyMode) {
-      _logger.d('🔙 Read-only mode, navigating directly to Home');
-      Get.until((route) => route.isFirst); // Kembali ke home page
-      return;
-    }
-    // ✅ CEK APAKAH HALAMAN INI DIBUKA DARI GRIN PAGE
-    final bool isFromGrinPage = widget.grId != null;
-
-    // ✅ CEK APAKAH ADA DATA YANG SUDAH DIINPUT
-    final bool hasAnyData = _hasAnyDataInput();
-    final bool hasSerialData = _hasSerialNumberData();
-    final bool hasNonSerialData = _hasNonSerialNumberData();
-
-    debugPrint('🔍 Status data sebelum back:');
-    debugPrint('   - From GRIN Page: $isFromGrinPage');
-    debugPrint('   - Total items: ${_pendingGrDetails.length}');
-    debugPrint('   - Dengan serial number: $hasSerialData');
-    debugPrint('   - Tanpa serial number: $hasNonSerialData');
-    debugPrint('   - GR ID saved: $_isGrIdSavedToFirestore');
-
-    // ✅ JIKA DIBUKA DARI GRIN PAGE → LANGSUNG KEMBALI KE GRIN PAGE
-    if (isFromGrinPage) {
-      _logger.d('🔙 Opened from GRIN Page, navigating back to GRIN Page');
-
-      if (hasAnyData) {
-        // Ada data yang sudah diinput, tampilkan notifikasi sukses
-        Fluttertoast.showToast(
-          msg: "Data berhasil ditambahkan ke GR ID: $_currentGrId",
-          backgroundColor: Colors.green,
-          textColor: Colors.white,
-        );
-      }
-
-      _resetGrData();
-      Get.back(); // Langsung kembali ke GRIN Page
-      return;
-    }
-
-    // ✅ LOGIKA UNTUK HALAMAN YANG DIBUKA DARI IN PAGE:
-    // - JIKA ADA DATA → TAWARKAN LIHAT GRIN ATAU LANJUTKAN INPUT
-    // - JIKA TIDAK ADA DATA → KEMBALI KE IN PAGE
-
-    if (hasAnyData && _isGrIdSavedToFirestore && _currentGrId != null) {
-      // ✅ ADA DATA YANG SUDAH DIINPUT → TAWARKAN NAVIGASI KE GRIN PAGE
-      _logger.d('📦 Data sudah diinput, tawarkan navigasi ke GrinPage');
-
-      final shouldNavigateToGrin =
-          await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Row(
-                children: [
-                  Icon(Icons.inventory_2, color: hijauGojek),
-                  SizedBox(width: 8),
-                  Text("Data GR Telah Disimpan"),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Info GR ID
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.confirmation_number, color: Colors.green),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "GR ID: $_currentGrId",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green.shade800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 12),
-
-                  // Summary data
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Total: ${_pendingGrDetails.length} items",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue.shade800,
-                          ),
-                        ),
-                        if (hasSerialData)
-                          Text(
-                            "• ${_pendingGrDetails.where((d) => d.sn != null && d.sn!.isNotEmpty).length} dengan serial number",
-                          ),
-                        if (hasNonSerialData)
-                          Text(
-                            "• ${_pendingGrDetails.where((d) => d.sn == null || d.sn!.isEmpty).length} tanpa serial number",
-                          ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 12),
-
-                  Text(
-                    "Data telah berhasil disimpan. Apakah Anda ingin melihat daftar GRIN?",
-                    style: TextStyle(fontSize: 14),
-                  ),
-                ],
-              ),
-              actions: [
-                // ✅ Opsi: Lanjutkan Input (tetap di halaman ini)
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text("Lanjutkan Input"),
-                ),
-
-                // ✅ Opsi: Ke GRIN Page
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: ElevatedButton.styleFrom(backgroundColor: hijauGojek),
-                  child: Text("Lihat GRIN"),
-                ),
-              ],
-            ),
-          ) ??
-          false;
-
-      if (shouldNavigateToGrin) {
-        // ✅ ARAHKAN KE GRIN PAGE
-        _navigateToGrinPage();
-      } else {
-        // ✅ USER MEMILIH LANJUTKAN INPUT - TETAP DI HALAMAN INI
-        _logger.d('👤 User memilih untuk lanjutkan input data');
-      }
-    }
-    // ✅ JIKA BELUM ADA DATA SAMA SEKALI → LANGSUNG KEMBALI KE IN PAGE
-    else if (!hasAnyData) {
-      _logger.d('🔄 Tidak ada data yang diinput, kembali ke InPage');
-
-      _resetGrData();
-      Get.back(); // Langsung kembali ke IN Page tanpa konfirmasi
-    }
-    // ✅ EDGE CASE: Ada data tapi belum disimpan (seharusnya tidak terjadi)
-    else if (hasAnyData && !_isGrIdSavedToFirestore) {
-      _logger.w(
-        '⚠️ Ada data yang belum disimpan: ${_pendingGrDetails.length} items',
-      );
-
-      final shouldGoBack =
-          await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text("Data Belum Disimpan"),
-              content: Text(
-                "Ada ${_pendingGrDetails.length} item yang belum disimpan. "
-                "Apakah Anda yakin ingin membatalkan?",
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text("Lanjutkan Input"),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                  ),
-                  child: Text("Batalkan Input"),
-                ),
-              ],
-            ),
-          ) ??
-          false;
-
-      if (shouldGoBack) {
-        _resetGrData();
-        Get.back();
-      }
+  void _handleBackPress() {
+    if (widget.from == "history") {
+      Get.back(result: true); // Kembali dengan result true
+    } else if (widget.from == "sync") {
+      if (widget.flag == null) return;
+      _showMyDialogReject(widget.flag!);
+    } else {
+      final model = inVM.tolistPO.isNotEmpty
+          ? inVM.tolistPO[widget.index]
+          : null;
+      if (model == null) return;
+      _showMyDialogReject(model);
     }
   }
 
@@ -7040,289 +5241,7 @@ class _InDetailPageState extends State<InDetailPage>
   }
 
   void _handleCancelPress() {
-    if (_isGrIdSavedToFirestore && _currentGrId != null) {
-      // Jika sudah disimpan, tampilkan konfirmasi ke GrinPage
-      _showNavigationConfirmation();
-    } else {
-      // Jika belum disimpan, kembali ke InPage
-      _showCancelConfirmation();
-    }
-  }
-
-  void _showNavigationConfirmation() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Lihat GRIN?"),
-        content: Text(
-          "Data GR sudah disimpan. Apakah Anda ingin melihat halaman GRIN?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text("Tambah Lagi"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _navigateToGrinPage();
-            },
-            child: Text("Lihat GRIN"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showCancelConfirmation() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Batalkan Input?"),
-        content: Text(
-          _pendingGrDetails.isNotEmpty
-              ? "Ada ${_pendingGrDetails.length} item yang belum disimpan. Apakah Anda yakin ingin membatalkan?"
-              : "Apakah Anda yakin ingin membatalkan input?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text("Lanjutkan"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _resetGrData();
-              Get.back();
-            },
-            child: Text("Batalkan"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSaveConfirmationDialog(
-    InDetail product,
-    String? serialNumber,
-    int quantity, {
-    bool fromQR = false,
-    bool shouldCloseBottomSheet = true,
-    bool shouldNavigate = true,
-    VoidCallback? onAfterSave, // ✅ CALLBACK BARU SETELAH SIMPAN
-  }) {
-    final hasSerialNumber = serialNumber != null && serialNumber.isNotEmpty;
-    final currentGrId = _currentGrId ?? "Akan digenerate";
-    final productName =
-        product.maktxUI ?? product.mProductId ?? "Unknown Product";
-    final poNumber = widget.from == "sync"
-        ? widget.flag?.documentno ?? ""
-        : _getCurrentInModel().documentno ?? "";
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.save_rounded, color: hijauGojek),
-            SizedBox(width: 8),
-            Text("Konfirmasi Simpan Data"),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Informasi GR ID
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.confirmation_number, color: Colors.blue, size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "GR ID: $currentGrId",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
-
-            // Informasi PO
-            Container(
-              padding: EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.description, color: Colors.green, size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "PO: $poNumber",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.green.shade800,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          "Product: $productName",
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.green.shade600,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
-
-            // Informasi Serial Number
-            Container(
-              padding: EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: hasSerialNumber
-                    ? Colors.orange.shade50
-                    : Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    hasSerialNumber ? Icons.qr_code : Icons.no_sim,
-                    color: hasSerialNumber ? Colors.orange : Colors.grey,
-                    size: 16,
-                  ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          hasSerialNumber
-                              ? "Dengan Serial Number"
-                              : "Tanpa Serial Number",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: hasSerialNumber
-                                ? Colors.orange.shade800
-                                : Colors.grey.shade800,
-                          ),
-                        ),
-                        if (hasSerialNumber) ...[
-                          SizedBox(height: 2),
-                          Text(
-                            "SN: $serialNumber",
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.orange.shade600,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
-
-            // Informasi Quantity
-            Container(
-              padding: EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.purple.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.confirmation_number,
-                    color: Colors.purple,
-                    size: 16,
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    "Quantity: $quantity",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.purple.shade800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
-
-            Text(
-              "Apakah Anda yakin ingin menyimpan data ini?",
-              style: TextStyle(fontSize: 14),
-            ),
-          ],
-        ),
-        actions: [
-          // Tombol Batal
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(false);
-            },
-            child: Text("Batal", style: TextStyle(color: Colors.grey.shade700)),
-          ),
-
-          // Tombol Simpan
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop(true);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: hijauGojek),
-            child: Text("Ya, Simpan"),
-          ),
-        ],
-      ),
-    ).then((confirmed) async {
-      if (confirmed == true) {
-        // ✅ JIKA USER MENGKONFIRMASI, LANJUTKAN PENYIMPANAN
-        await _saveToFirestore(
-          product,
-          serialNumber,
-          quantity,
-          shouldCloseBottomSheet: shouldCloseBottomSheet,
-          shouldNavigate: shouldNavigate,
-        );
-
-        // ✅ PANGGIL CALLBACK SETELAH SIMPAN BERHASIL
-        if (onAfterSave != null) {
-          onAfterSave();
-        }
-      }
-    });
+    _showMyDialogReject(inVM.tolistPO[widget.index]);
   }
 
   void _handleApprovePress(bool isSync) {
@@ -7394,7 +5313,6 @@ class _CameraScannerDialogState extends State<CameraScannerDialog> {
   @override
   void dispose() {
     cameraController.dispose();
-
     super.dispose();
   }
 

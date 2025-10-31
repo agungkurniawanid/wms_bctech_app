@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:wms_bctech/widgets/text_widget.dart';
+import 'package:wms_bctech/components/text_widget.dart';
 
 class CardWidget extends StatelessWidget {
   final String? text;

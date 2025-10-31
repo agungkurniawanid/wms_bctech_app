@@ -1,7 +1,10 @@
+import 'dart:isolate';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:wms_bctech/controllers/grin/gr_sequence_controller.dart';
+import 'package:wms_bctech/helpers/text_helper.dart';
 import 'package:wms_bctech/models/grin/good_receive_serial_number_detail_model.dart';
 import 'package:wms_bctech/models/grin/good_receive_serial_number_model.dart';
 import 'package:logger/web.dart';
@@ -21,8 +24,216 @@ class GrinController extends GetxController {
 
   @override
   void onReady() {
+    _logger.d('🎯 GrinController onReady dipanggil');
     super.onReady();
     loadGrinData();
+  }
+
+  // Di GrinController class
+  void setSearchMode(bool searching) {
+    _logger.d('🔄 setSearchMode: $searching');
+
+    // ✅ FIXED: Update state dengan microtask untuk konsistensi
+    Future.microtask(() {
+      isSearching.value = searching;
+      if (!searching) {
+        searchQuery.value = '';
+      }
+    });
+  }
+
+  void updateSearchQueryGrinPage(String newQuery) {
+    _logger.d('🔄 updateSearchQueryGrinPage: "$newQuery"');
+
+    // ✅ FIXED: Handle empty query dengan benar
+    if (newQuery.isEmpty) {
+      setSearchMode(false);
+    } else {
+      setSearchMode(true);
+      searchGrin(newQuery);
+    }
+  }
+
+  // ✅ PERBAIKAN: Gunakan Isolate.run untuk filter async
+  // Di GrinController - PERBAIKI method searchGrin
+  void searchGrin(String query) async {
+    _logger.d('🔍 searchGrin dipanggil dengan query: "$query"');
+
+    try {
+      // GUNAKAN METHOD INI UNTUK MEMASTIKAN KONSISTENSI STATE
+      await _updateSearchState(query, true);
+
+      _logger.d('📊 Data sebelum search: ${grinListBackup.length} items');
+
+      if (query.isEmpty) {
+        _logger.d('🔄 Query kosong, restore data dari backup');
+        if (grinListBackup.isNotEmpty) {
+          grinList.assignAll(grinListBackup);
+          _logger.d('✅ Data restored: ${grinList.length} items');
+        } else {
+          _logger.w('⚠️ Backup data kosong, tidak ada data untuk direstore');
+        }
+        await _updateSearchState(query, false);
+        return;
+      }
+
+      final listToFilter = List<GoodReceiveSerialNumberModel>.from(
+        grinListBackup,
+      );
+      final searchKey = query.toLowerCase().trim();
+
+      _logger.d('🚀 Memulai filter di Isolate untuk keyword: "$searchKey"');
+
+      final filteredList = await Isolate.run(() {
+        return listToFilter.where((gr) {
+          final grId = gr.grId.toLowerCase();
+          final poNumber = gr.poNumber.toLowerCase();
+          final createdBy = TextHelper.formatUserName(
+            gr.createdBy ?? 'Unknown',
+          ).toLowerCase();
+
+          final hasMatchingDetail = gr.details.any((detail) {
+            final sn = detail.sn?.toLowerCase() ?? '';
+            return sn.contains(searchKey);
+          });
+
+          return grId.contains(searchKey) ||
+              poNumber.contains(searchKey) ||
+              createdBy.contains(searchKey) ||
+              hasMatchingDetail;
+        }).toList();
+      });
+
+      _logger.d('🏁 Isolate selesai, hasil: ${filteredList.length} items');
+
+      // PASTIKAN QUERY MASIH SAMA SEBELUM UPDATE STATE
+      if (searchQuery.value == query) {
+        grinList.assignAll(filteredList);
+        await _updateSearchState(query, false);
+        _logger.d(
+          '✅ Search completed, data diupdate dengan ${filteredList.length} items',
+        );
+      } else {
+        _logger.d('⏭️ Query berubah, abaikan hasil Isolate lama');
+      }
+    } catch (e, stackTrace) {
+      _logger.e('❌ Error di searchGrin: $e');
+      _logger.e('📋 Stack trace: $stackTrace');
+      // PASTIKAN STATE DIBERSIHKAN MESKIPUN ERROR
+      await _updateSearchState('', false);
+    }
+  }
+
+  // TAMBAHKAN METHOD BARU UNTUK MENGATUR STATE DENGAN AMAN
+  Future<void> _updateSearchState(String query, bool searching) async {
+    // GUNAKAN MICROTASK UNTUK MEMASTIKAN UPDATE SETELAH BUILD CYCLE
+    await Future.microtask(() {
+      searchQuery.value = query;
+      isSearching.value = searching;
+    });
+  }
+
+  // PERBAIKI METHOD CLEARSEARCH
+  void clearSearch() {
+    _logger.d('🧹 clearSearch dipanggil');
+    try {
+      // RESET STATE DENGAN AMAN
+      _updateSearchState('', false);
+
+      if (grinListBackup.isNotEmpty) {
+        grinList.assignAll(grinListBackup);
+        _logger.d(
+          '✅ Data cleared, restored ${grinList.length} items dari backup',
+        );
+      } else {
+        _logger.w('⚠️ Backup data kosong, tidak bisa restore');
+        loadGrinData();
+      }
+    } catch (e, stackTrace) {
+      _logger.e('❌ Error di clearSearch: $e');
+      _logger.e('📋 Stack trace: $stackTrace');
+      // PASTIKAN STATE DIBERSIHKAN MESKIPUN ERROR
+      _updateSearchState('', false);
+    }
+  }
+
+  // ✅ PERBAIKAN: Pastikan backup data selalu terisi
+  Future<void> loadGrinData() async {
+    _logger.d('📥 loadGrinData dipanggil');
+    try {
+      isLoading.value = true;
+
+      await getGrinStream().first;
+      _logger.d('✅ Data GRIN berhasil diload');
+
+      isLoading.value = false;
+    } catch (e, stackTrace) {
+      _logger.e('❌ Error loading GRIN data: $e');
+      _logger.e('📋 Stack trace: $stackTrace');
+      isLoading.value = false;
+    }
+  }
+
+  Stream<List<GoodReceiveSerialNumberModel>> getGrinStream() {
+    _logger.d('📡 getGrinStream dipanggil');
+
+    final oneMonthAgo = DateTime.now().subtract(const Duration(days: 30));
+    final startOfDay = DateTime(
+      oneMonthAgo.year,
+      oneMonthAgo.month,
+      oneMonthAgo.day,
+    );
+
+    return _firestore
+        .collection('gr_in')
+        .where(
+          'createdat',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+        )
+        .orderBy('createdat', descending: true)
+        .snapshots()
+        .asyncMap((snapshot) async {
+          _logger.d(
+            '📊 Mendapatkan ${snapshot.docs.length} documents dari Firestore',
+          );
+
+          final List<GoodReceiveSerialNumberModel> grList = [];
+
+          for (final doc in snapshot.docs) {
+            try {
+              final grModel = GoodReceiveSerialNumberModel.fromFirestore(
+                doc,
+                null,
+              );
+              grList.add(grModel);
+            } catch (e) {
+              _logger.e('❌ Error parsing GR document ${doc.id}: $e');
+            }
+          }
+
+          // Sort by created date
+          grList.sort((a, b) {
+            final dateA = a.createdAt;
+            final dateB = b.createdAt;
+            if (dateA == null && dateB == null) return 0;
+            if (dateA == null) return 1;
+            if (dateB == null) return -1;
+            return dateB.compareTo(dateA);
+          });
+
+          // ✅ PERBAIKAN: Pastikan backup data selalu terupdate
+          grinListBackup.value = List.from(grList);
+          grinList.value = List.from(grList);
+
+          _logger.d('✅ Backup data diupdate: ${grList.length} items');
+          _logger.d('✅ Loaded ${grList.length} GR documents dari last 30 days');
+
+          return grList;
+        })
+        .handleError((error) {
+          _logger.e('❌ Stream error in getGrinStream: $error');
+          return <GoodReceiveSerialNumberModel>[];
+        });
   }
 
   Future<bool> isSerialNumberUniqueGlobal(String serialNumber) async {
@@ -92,24 +303,7 @@ class GrinController extends GetxController {
   }
 
   // Update method search untuk mendukung grouped data
-  void searchGrin(String query) {
-    searchQuery.value = query;
-
-    if (query.isEmpty) {
-      grinList.assignAll(grinListBackup);
-      return;
-    }
-
-    final filteredList = grinListBackup.where((gr) {
-      final grId = gr.grId.toLowerCase();
-      final poNumber = gr.poNumber.toLowerCase();
-      final searchLower = query.toLowerCase();
-
-      return grId.contains(searchLower) || poNumber.contains(searchLower);
-    }).toList();
-
-    grinList.assignAll(filteredList);
-  }
+  // Di dalam GrinController class
 
   Future<bool> isSerialNumberUniqueOptimized(String serialNumber) async {
     try {
@@ -290,61 +484,6 @@ class GrinController extends GetxController {
     }
   }
 
-  Stream<List<GoodReceiveSerialNumberModel>> getGrinStream() {
-    // Hitung batas waktu: 30 hari ke belakang
-    final oneMonthAgo = DateTime.now().subtract(const Duration(days: 30));
-    final startOfDay = DateTime(
-      oneMonthAgo.year,
-      oneMonthAgo.month,
-      oneMonthAgo.day,
-    );
-
-    return FirebaseFirestore.instance
-        .collection('gr_in')
-        .where(
-          'createdat',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
-        )
-        .orderBy('createdat', descending: true) // Urutkan di Firestore
-        .snapshots()
-        .asyncMap((snapshot) async {
-          final List<GoodReceiveSerialNumberModel> grList = [];
-
-          for (final doc in snapshot.docs) {
-            try {
-              final grModel = GoodReceiveSerialNumberModel.fromFirestore(
-                doc,
-                null,
-              );
-              grList.add(grModel);
-            } catch (e) {
-              _logger.e('Error parsing GR document ${doc.id}: $e');
-            }
-          }
-
-          // Tidak perlu sort lagi karena sudah di-orderBy di Firestore
-          // Tapi tetap sort ulang jika ada data yang createdAt null
-          grList.sort((a, b) {
-            final dateA = a.createdAt;
-            final dateB = b.createdAt;
-            if (dateA == null && dateB == null) return 0;
-            if (dateA == null) return 1;
-            if (dateB == null) return -1;
-            return dateB.compareTo(dateA);
-          });
-
-          // Update reactive list
-          grinList.value = grList;
-          _logger.d('Loaded ${grList.length} GR documents from last 30 days');
-
-          return grList;
-        })
-        .handleError((error) {
-          _logger.e('Stream error in getGrinStream: $error');
-          return <GoodReceiveSerialNumberModel>[];
-        });
-  }
-
   Future<Map<String, dynamic>> updateGrDetails({
     required String grId,
     required List<GoodReceiveSerialNumberDetailModel> details,
@@ -438,25 +577,6 @@ class GrinController extends GetxController {
     }
   }
 
-  Future<void> loadGrinData() async {
-    try {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        isLoading.value = true;
-      });
-
-      await getGrinStream().first;
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        isLoading.value = false;
-      });
-    } catch (e) {
-      _logger.e('Error loading GRIN data: $e');
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        isLoading.value = false;
-      });
-    }
-  }
-
   Future<void> saveSerialNumberGlobal({
     required String serialNumber,
     required String grId,
@@ -499,11 +619,6 @@ class GrinController extends GetxController {
     } finally {
       isLoading.value = false;
     }
-  }
-
-  void clearSearch() {
-    searchQuery.value = '';
-    grinList.assignAll(grinListBackup);
   }
 
   void sortGrin(String sortBy) {
@@ -719,10 +834,6 @@ class GrinController extends GetxController {
     }
 
     return {'success': false, 'error': 'Gagal menyimpan GR'};
-  }
-
-  void updateSearchQueryGrinPage(String newQuery) {
-    searchGrin(newQuery);
   }
 
   Future<void> handleRefreshGrinPage() async {

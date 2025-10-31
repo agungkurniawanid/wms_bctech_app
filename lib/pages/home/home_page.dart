@@ -11,12 +11,12 @@ import 'package:wms_bctech/helpers/number_helper.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
 import 'package:wms_bctech/pages/grin/grin_page.dart';
 import 'package:wms_bctech/pages/out/out_page.dart';
-import 'package:wms_bctech/widgets/clipper.dart';
-import 'package:wms_bctech/widgets/home/home_appbar_widget.dart';
-import 'package:wms_bctech/widgets/home/home_menu_card_widget.dart';
-import 'package:wms_bctech/widgets/home/home_more_options_bottom_sheet_widget.dart';
-import 'package:wms_bctech/widgets/home/home_recent_order_carousel_widget.dart';
-import 'package:wms_bctech/widgets/home/home_shimmer_loading_widget.dart';
+import 'package:wms_bctech/components/clipper.dart';
+import 'package:wms_bctech/components/home/home_appbar_widget.dart';
+import 'package:wms_bctech/components/home/home_menu_card_widget.dart';
+import 'package:wms_bctech/components/home/home_more_options_bottom_sheet_widget.dart';
+import 'package:wms_bctech/components/home/home_recent_order_carousel_widget.dart';
+import 'package:wms_bctech/components/home/home_shimmer_loading_widget.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});

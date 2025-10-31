@@ -16,6 +16,7 @@ class HomeAppbarWidget extends StatefulWidget {
 
 class _HomeAppbarWidgetState extends State<HomeAppbarWidget> {
   final authController = Get.find<NewAuthController>();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -48,8 +49,10 @@ class _HomeAppbarWidgetState extends State<HomeAppbarWidget> {
               ),
 
               Obx(() {
-                final rawName = authController.userId.value;
-                final formattedName = TextHelper.capitalize(rawName);
+                final rawName =
+                    authController.userName.value ??
+                    authController.userId.value;
+                final formattedName = TextHelper.formatUserName(rawName);
 
                 return Text(
                   formattedName.isEmpty ? 'Memuat...' : formattedName,

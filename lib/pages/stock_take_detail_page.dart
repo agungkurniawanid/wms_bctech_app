@@ -17,7 +17,7 @@ import 'package:wms_bctech/models/stock_take_model.dart';
 import 'package:wms_bctech/pages/counted_page.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
 import 'package:wms_bctech/controllers/stock_tick_controller.dart';
-import 'package:wms_bctech/widgets/text_widget.dart';
+import 'package:wms_bctech/components/text_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
