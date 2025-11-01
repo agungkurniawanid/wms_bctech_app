@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:logger/web.dart';
 import 'package:wms_bctech/constants/grin/grin_constant.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/controllers/grin/grin_controller.dart';
@@ -21,7 +22,6 @@ import 'package:wms_bctech/components/grin/grin_appbar_widget.dart';
 import 'package:wms_bctech/components/grin/grin_empty_widget.dart';
 import 'package:wms_bctech/components/grin/grin_header_widget.dart';
 import 'package:wms_bctech/components/grin/grin_shimmer_widget.dart';
-import 'package:logger/logger.dart';
 
 class GrinPage extends StatefulWidget {
   const GrinPage({super.key});
@@ -38,45 +38,57 @@ class _GrinPageState extends State<GrinPage> {
   final _inController = Get.find<InVM>();
 
   Timer? _searchDebounce;
-
-  bool _isInSearchMode = false; // LOCAL STATE untuk UI search mode
-  // ✅ TAMBAHKAN STREAM SUBSCRIPTION UNTUK SYNCHRONIZE STATE
   late final StreamSubscription<bool> _searchStateSubscription;
+  late final StreamSubscription<String> _searchQuerySubscription;
 
   @override
   void initState() {
     super.initState();
-    // Stream subscription tetap untuk trigger setState
+    _logger.d('🎯 GrinPage initState');
+
     _searchStateSubscription = _grinController.isSearching.listen((searching) {
-      if (mounted) setState(() {});
+      _logger.d('🔄 Search state changed in UI: $searching');
+      if (mounted) {
+        setState(() {});
+      }
+    });
+
+    _searchQuerySubscription = _grinController.searchQuery.listen((query) {
+      _logger.d('📝 Search query in UI: "$query"');
+      // Sync search controller text
+      if (_searchController.text != query) {
+        _searchController.text = query;
+      }
     });
   }
 
   @override
   void dispose() {
+    _logger.d('🧹 GrinPage dispose');
     _searchDebounce?.cancel();
-    _searchStateSubscription.cancel(); // ✅ JANGAN LUPA DISPOSE
+    _searchStateSubscription.cancel();
+    _searchQuerySubscription.cancel();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   void _onSearchChanged(String query) {
+    _logger.d('🔍 _onSearchChanged: "$query"');
+
     if (_searchDebounce?.isActive ?? false) {
       _searchDebounce!.cancel();
     }
 
     _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+
       try {
         final trimmedQuery = query.trim();
+        _logger.d('🎯 Executing search for: "$trimmedQuery"');
 
-        // ✅ FIXED: Jika query kosong, nonaktifkan search mode
-        if (trimmedQuery.isEmpty) {
-          _grinController.setSearchMode(false);
-        } else {
-          _grinController.setSearchMode(true);
-          _grinController.searchGrin(trimmedQuery);
-        }
+        // Delegate to controller
+        _grinController.updateSearchQuery(trimmedQuery);
       } catch (e, stackTrace) {
         _logger.e('❌ Search error: $e\n$stackTrace');
       }
@@ -84,17 +96,11 @@ class _GrinPageState extends State<GrinPage> {
   }
 
   void _startSearch() {
-    _logger.d('🔍 _startSearch dipanggil');
+    _logger.d('🔍 _startSearch called');
     try {
-      // ✅ FIXED: Update controller state
       _grinController.setSearchMode(true);
-
-      // Trigger UI rebuild
-      if (mounted) setState(() {});
-
-      _logger.d('✅ Search mode diaktifkan');
     } catch (e, stackTrace) {
-      _logger.e('❌ Error di _startSearch: $e\n$stackTrace');
+      _logger.e('❌ Error in _startSearch: $e\n$stackTrace');
     }
   }
 
@@ -102,36 +108,45 @@ class _GrinPageState extends State<GrinPage> {
     _logger.d('🧹 _clearSearchQuery dipanggil');
     try {
       _searchController.clear();
-      _grinController.setSearchMode(false); // ✅ Nonaktifkan search mode
+      _grinController.clearSearch();
       _logger.d('✅ Search cleared dan mode dinonaktifkan');
     } catch (e, stackTrace) {
       _logger.e('❌ Error di _clearSearchQuery: $e\n$stackTrace');
     }
   }
 
-  // ✅ PERBAIKI _buildContent UNTUK LEBIH ROBUST
   Widget _buildContent() {
     return Obx(() {
       final isSearching = _grinController.isSearching.value;
       final searchQuery = _grinController.searchQuery.value;
-      final hasResults = _grinController.grinList.isNotEmpty;
+      final hasSearchResults = _grinController.grinList.isNotEmpty;
+      final isLoading = _grinController.isLoading.value;
 
-      // ✅ FIXED: Logic yang lebih sederhana dan aman
-      if (searchQuery.isNotEmpty) {
-        return _buildSearchResults();
-      }
+      _logger.d(
+        '📊 _buildContent - isSearching: $isSearching, searchQuery: "$searchQuery", hasResults: $hasSearchResults',
+      );
 
-      // Default view (bukan search mode)
-      if (isSearching && !hasResults) {
+      // Jika sedang loading
+      if (isLoading) {
         return const GrinShimmerWidget();
       }
 
-      if (!isSearching && !hasResults) {
+      // Jika sedang search mode dan ada query
+      if (isSearching && searchQuery.isNotEmpty) {
+        if (!hasSearchResults) {
+          return _buildEmptySearchState();
+        }
+        return _buildSearchResults();
+      }
+
+      // Jika tidak ada data sama sekali
+      if (_grinController.grinList.isEmpty) {
         return GrinEmptyWidget(
           onRefresh: _grinController.handleRefreshGrinPage,
         );
       }
 
+      // Default view - grouped list
       return _buildGroupedGrinList();
     });
   }
@@ -141,119 +156,429 @@ class _GrinPageState extends State<GrinPage> {
       final searchQuery = _grinController.searchQuery.value
           .trim()
           .toLowerCase();
-      final isSearching = _grinController.isSearching.value;
       final grinList = _grinController.grinList;
 
-      // Jika belum mulai mengetik
       if (searchQuery.isEmpty) {
         return const Center(child: Text('Start typing to search...'));
       }
 
-      // Jika sedang loading
-      if (isSearching) {
-        return const Center(child: CircularProgressIndicator());
-      }
-
-      // Filter data berdasarkan query di field tertentu
-      final filteredList = grinList.where((grin) {
-        final createdBy = grin.createdBy?.toLowerCase() ?? '';
-        final grId = grin.grId.toLowerCase();
-        final poId = grin.poNumber.toLowerCase();
-        final poNumber = grin.poNumber.toLowerCase();
-
-        return createdBy.contains(searchQuery) ||
-            grId.contains(searchQuery) ||
-            poId.contains(searchQuery) ||
-            poNumber.contains(searchQuery);
-      }).toList();
-
-      if (filteredList.isEmpty) {
-        return const Center(child: Text('No results found.'));
-      }
-
-      // Tampilkan hasil tanpa grouping (langsung per card)
-      return ListView.builder(
-        itemCount: filteredList.length,
-        itemBuilder: (context, index) {
-          final grin = filteredList[index];
-          return _buildSearchResultCard(grin);
-        },
+      // Tampilkan hasil search secara langsung (tanpa grouping)
+      return Expanded(
+        child: ListView.builder(
+          controller: _scrollController,
+          itemCount: grinList.length,
+          itemBuilder: (context, index) {
+            final grin = grinList[index];
+            return _buildSearchResultCard(grin);
+          },
+        ),
       );
     });
   }
 
-  // Card tampilan hasil pencarian
-  Widget _buildSearchResultCard(GoodReceiveSerialNumberModel grin) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 3,
-      child: ListTile(
-        title: Text(grin.poNumber),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  // Empty state dengan ilustrasi modern
+  Widget _buildEmptySearchState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('GR ID: ${grin.grId}'),
-            Text('PO ID: ${grin.poNumber}'),
-            Text('Created by: ${grin.createdBy ?? '-'}'),
+            // Animated search icon
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    GrinConstants.primaryColor.withValues(alpha: 0.1),
+                    GrinConstants.primaryColor.withValues(alpha: 0.05),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.search_off_rounded,
+                size: 56,
+                color: GrinConstants.primaryColor.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            Text(
+              'No Results Found',
+              style: TextStyle(
+                fontFamily: 'MonaSans',
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: GrinConstants.textPrimaryColor,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            Text(
+              'We couldn\'t find any matches for your search.\nTry adjusting your search terms.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'MonaSans',
+                fontSize: 15,
+                fontWeight: FontWeight.w400,
+                color: GrinConstants.textSecondaryColor,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // Optional: Add clear search button
+            OutlinedButton.icon(
+              onPressed: () {
+                _clearSearchQuery();
+              },
+              icon: const Icon(Icons.clear_rounded, size: 18),
+              label: const Text('Clear Search'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: GrinConstants.primaryColor,
+                side: BorderSide(color: GrinConstants.primaryColor),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
           ],
         ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 18),
-        onTap: () {
-          Get.to(() => GrinDetailPage(grId: grin.grId));
-        },
       ),
     );
   }
 
-  // ✅ PERBAIKAN: Method untuk membangun baris info di hasil pencarian
-  Widget _buildSearchInfoRow(IconData icon, String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: GrinConstants.primaryColor.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, size: 16, color: GrinConstants.primaryColor),
+  Widget _buildSearchResultCard(GoodReceiveSerialNumberModel grin) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white, Colors.grey.shade50],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'MonaSans',
-                  fontSize: 12,
-                  color: GrinConstants.textSecondaryColor,
-                  fontWeight: FontWeight.w500,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: GrinConstants.primaryColor.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
+          ),
+        ],
+        border: Border.all(color: Colors.grey.shade200, width: 1),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            Get.to(
+              () => GrinDetailPage(grId: grin.grId),
+              transition: Transition.rightToLeft,
+            );
+          },
+          borderRadius: BorderRadius.circular(16),
+          splashColor: GrinConstants.primaryColor.withValues(alpha: 0.1),
+          highlightColor: GrinConstants.primaryColor.withValues(alpha: 0.05),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header: GR ID dan Date
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: GrinConstants.primaryColor.withValues(
+                          alpha: 0.1,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: GrinConstants.primaryColor.withValues(
+                            alpha: 0.3,
+                          ),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        grin.grId,
+                        style: TextStyle(
+                          fontFamily: 'MonaSans',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: GrinConstants.primaryColor,
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today_rounded,
+                          size: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          grin.createdAt != null
+                              ? DateHelper.formatDate(
+                                  grin.createdAt!.toIso8601String(),
+                                )
+                              : 'No Date',
+                          style: TextStyle(
+                            fontFamily: 'MonaSans',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: GrinConstants.textSecondaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: TextStyle(
-                  fontFamily: 'MonaSans',
-                  fontSize: 14,
-                  color: GrinConstants.textPrimaryColor,
-                  fontWeight: FontWeight.w600,
+                const SizedBox(height: 16),
+
+                // PO Number
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            GrinConstants.primaryColor.withValues(alpha: 0.12),
+                            GrinConstants.primaryColor.withValues(alpha: 0.06),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.receipt_long_rounded,
+                        size: 18,
+                        color: GrinConstants.primaryColor,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'PO Number',
+                            style: TextStyle(
+                              fontFamily: 'MonaSans',
+                              fontSize: 12,
+                              color: GrinConstants.textSecondaryColor,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            grin.poNumber,
+                            style: TextStyle(
+                              fontFamily: 'MonaSans',
+                              fontSize: 15,
+                              color: GrinConstants.textPrimaryColor,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+                const SizedBox(height: 16),
+
+                // Created By
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            GrinConstants.primaryColor.withValues(alpha: 0.12),
+                            GrinConstants.primaryColor.withValues(alpha: 0.06),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.person_rounded,
+                        size: 18,
+                        color: GrinConstants.primaryColor,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Created By',
+                            style: TextStyle(
+                              fontFamily: 'MonaSans',
+                              fontSize: 12,
+                              color: GrinConstants.textSecondaryColor,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            TextHelper.formatUserName(
+                              grin.createdBy ?? 'Unknown',
+                            ),
+                            style: TextStyle(
+                              fontFamily: 'MonaSans',
+                              fontSize: 15,
+                              color: GrinConstants.textPrimaryColor,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Total Items dan Kafka Button
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  GrinConstants.primaryColor.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  GrinConstants.primaryColor.withValues(
+                                    alpha: 0.06,
+                                  ),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.inventory_2_rounded,
+                              size: 18,
+                              color: GrinConstants.primaryColor,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Total Items',
+                                  style: TextStyle(
+                                    fontFamily: 'MonaSans',
+                                    fontSize: 12,
+                                    color: GrinConstants.textSecondaryColor,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  '${grin.details.length} items',
+                                  style: TextStyle(
+                                    fontFamily: 'MonaSans',
+                                    fontSize: 15,
+                                    color: GrinConstants.textPrimaryColor,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    _buildStatusAndKafkaButton(grin.grId, grin),
+                  ],
+                ),
+
+                // Divider dan Arrow indicator
+                const SizedBox(height: 16),
+                Container(
+                  height: 1,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.transparent,
+                        Colors.grey.shade300,
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // View Details Indicator
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Tap to view details',
+                      style: TextStyle(
+                        fontFamily: 'MonaSans',
+                        fontSize: 12,
+                        color: GrinConstants.primaryColor,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 14,
+                      color: GrinConstants.primaryColor,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-      ],
+      ),
     );
   }
-
-  // ... (method-method lainnya tetap sama seperti sebelumnya: _buildStatusAndKafkaButton, _buildAddButton, dll.)
 
   Widget _buildStatusAndKafkaButton(
     String grId,
@@ -267,7 +592,7 @@ class _GrinPageState extends State<GrinPage> {
         }
 
         final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-        final kafkaStatus = data['lastSentToKafkaLogStatus'];
+        final kafkaStatus = data['status'];
 
         Color badgeColor;
         String statusLabel;
@@ -307,10 +632,10 @@ class _GrinPageState extends State<GrinPage> {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: GrinConstants.primaryColor.withOpacity(0.1),
+          color: GrinConstants.primaryColor.withValues(alpha: 0.1),
           shape: BoxShape.circle,
           border: Border.all(
-            color: GrinConstants.primaryColor.withOpacity(0.3),
+            color: GrinConstants.primaryColor.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
@@ -327,7 +652,7 @@ class _GrinPageState extends State<GrinPage> {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.1),
+          color: Colors.green.withValues(alpha: 0.1),
           shape: BoxShape.circle,
           border: Border.all(color: Colors.green, width: 1),
         ),
@@ -341,7 +666,7 @@ class _GrinPageState extends State<GrinPage> {
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.1),
+        color: Colors.green.withValues(alpha: 0.1),
         shape: BoxShape.circle,
         border: Border.all(color: Colors.green, width: 1),
       ),
@@ -353,8 +678,8 @@ class _GrinPageState extends State<GrinPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        border: Border.all(color: color.withOpacity(0.6), width: 1),
+        color: color.withValues(alpha: 0.1),
+        border: Border.all(color: color.withValues(alpha: 0.6), width: 1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
@@ -441,12 +766,12 @@ class _GrinPageState extends State<GrinPage> {
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                GrinConstants.primaryColor.withOpacity(0.05),
-                GrinConstants.primaryColor.withOpacity(0.02),
+                GrinConstants.primaryColor.withValues(alpha: 0.05),
+                GrinConstants.primaryColor.withValues(alpha: 0.02),
               ],
             ),
             border: Border.all(
-              color: GrinConstants.primaryColor.withOpacity(0.3),
+              color: GrinConstants.primaryColor.withValues(alpha: 0.3),
               width: 1.5,
             ),
           ),
@@ -465,8 +790,8 @@ class _GrinPageState extends State<GrinPage> {
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                     colors: [
-                      GrinConstants.primaryColor.withOpacity(0.08),
-                      GrinConstants.primaryColor.withOpacity(0.04),
+                      GrinConstants.primaryColor.withValues(alpha: 0.08),
+                      GrinConstants.primaryColor.withValues(alpha: 0.04),
                     ],
                   ),
                 ),
@@ -476,10 +801,14 @@ class _GrinPageState extends State<GrinPage> {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: GrinConstants.primaryColor.withOpacity(0.1),
+                        color: GrinConstants.primaryColor.withValues(
+                          alpha: 0.1,
+                        ),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: GrinConstants.primaryColor.withOpacity(0.3),
+                          color: GrinConstants.primaryColor.withValues(
+                            alpha: 0.3,
+                          ),
                           width: 1.5,
                         ),
                       ),
@@ -522,10 +851,14 @@ class _GrinPageState extends State<GrinPage> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: GrinConstants.primaryColor.withOpacity(0.1),
+                        color: GrinConstants.primaryColor.withValues(
+                          alpha: 0.1,
+                        ),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: GrinConstants.primaryColor.withOpacity(0.3),
+                          color: GrinConstants.primaryColor.withValues(
+                            alpha: 0.3,
+                          ),
                           width: 1,
                         ),
                       ),
@@ -552,8 +885,8 @@ class _GrinPageState extends State<GrinPage> {
                       ? BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
-                              color: GrinConstants.primaryColor.withOpacity(
-                                0.1,
+                              color: GrinConstants.primaryColor.withValues(
+                                alpha: 0.1,
                               ),
                               width: 1,
                             ),
@@ -585,8 +918,8 @@ class _GrinPageState extends State<GrinPage> {
               transition: Transition.rightToLeft,
             );
           },
-          splashColor: GrinConstants.primaryColor.withOpacity(0.1),
-          highlightColor: GrinConstants.primaryColor.withOpacity(0.05),
+          splashColor: GrinConstants.primaryColor.withValues(alpha: 0.1),
+          highlightColor: GrinConstants.primaryColor.withValues(alpha: 0.05),
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -605,10 +938,14 @@ class _GrinPageState extends State<GrinPage> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: GrinConstants.primaryColor.withOpacity(0.1),
+                        color: GrinConstants.primaryColor.withValues(
+                          alpha: 0.1,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: GrinConstants.primaryColor.withOpacity(0.3),
+                          color: GrinConstants.primaryColor.withValues(
+                            alpha: 0.3,
+                          ),
                           width: 1,
                         ),
                       ),
@@ -645,7 +982,9 @@ class _GrinPageState extends State<GrinPage> {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: GrinConstants.primaryColor.withOpacity(0.1),
+                        color: GrinConstants.primaryColor.withValues(
+                          alpha: 0.1,
+                        ),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -693,7 +1032,9 @@ class _GrinPageState extends State<GrinPage> {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: GrinConstants.primaryColor.withOpacity(0.1),
+                        color: GrinConstants.primaryColor.withValues(
+                          alpha: 0.1,
+                        ),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -758,12 +1099,12 @@ class _GrinPageState extends State<GrinPage> {
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                GrinConstants.primaryColor.withOpacity(0.05),
-                GrinConstants.primaryColor.withOpacity(0.02),
+                GrinConstants.primaryColor.withValues(alpha: 0.05),
+                GrinConstants.primaryColor.withValues(alpha: 0.02),
               ],
             ),
             border: Border.all(
-              color: GrinConstants.primaryColor.withOpacity(0.3),
+              color: GrinConstants.primaryColor.withValues(alpha: 0.3),
               width: 1.5,
             ),
           ),
@@ -777,8 +1118,10 @@ class _GrinPageState extends State<GrinPage> {
                 );
               },
               borderRadius: BorderRadius.circular(16),
-              splashColor: GrinConstants.primaryColor.withOpacity(0.1),
-              highlightColor: GrinConstants.primaryColor.withOpacity(0.05),
+              splashColor: GrinConstants.primaryColor.withValues(alpha: 0.1),
+              highlightColor: GrinConstants.primaryColor.withValues(
+                alpha: 0.05,
+              ),
               child: Container(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -793,11 +1136,13 @@ class _GrinPageState extends State<GrinPage> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: GrinConstants.primaryColor.withOpacity(0.1),
+                            color: GrinConstants.primaryColor.withValues(
+                              alpha: 0.1,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: GrinConstants.primaryColor.withOpacity(
-                                0.3,
+                              color: GrinConstants.primaryColor.withValues(
+                                alpha: 0.3,
                               ),
                               width: 1,
                             ),
@@ -952,7 +1297,7 @@ class _GrinPageState extends State<GrinPage> {
       }
     } catch (e, stackTrace) {
       _logger.e('❌ Error loading PO data: $e');
-      _logger.e('Stack trace: $stackTrace');
+      _logger.e('📋 Stack trace: $stackTrace');
 
       if (Get.isDialogOpen ?? false) {
         Get.back();
@@ -977,7 +1322,7 @@ class _GrinPageState extends State<GrinPage> {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: GrinConstants.primaryColor.withOpacity(0.1),
+            color: GrinConstants.primaryColor.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, size: 16, color: GrinConstants.primaryColor),
@@ -1016,7 +1361,12 @@ class _GrinPageState extends State<GrinPage> {
   }
 
   void _handleBackPress() {
-    Get.offAll(() => const AppBottomNavigation());
+    // Jika sedang search mode, clear search dulu
+    if (_grinController.isSearching.value) {
+      _clearSearchQuery();
+    } else {
+      Get.offAll(() => const AppBottomNavigation());
+    }
   }
 
   void _handleSortChange(String? value) {
@@ -1043,12 +1393,8 @@ class _GrinPageState extends State<GrinPage> {
     return PopScope(
       canPop: true,
       onPopInvoked: (didPop) {
-        // Handle back button - jika sedang search mode, clear search dulu
-        if (_isInSearchMode) {
-          _clearSearchQuery();
-        } else {
-          _handleBackPress();
-        }
+        if (didPop) return;
+        _handleBackPress();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
@@ -1060,7 +1406,7 @@ class _GrinPageState extends State<GrinPage> {
         child: SafeArea(
           child: Scaffold(
             appBar: GrinAppbarWidget(
-              isSearching: _isInSearchMode, // Gunakan LOCAL STATE
+              isSearching: isInSearchMode, // GUNAKAN STATE DARI CONTROLLER
               onBackPressed: _handleBackPress,
               onClearSearch: _clearSearchQuery,
               onRefresh: _grinController.handleRefreshGrinPage,
@@ -1080,16 +1426,16 @@ class _GrinPageState extends State<GrinPage> {
                   mainAxisSize: MainAxisSize.max,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (!_isInSearchMode)
+                    if (!isInSearchMode)
                       GrinAddButtonWidget(onPressed: _handleAddGrin),
-                    if (!_isInSearchMode)
+                    if (!isInSearchMode)
                       GrinHeaderWidget.fromReactiveList(
                         reactiveList: _grinController.grinList,
                         selectedSort: GrinConstants.defaultSort,
                         sortList: GrinConstants.sortOptions,
                         onSortChanged: _handleSortChange,
                       ),
-                    if (!_isInSearchMode) const SizedBox(height: 16),
+                    if (!isInSearchMode) const SizedBox(height: 16),
                     _buildContent(),
                   ],
                 ),

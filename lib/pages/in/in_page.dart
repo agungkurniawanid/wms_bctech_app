@@ -656,7 +656,7 @@ class _InPageState extends State<InPage> {
                   _buildInfoRow(
                     Icons.business_center,
                     'Vendor',
-                    poData.cBpartnerId ?? 'No Vendor',
+                    poData.cBpartnerName ?? 'No Vendor',
                   ),
                   const SizedBox(height: 8),
                   const Divider(height: 24, thickness: 1),

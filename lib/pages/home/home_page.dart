@@ -7,6 +7,7 @@ import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/controllers/in_controller.dart';
 import 'package:wms_bctech/controllers/auth_controller.dart';
 import 'package:wms_bctech/controllers/out_controller.dart';
+import 'package:wms_bctech/helpers/date_helper.dart';
 import 'package:wms_bctech/helpers/number_helper.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
 import 'package:wms_bctech/pages/grin/grin_page.dart';
@@ -171,7 +172,7 @@ class _HomePage extends State<HomePage> {
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
+        statusBarColor: hijauGojek,
         statusBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
@@ -300,7 +301,10 @@ class _HomePage extends State<HomePage> {
 
                             return {
                               'documentNo': so.documentno ?? '-',
-                              'date': so.dateordered ?? '-',
+                              'customer': TextHelper.capitalize(
+                                so.cBpartnerName ?? "",
+                              ),
+                              'date': DateHelper.formatDate(so.dateordered),
                               'totalItems': totalItems.toString(),
                               'totalQty': NumberHelper.formatNumber(
                                 double.parse(totalQty),
@@ -382,10 +386,10 @@ class _HomePage extends State<HomePage> {
                               return {
                                 'documentNo': po.documentno ?? '-',
                                 'supplier': TextHelper.capitalize(
-                                  po.cBpartnerId,
+                                  po.cBpartnerName,
                                 ),
                                 'status': po.docstatus ?? '-',
-                                'date': po.dateordered ?? '-',
+                                'date': DateHelper.formatDate(po.dateordered),
                                 'items': NumberHelper.formatNumber(
                                   double.parse(totalItems.toString()),
                                 ),

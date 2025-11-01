@@ -80,7 +80,7 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
           _grinData = GoodReceiveSerialNumberModel.fromFirestore(grinDoc, null);
 
           // === TENTUKAN STATUS DARI lastSentToKafkaLogStatus ===
-          final kafkaStatus = grinDoc.data()?['lastSentToKafkaLogStatus'];
+          final kafkaStatus = grinDoc.data()?['status'];
           if (kafkaStatus == null) {
             _grinStatus = 'Belum Dikirim';
           } else if (kafkaStatus == 'error') {

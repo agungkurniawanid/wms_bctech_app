@@ -53,7 +53,6 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isSmallDevice = size.width < 360;
-    final isMediumDevice = size.width >= 360 && size.width < 600;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -71,7 +70,7 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withValues(alpha: 0.2),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -84,7 +83,7 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
             Container(
               padding: EdgeInsets.all(isSmallDevice ? 12 : 16),
               decoration: BoxDecoration(
-                color: hijauGojek.withOpacity(0.1),
+                color: hijauGojek.withValues(alpha: 0.1),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(20),
                   topRight: Radius.circular(20),
@@ -95,7 +94,7 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: hijauGojek.withOpacity(0.2),
+                      color: hijauGojek.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -235,7 +234,7 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
                         gradient: LinearGradient(
                           colors: [
                             Colors.blue.shade50,
-                            Colors.blue.shade100.withOpacity(0.5),
+                            Colors.blue.shade100.withValues(alpha: 0.5),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(12),
@@ -317,7 +316,7 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
                         _ModernButton(
                           icon: Icons.keyboard,
                           label: "Manual",
-                          backgroundColor: hijauGojek.withOpacity(0.1),
+                          backgroundColor: hijauGojek.withValues(alpha: 0.1),
                           foregroundColor: hijauGojek,
                           isSmall: isSmallDevice,
                           onPressed: _handleManualInput, // Panggil method baru

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:isolate';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -22,6 +23,14 @@ class GrinController extends GetxController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GrSequenceService _sequenceService = GrSequenceService();
 
+  // ✅ FIXED: Gunakan debouncer untuk search
+  final Rx<String> _currentSearchQuery = ''.obs;
+  Timer? _searchDebounceTimer;
+
+  // ✅ FIXED: Track search operation
+  bool _isSearchOperationRunning = false;
+  String _lastCompletedSearchQuery = '';
+
   @override
   void onReady() {
     _logger.d('🎯 GrinController onReady dipanggil');
@@ -29,17 +38,181 @@ class GrinController extends GetxController {
     loadGrinData();
   }
 
-  // Di GrinController class
-  void setSearchMode(bool searching) {
-    _logger.d('🔄 setSearchMode: $searching');
+  @override
+  void onInit() {
+    super.onInit();
+    _logger.d('🎯 GrinController onInit');
 
-    // ✅ FIXED: Update state dengan microtask untuk konsistensi
-    Future.microtask(() {
-      isSearching.value = searching;
-      if (!searching) {
-        searchQuery.value = '';
-      }
+    // Listen untuk search query changes dengan debounce
+    ever(searchQuery, (String query) {
+      _handleSearchQueryChange(query);
     });
+  }
+
+  void _handleSearchQueryChange(String query) {
+    _logger.d('🔄 Search query changed: "$query"');
+
+    // Cancel previous debounce
+    _searchDebounceTimer?.cancel();
+
+    if (query.isEmpty) {
+      _logger.d('🧹 Query kosong, clear search immediately');
+      _clearSearchImmediately();
+      return;
+    }
+
+    // Debounce search operation
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      _executeSearch(query);
+    });
+  }
+
+  void _clearSearchImmediately() {
+    _logger.d('🧹 Immediate clear search');
+
+    // Cancel any pending search
+    _searchDebounceTimer?.cancel();
+    _isSearchOperationRunning = false;
+
+    // Reset state
+    isSearching.value = false;
+    searchQuery.value = '';
+
+    // Restore data
+    if (grinListBackup.isNotEmpty) {
+      grinList.assignAll(grinListBackup);
+      _logger.d('✅ Data restored: ${grinList.length} items');
+    }
+  }
+
+  Future<void> _executeSearch(String query) async {
+    if (_isSearchOperationRunning) {
+      _logger.d('⏸️ Search operation already running, skipping');
+      return;
+    }
+
+    if (query == _lastCompletedSearchQuery) {
+      _logger.d('⏭️ Same query as last completed, skipping');
+      return;
+    }
+
+    _logger.d('🚀 Executing search for: "$query"');
+
+    try {
+      _isSearchOperationRunning = true;
+      _currentSearchQuery.value = query;
+
+      await _performSearchOperation(query);
+
+      _lastCompletedSearchQuery = query;
+      _logger.d('✅ Search completed successfully for: "$query"');
+    } catch (e, stackTrace) {
+      _logger.e('❌ Search operation failed: $e');
+      _logger.e('📋 Stack trace: $stackTrace');
+
+      // Fallback: restore data on error
+      if (grinListBackup.isNotEmpty) {
+        grinList.assignAll(grinListBackup);
+      }
+    } finally {
+      _isSearchOperationRunning = false;
+    }
+  }
+
+  Future<void> _performSearchOperation(String query) async {
+    _logger.d(
+      '📊 Starting search operation, backup data: ${grinListBackup.length} items',
+    );
+
+    if (grinListBackup.isEmpty) {
+      _logger.w('⚠️ No backup data available for search');
+      return;
+    }
+
+    final listToFilter = List<GoodReceiveSerialNumberModel>.from(
+      grinListBackup,
+    );
+    final searchKey = query.toLowerCase().trim();
+
+    _logger.d('🔍 Filtering ${listToFilter.length} items for: "$searchKey"');
+
+    try {
+      final filteredList = await Isolate.run(() {
+        try {
+          return listToFilter.where((gr) {
+            try {
+              final grId = gr.grId.toLowerCase();
+              final poNumber = gr.poNumber.toLowerCase();
+              final createdBy = TextHelper.formatUserName(
+                gr.createdBy ?? 'Unknown',
+              ).toLowerCase();
+
+              final hasMatchingDetail = gr.details.any((detail) {
+                final sn = detail.sn?.toLowerCase() ?? '';
+                return sn.contains(searchKey);
+              });
+
+              return grId.contains(searchKey) ||
+                  poNumber.contains(searchKey) ||
+                  createdBy.contains(searchKey) ||
+                  hasMatchingDetail;
+            } catch (e) {
+              return false;
+            }
+          }).toList();
+        } catch (e) {
+          return <GoodReceiveSerialNumberModel>[];
+        }
+      });
+
+      _logger.d('🏁 Isolate completed, found: ${filteredList.length} items');
+
+      // ✅ FIXED: Check if we should still update (query hasn't changed)
+      if (_currentSearchQuery.value == query) {
+        grinList.assignAll(filteredList);
+        _logger.d('✅ Search results updated with ${filteredList.length} items');
+      } else {
+        _logger.d('⏭️ Query changed during search, ignoring results');
+      }
+    } catch (e, stackTrace) {
+      _logger.e('❌ Isolate error: $e');
+      _logger.e('📋 Stack trace: $stackTrace');
+      throw e;
+    }
+  }
+
+  // ✅ FIXED: Enhanced setSearchMode
+  void setSearchMode(bool searching) {
+    _logger.d('🔄 setSearchMode: $searching, current: ${isSearching.value}');
+
+    if (isSearching.value == searching) {
+      _logger.d('⏭️ Same search mode, skipping');
+      return;
+    }
+
+    // Cancel any pending search operations
+    _searchDebounceTimer?.cancel();
+    _isSearchOperationRunning = false;
+
+    isSearching.value = searching;
+
+    if (!searching) {
+      _clearSearchImmediately();
+    } else {
+      _logger.d('🔍 Entering search mode');
+    }
+  }
+
+  // ✅ FIXED: Simplified updateSearchQuery
+  void updateSearchQuery(String newQuery) {
+    _logger.d('📝 updateSearchQuery: "$newQuery"');
+    searchQuery.value = newQuery;
+  }
+
+  // ✅ FIXED: Enhanced clearSearch
+  void clearSearch() {
+    _logger.d('🧹 clearSearch called');
+    setSearchMode(false);
   }
 
   void updateSearchQueryGrinPage(String newQuery) {
@@ -131,30 +304,6 @@ class GrinController extends GetxController {
       searchQuery.value = query;
       isSearching.value = searching;
     });
-  }
-
-  // PERBAIKI METHOD CLEARSEARCH
-  void clearSearch() {
-    _logger.d('🧹 clearSearch dipanggil');
-    try {
-      // RESET STATE DENGAN AMAN
-      _updateSearchState('', false);
-
-      if (grinListBackup.isNotEmpty) {
-        grinList.assignAll(grinListBackup);
-        _logger.d(
-          '✅ Data cleared, restored ${grinList.length} items dari backup',
-        );
-      } else {
-        _logger.w('⚠️ Backup data kosong, tidak bisa restore');
-        loadGrinData();
-      }
-    } catch (e, stackTrace) {
-      _logger.e('❌ Error di clearSearch: $e');
-      _logger.e('📋 Stack trace: $stackTrace');
-      // PASTIKAN STATE DIBERSIHKAN MESKIPUN ERROR
-      _updateSearchState('', false);
-    }
   }
 
   // ✅ PERBAIKAN: Pastikan backup data selalu terisi
@@ -603,12 +752,6 @@ class GrinController extends GetxController {
     }
   }
 
-  @override
-  void onInit() {
-    super.onInit();
-    ever(isSearching, (_) => _logger.d('Search state changed'));
-  }
-
   Future<void> refreshData() async {
     try {
       isLoading.value = true;
@@ -797,6 +940,7 @@ class GrinController extends GetxController {
           poNumber: poNumber,
           createdBy: currentUser,
           createdAt: DateTime.now(),
+          status: 'drafted',
           details: details,
         );
 
@@ -842,7 +986,9 @@ class GrinController extends GetxController {
 
   @override
   void onClose() {
-    // Cleanup jika diperlukan
+    _logger.d('🧹 GrinController onClose');
+    _searchDebounceTimer?.cancel();
+    _isSearchOperationRunning = false;
     super.onClose();
   }
 }

@@ -68,7 +68,7 @@ class _HomeRecentOrderCarouselWidgetState
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
-        duration: Duration(seconds: 2),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -87,10 +87,11 @@ class _HomeRecentOrderCarouselWidgetState
                 padding: const EdgeInsets.only(right: 16),
                 child: HomeRecentOrderCardWidget(
                   documentNo: item['documentNo'] ?? '-',
-                  title1: 'PO Date',
-                  value1: item['date'] ?? '-',
-                  title2: 'Supplier',
-                  value2: item['supplier'] ?? '-',
+                  partnerName: item['supplier'] ?? '-', // ✅ Nama Vendor
+                  title1: 'Document No',
+                  value1: item['documentNo'] ?? '-',
+                  title2: 'PO Date',
+                  value2: item['date'] ?? '-',
                   title3: 'Total Items',
                   value3: item['items']?.toString() ?? '0',
                   contextType: 'PO',
@@ -102,12 +103,13 @@ class _HomeRecentOrderCarouselWidgetState
               padding: const EdgeInsets.only(right: 16),
               child: HomeRecentOrderCardWidget(
                 documentNo: item['documentNo'] ?? '-',
-                title1: 'SO Date',
-                value1: item['date'] ?? '-',
-                title2: 'Total Items',
-                value2: item['totalItems']?.toString() ?? '0',
-                title3: 'Total QTY',
-                value3: item['totalQty']?.toString() ?? '0',
+                partnerName: item['customer'] ?? '-', // ✅ Nama Customer
+                title1: 'Document No',
+                value1: item['documentNo'] ?? '-',
+                title2: 'SO Date',
+                value2: item['date'] ?? '-',
+                title3: 'Total Items',
+                value3: item['totalItems']?.toString() ?? '0',
                 contextType: 'SO',
               ),
             );

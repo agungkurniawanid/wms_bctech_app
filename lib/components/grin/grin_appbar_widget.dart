@@ -35,38 +35,60 @@ class GrinAppbarWidget extends StatefulWidget implements PreferredSizeWidget {
 
 class _GrinAppbarWidgetState extends State<GrinAppbarWidget> {
   final FocusNode _searchFocusNode = FocusNode();
-  bool _localSearching = false;
+  final Logger _logger = Logger();
+  bool _isFocusRequested = false;
 
   @override
   void initState() {
     super.initState();
-    // ✅ Fokuskan search field jika langsung dalam mode search
-    if (widget.isSearching) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _searchFocusNode.requestFocus();
-      });
-    }
+    _logger.d(
+      '🎨 GrinAppbarWidget initState, isSearching: ${widget.isSearching}',
+    );
   }
 
   @override
   void didUpdateWidget(covariant GrinAppbarWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _logger.d(
+      '🔄 GrinAppbarWidget didUpdateWidget, old: ${oldWidget.isSearching}, new: ${widget.isSearching}',
+    );
 
-    // ✅ FIXED: Logic yang lebih sederhana dan konsisten
+    // Handle focus dengan lebih hati-hati
     if (widget.isSearching && !oldWidget.isSearching) {
-      // Baru masuk mode search
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _searchFocusNode.requestFocus();
-      });
+      _logger.d('🎯 Masuk mode search, request focus');
+      _requestFocus();
     } else if (!widget.isSearching && oldWidget.isSearching) {
-      // Keluar dari mode search
+      _logger.d('🚪 Keluar mode search, unfocus');
       _searchFocusNode.unfocus();
+      _isFocusRequested = false;
+    }
+  }
+
+  void _requestFocus() {
+    if (!_isFocusRequested && mounted) {
+      _isFocusRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            widget.isSearching &&
+            _searchFocusNode.hasFocus == false) {
+          _logger.d('🎯 Executing focus request');
+          _searchFocusNode.requestFocus();
+        }
+      });
     }
   }
 
   @override
+  void dispose() {
+    _logger.d('🧹 GrinAppbarWidget dispose');
+    _searchFocusNode.unfocus(); // Use unfocus() instead of dismiss()
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    debugPrint('🎨 GrinAppbarWidget build, isSearching: $_localSearching');
+    _logger.d('🎨 GrinAppbarWidget build, isSearching: ${widget.isSearching}');
 
     return AppBar(
       actions: _buildAppBarActions(),
@@ -77,9 +99,7 @@ class _GrinAppbarWidgetState extends State<GrinAppbarWidget> {
       ),
       backgroundColor: GrinConstants.primaryColor,
       elevation: 0,
-      title:
-          widget
-              .isSearching // ✅ GUNAKAN widget.isSearching
+      title: widget.isSearching
           ? _buildSearchField()
           : Text(
               "List Good Receive",
@@ -98,10 +118,14 @@ class _GrinAppbarWidgetState extends State<GrinAppbarWidget> {
   }
 
   Widget _buildSearchField() {
+    _logger.d(
+      '🔍 Building search field, hasFocus: ${_searchFocusNode.hasFocus}',
+    );
+
     return TextField(
       controller: widget.searchController,
       focusNode: _searchFocusNode,
-      autofocus: true,
+      autofocus: false, // Jangan gunakan autofocus, handle manual
       decoration: const InputDecoration(
         hintText: 'Search GR ID, PO Number, Created By...',
         border: InputBorder.none,
@@ -109,9 +133,12 @@ class _GrinAppbarWidgetState extends State<GrinAppbarWidget> {
         contentPadding: EdgeInsets.zero,
       ),
       style: const TextStyle(color: Colors.white, fontSize: 16.0),
-      onChanged:
-          widget.onSearchChanged ??
-          widget.grinController.updateSearchQueryGrinPage,
+      onChanged: (query) {
+        _logger.d(
+          '📝 Search text changed: "${query.substring(0, query.length > 10 ? 10 : query.length)}..."',
+        );
+        widget.onSearchChanged?.call(query);
+      },
     );
   }
 
@@ -121,8 +148,7 @@ class _GrinAppbarWidgetState extends State<GrinAppbarWidget> {
         IconButton(
           icon: const Icon(Icons.clear, color: Colors.white),
           onPressed: () {
-            debugPrint('🧹 Clear search button ditekan');
-            widget.searchController.clear();
+            _logger.d('🧹 Clear search button ditekan');
             widget.onClearSearch();
           },
         ),
@@ -135,14 +161,14 @@ class _GrinAppbarWidgetState extends State<GrinAppbarWidget> {
           IconButton(
             icon: const Icon(Icons.refresh_outlined, color: Colors.white),
             onPressed: () {
-              debugPrint('🔄 Refresh button ditekan');
+              _logger.d('🔄 Refresh button ditekan');
               widget.onRefresh();
             },
           ),
           IconButton(
             icon: const Icon(Icons.search, color: Colors.white),
             onPressed: () {
-              debugPrint('🔍 Search button ditekan - Masuk mode search');
+              _logger.d('🔍 Search button ditekan - Masuk mode search');
               widget.onStartSearch();
             },
           ),

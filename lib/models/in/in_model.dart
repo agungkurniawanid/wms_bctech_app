@@ -9,6 +9,7 @@ class InModel implements ImmobileItem {
   String? adClientId;
   List<String>? adOrgId;
   String? cBpartnerId;
+  String? cBpartnerName;
   String? cCurrencyId;
   String? cDoctypeId;
   String? cDoctypetargetId;
@@ -43,6 +44,7 @@ class InModel implements ImmobileItem {
     this.adClientId,
     this.adOrgId,
     this.cBpartnerId,
+    this.cBpartnerName,
     this.cCurrencyId,
     this.cDoctypeId,
     this.cDoctypetargetId,
@@ -87,6 +89,7 @@ class InModel implements ImmobileItem {
       adClientId: data.adClientId,
       adOrgId: data.adOrgId != null ? List.from(data.adOrgId!) : null,
       cBpartnerId: data.cBpartnerId,
+      cBpartnerName: data.cBpartnerName,
       cCurrencyId: data.cCurrencyId,
       cDoctypeId: data.cDoctypeId,
       cDoctypetargetId: data.cDoctypetargetId,
@@ -123,6 +126,7 @@ class InModel implements ImmobileItem {
           ? List<String>.from(json['ad_org_id'])
           : null,
       cBpartnerId: json['c_bpartner_id'],
+      cBpartnerName: json['c_bpartner_name'],
       cCurrencyId: json['c_currency_id'],
       cDoctypeId: json['c_doctype_id'],
       cDoctypetargetId: json['c_doctypetarget_id'],
@@ -167,6 +171,7 @@ class InModel implements ImmobileItem {
           ? List<String>.from(data['ad_org_id'])
           : [],
       cBpartnerId: data['c_bpartner_id'] ?? "",
+      cBpartnerName: data['c_bpartner_name'] ?? "",
       cCurrencyId: data['c_currency_id'] ?? "",
       cDoctypeId: data['c_doctype_id'] ?? "",
       cDoctypetargetId: data['c_doctypetarget_id'] ?? "",
@@ -203,6 +208,7 @@ class InModel implements ImmobileItem {
       'ad_client_id': adClientId,
       'ad_org_id': adOrgId,
       'c_bpartner_id': cBpartnerId,
+      'c_bpartner_name': cBpartnerName,
       'c_currency_id': cCurrencyId,
       'c_doctype_id': cDoctypeId,
       'c_doctypetarget_id': cDoctypetargetId,

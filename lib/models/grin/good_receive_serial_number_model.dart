@@ -6,6 +6,7 @@ class GoodReceiveSerialNumberModel {
   final String poNumber;
   final String? createdBy;
   final DateTime? createdAt;
+  final String? status;
   final List<GoodReceiveSerialNumberDetailModel> details;
 
   GoodReceiveSerialNumberModel({
@@ -14,6 +15,7 @@ class GoodReceiveSerialNumberModel {
     required this.details,
     this.createdBy,
     this.createdAt,
+    this.status,
   });
 
   // Factory method untuk membuat model dari DocumentSnapshot
@@ -29,6 +31,7 @@ class GoodReceiveSerialNumberModel {
       createdBy: data['createdby'] ?? '',
       createdAt: (data['createdat'] as Timestamp?)?.toDate(),
       details: _parseDetails(data['details']),
+      status: data['status'] ?? '',
     );
   }
 
@@ -54,6 +57,7 @@ class GoodReceiveSerialNumberModel {
       'ponumber': poNumber,
       'createdby': createdBy,
       'createdat': createdAt,
+      'status': status,
       'details': details.map((detail) => detail.toMap()).toList(),
     };
   }

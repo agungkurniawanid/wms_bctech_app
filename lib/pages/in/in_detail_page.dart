@@ -6,6 +6,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:wms_bctech/config/global_variable_config.dart';
+import 'package:wms_bctech/constants/grin/grin_constant.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/constants/utils_constant.dart';
 import 'package:wms_bctech/controllers/grin/grin_controller.dart';
@@ -161,6 +162,11 @@ class _InDetailPageState extends State<InDetailPage>
 
   final _logger = Logger();
 
+  // Tambahkan di bagian variabel
+  final FocusNode _searchFocusNode = FocusNode();
+  final RxBool _isSearchActive = false.obs;
+  final RxList<InDetail> _filteredDetailsList = <InDetail>[].obs;
+
   @override
   void initState() {
     super.initState();
@@ -176,9 +182,16 @@ class _InDetailPageState extends State<InDetailPage>
 
     isReadOnlyMode = widget.isReadOnlyMode;
 
+    // Inisialisasi filtered list dengan data awal
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeWithRealData();
       _startRealtimeListeners();
+
+      // Set filtered list dengan data awal
+      final initialData = _realtimeDetailsList.isNotEmpty
+          ? _realtimeDetailsList
+          : detailsList;
+      _filteredDetailsList.assignAll(initialData);
     });
 
     _loadDetails();
@@ -211,6 +224,11 @@ class _InDetailPageState extends State<InDetailPage>
                 setState(() {
                   _realtimeDetailsList.assignAll(details);
                   detailsList.assignAll(details);
+
+                  // Update filtered list juga
+                  if (!_isSearchActive.value || _searchQuery.text.isEmpty) {
+                    _filteredDetailsList.assignAll(details);
+                  }
                 });
               }
             },
@@ -304,6 +322,10 @@ class _InDetailPageState extends State<InDetailPage>
     try {
       setState(() {
         isDetailsLoading.value = true;
+        // Reset search state saat refresh
+        if (_isSearchActive.value) {
+          _stopSearching();
+        }
       });
 
       // Restart realtime listeners
@@ -486,7 +508,7 @@ class _InDetailPageState extends State<InDetailPage>
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Pilih Metode Scan"),
+        title: const Text("Pilih Metode Pencarian Scan"),
         content: const Text(
           "Pilih metode yang ingin digunakan untuk memindai barcode",
         ),
@@ -503,7 +525,7 @@ class _InDetailPageState extends State<InDetailPage>
               Navigator.of(context).pop();
               _startCameraScanImproved();
             },
-            child: const Text("Kamera HP"),
+            child: const Text("Scan Camera"),
           ),
         ],
       ),
@@ -609,7 +631,7 @@ class _InDetailPageState extends State<InDetailPage>
 
     final foundProducts = allProducts.where((product) {
       final productId = product.mProductId?.toLowerCase() ?? '';
-      final productName = product.maktxUI?.toLowerCase() ?? '';
+      final productName = product.mProductName?.toLowerCase() ?? '';
       final matnr = product.matnr?.toLowerCase() ?? '';
       final searchBarcode = barcode.trim().toLowerCase();
 
@@ -712,15 +734,7 @@ class _InDetailPageState extends State<InDetailPage>
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
-          builder: (context) => ProductDetailBottomSheet(
-            product: product,
-            onSave: _saveProductChanges,
-            onCancel: () {
-              setState(() {
-                checkingscan = false;
-              });
-            },
-          ),
+          builder: (context) => ProductDetailBottomSheet(product: product),
         );
       }
     } else {
@@ -752,50 +766,18 @@ class _InDetailPageState extends State<InDetailPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Batal"),
+            child: const Text("Oke"),
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _addManualProduct(barcode);
-            },
-            child: const Text("Tambah Manual"),
-          ),
+          // ElevatedButton(
+          //   onPressed: () {
+          //     Navigator.of(context).pop();
+          //     _addManualProduct(barcode);
+          //   },
+          //   child: const Text("Tambah Manual"),
+          // ),
         ],
       ),
     );
-  }
-
-  void _addManualProduct(String barcode) {
-    final newProduct = InDetail(
-      mProductId: barcode,
-      maktxUI: "Product Manual: $barcode",
-      pounitori: "PCS",
-      umrez: 1,
-      qtctn: 0,
-      qtuom: 0.0,
-      qtyordered: 0.0,
-      vfdat: "",
-      descr: "Ditambahkan via scan barcode",
-    );
-
-    // Tampilkan ProductDetailBottomSheet untuk product manual
-    if (mounted) {
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => ProductDetailBottomSheet(
-          product: newProduct,
-          onSave: _saveProductChanges,
-          onCancel: () {
-            setState(() {
-              checkingscan = false;
-            });
-          },
-        ),
-      );
-    }
   }
 
   Future<void> scanBarcode() async {
@@ -932,15 +914,8 @@ class _InDetailPageState extends State<InDetailPage>
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (context) => ProductDetailBottomSheet(
-          product: simulatedDetail,
-          onSave: _saveProductChanges,
-          onCancel: () {
-            setState(() {
-              checkingscan = false;
-            });
-          },
-        ),
+        builder: (context) =>
+            ProductDetailBottomSheet(product: simulatedDetail),
       );
     }
   }
@@ -1035,11 +1010,6 @@ class _InDetailPageState extends State<InDetailPage>
           },
           // Di dalam QRScannerDialog atau method yang memanggil manual input dari QR
           openManualInput: () {
-            // Tutup dialog scanner terlebih dahulu
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-            // Tunggu sebentar lalu buka manual input
             Future.delayed(const Duration(milliseconds: 300), () {
               _startManualInput(product, fromQR: true);
             });
@@ -1641,11 +1611,11 @@ class _InDetailPageState extends State<InDetailPage>
   void searchWF(String search) async {
     final query = search.toLowerCase();
 
-    if (search.isEmpty) {
-      // Reset ke semua data realtime
-      if (_realtimeDetailsList.isNotEmpty) {
-        detailsList.assignAll(_realtimeDetailsList);
-      }
+    if (query.isEmpty) {
+      // Tampilkan data realtime atau semua data
+      detailsList.assignAll(
+        _realtimeDetailsList.isNotEmpty ? _realtimeDetailsList : detailsList,
+      );
       return;
     }
 
@@ -1653,13 +1623,13 @@ class _InDetailPageState extends State<InDetailPage>
         ? _realtimeDetailsList
         : detailsList;
 
-    final filteredList = sourceList.where((e) {
+    final filtered = sourceList.where((e) {
       final name = e.maktxUI?.toLowerCase() ?? '';
       final sku = e.mProductId?.toLowerCase() ?? '';
       return name.contains(query) || sku.contains(query);
     }).toList();
 
-    detailsList.assignAll(filteredList);
+    detailsList.assignAll(filtered);
   }
 
   String calculateTotalCtn() {
@@ -1673,31 +1643,25 @@ class _InDetailPageState extends State<InDetailPage>
     return total.toString();
   }
 
+  // Perbaiki method _buildActions untuk search
   List<Widget> _buildActions() {
     if (_isSearching) {
       return [
-        IconButton(
-          icon: const Icon(Icons.clear),
-          onPressed: () {
-            if (_searchQuery.text.isEmpty) {
-              setState(_stopSearching);
-            } else {
-              _clearSearchQuery();
-            }
-          },
-        ),
+        SizedBox(width: 8), // Memberikan sedikit ruang
       ];
     }
 
     return [
-      IconButton(
-        icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
-        onPressed: scanBarcode,
-      ),
-      IconButton(
-        icon: const Icon(Icons.search, color: Colors.white),
-        onPressed: _startSearch,
-      ),
+      if (!isReadOnlyMode) ...[
+        IconButton(
+          icon: Icon(Icons.qr_code_scanner, color: Colors.white),
+          onPressed: scanBarcode,
+        ),
+        IconButton(
+          icon: Icon(Icons.search, color: Colors.white),
+          onPressed: _startSearch,
+        ),
+      ],
     ];
   }
 
@@ -1716,10 +1680,87 @@ class _InDetailPageState extends State<InDetailPage>
   }
 
   void updateSearchQuery(String newQuery) {
-    setState(() {
-      searchQuery = newQuery;
-      searchWF(newQuery);
-    });
+    _performLiveSearch(newQuery);
+  }
+
+  // Widget untuk search field yang lebih baik
+  Widget _buildEnhancedSearchField() {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(25),
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: 12),
+          Icon(Icons.search, color: hijauGojek),
+          SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _searchQuery,
+              focusNode: _searchFocusNode,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Cari produk...',
+                border: InputBorder.none,
+                hintStyle: TextStyle(color: Colors.white70),
+                contentPadding: EdgeInsets.symmetric(vertical: 12),
+              ),
+              style: TextStyle(color: Colors.black87, fontSize: 16.0),
+              onChanged: _performLiveSearch,
+              onSubmitted: (_) {
+                // Optional: handle submit jika diperlukan
+              },
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.clear, color: hijauGojek),
+            onPressed: _stopSearching,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget untuk empty search state
+  Widget _buildSearchEmptyState() {
+    return Container(
+      height: 200,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
+          SizedBox(height: 16),
+          Text(
+            'Produk tidak ditemukan',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Coba dengan kata kunci lain atau periksa ejaan',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+          ),
+          SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _stopSearching,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: hijauGojek,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            child: Text('Tampilkan Semua Produk'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildShimmerLoading() {
@@ -1838,23 +1879,65 @@ class _InDetailPageState extends State<InDetailPage>
     );
   }
 
+  // Method untuk memulai pencarian
   void _startSearch() {
     setState(() {
-      listindetaillocal.clear();
-
-      final sourceData = widget.from == "sync"
-          ? (widget.flag?.details ?? [])
-          : (_getCurrentInModel().details ?? []);
-
-      listindetaillocal.addAll(sourceData);
+      _isSearchActive.value = true;
       _isSearching = true;
+    });
+
+    // Fokuskan ke search field
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _searchFocusNode.requestFocus();
     });
   }
 
+  // Method untuk menghentikan pencarian
   void _stopSearching() {
-    _clearSearchQuery();
     setState(() {
+      _isSearchActive.value = false;
       _isSearching = false;
+      _searchQuery.clear();
+      searchQuery = '';
+
+      // Reset ke data asli
+      _filteredDetailsList.clear();
+      _filteredDetailsList.addAll(
+        _realtimeDetailsList.isNotEmpty ? _realtimeDetailsList : detailsList,
+      );
+    });
+  }
+
+  // Method untuk live search
+  void _performLiveSearch(String query) {
+    setState(() {
+      searchQuery = query;
+
+      if (query.isEmpty) {
+        // Jika query kosong, tampilkan semua data
+        _filteredDetailsList.clear();
+        _filteredDetailsList.addAll(
+          _realtimeDetailsList.isNotEmpty ? _realtimeDetailsList : detailsList,
+        );
+        return;
+      }
+
+      final searchTerm = query.toLowerCase().trim();
+      final sourceList = _realtimeDetailsList.isNotEmpty
+          ? _realtimeDetailsList
+          : detailsList;
+
+      final filtered = sourceList.where((product) {
+        final productId = product.mProductId?.toLowerCase() ?? '';
+        final productName = product.mProductName?.toLowerCase() ?? '';
+        final matnr = product.matnr?.toLowerCase() ?? '';
+
+        return productId.contains(searchTerm) ||
+            productName.contains(searchTerm) ||
+            matnr.contains(searchTerm);
+      }).toList();
+
+      _filteredDetailsList.assignAll(filtered);
     });
   }
 
@@ -2258,257 +2341,267 @@ class _InDetailPageState extends State<InDetailPage>
           BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Colors.white, Colors.grey.shade50],
-          ),
+      child: InkWell(
+        splashColor: GrinConstants.primaryColor.withOpacity(0.1),
+        highlightColor: GrinConstants.primaryColor.withOpacity(0.05),
+        onTap: () => showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => ProductDetailBottomSheet(product: indetail),
         ),
-        child: Stack(
-          children: [
-            Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: isReadOnlyMode ? 16 : 60,
-                top: 16,
-                bottom: 16,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Product Icon dengan status realtime
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: hijauGojek.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Stack(
-                          children: [
-                            Center(
-                              child: Icon(
-                                Icons.inventory_2,
-                                color: hijauGojek,
-                                size: 24,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.white, Colors.grey.shade50],
+            ),
+          ),
+          child: Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: isReadOnlyMode ? 16 : 60,
+                  top: 16,
+                  bottom: 16,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Product Icon dengan status realtime
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: hijauGojek.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Stack(
+                            children: [
+                              Center(
+                                child: Icon(
+                                  Icons.inventory_2,
+                                  color: hijauGojek,
+                                  size: 24,
+                                ),
                               ),
-                            ),
-                            // Indicator realtime
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: Colors.green,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 2,
+                              // Indicator realtime
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: Colors.green,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Product Name
-                            Text(
-                              indetail.mProductName ?? "Product Name",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            SizedBox(height: 4),
-                            // SKU
-                            Text(
-                              indetail.mProductId ?? "SKU",
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 14,
-                              ),
-                            ),
-                            SizedBox(height: 12),
-
-                            // PROGRESS BAR realtime
-                            // _buildProgressBarChart(
-                            //   qtyEntered,
-                            //   qtyOrdered,
-                            //   progressPercentage,
-                            // ),
-                            SizedBox(height: 8),
-
-                            // STATUS BADGE realtime
-                            if (progress > 0)
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Product Name
+                              Text(
+                                indetail.mProductName ?? "Product Name",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: _getStatusColor(
-                                    progress,
-                                  ).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              SizedBox(height: 4),
+                              // SKU
+                              Text(
+                                indetail.mProductId ?? "SKU",
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              SizedBox(height: 12),
+
+                              // PROGRESS BAR realtime
+                              // _buildProgressBarChart(
+                              //   qtyEntered,
+                              //   qtyOrdered,
+                              //   progressPercentage,
+                              // ),
+                              SizedBox(height: 8),
+
+                              // STATUS BADGE realtime
+                              if (progress > 0)
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
                                     color: _getStatusColor(
                                       progress,
-                                    ).withValues(alpha: 0.3),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _getStatusIcon(progress),
-                                      size: 12,
-                                      color: _getStatusColor(progress),
+                                    ).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: _getStatusColor(
+                                        progress,
+                                      ).withValues(alpha: 0.3),
+                                      width: 1,
                                     ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      _getStatusText(progress),
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _getStatusIcon(progress),
+                                        size: 12,
                                         color: _getStatusColor(progress),
                                       ),
-                                    ),
-                                  ],
+                                      SizedBox(width: 4),
+                                      Text(
+                                        _getStatusText(progress),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: _getStatusColor(progress),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  SizedBox(height: 12),
-
-                  // QUANTITY CHIPS SECTION realtime
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildQuantityChipWithLabel(
-                          "Total Pesanan",
-                          "$qtyOrdered",
-                          Icons.shopping_cart,
-                        ),
-                        _buildQuantityChipWithLabel(
-                          "Sudah Dikirim",
-                          "$qtyEntered",
-                          Icons.check_circle,
-                        ),
-                        _buildQuantityChipWithLabel(
-                          "Sisa Kirim",
-                          "$remainingQty",
-                          Icons.pending_actions,
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                  ),
 
-                  // DESCRIPTION realtime
-                  if (indetail.descr?.isNotEmpty ?? false) ...[
-                    SizedBox(height: 8),
+                    SizedBox(height: 12),
+
+                    // QUANTITY CHIPS SECTION realtime
                     Container(
-                      padding: EdgeInsets.all(8),
+                      padding: EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(6),
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          Icon(
-                            Icons.note,
-                            size: 14,
-                            color: Colors.blue.shade600,
+                          _buildQuantityChipWithLabel(
+                            "Total Pesanan",
+                            "$qtyOrdered",
+                            Icons.shopping_cart,
                           ),
-                          SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              indetail.descr!,
-                              style: TextStyle(
-                                color: Colors.blue.shade800,
-                                fontSize: 11,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                          _buildQuantityChipWithLabel(
+                            "Sudah Dikirim",
+                            "$qtyEntered",
+                            Icons.check_circle,
+                          ),
+                          _buildQuantityChipWithLabel(
+                            "Sisa Kirim",
+                            "$remainingQty",
+                            Icons.pending_actions,
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ],
-              ),
-            ),
 
-            // ACTION BUTTONS
-            if (widget.from != "history" && !isReadOnlyMode)
-              Positioned(
-                right: 0,
-                top: 0,
-                bottom: 0,
-                child: Container(
-                  width: 50,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.only(
-                      topRight: Radius.circular(12),
-                      bottomRight: Radius.circular(12),
-                    ),
-                    gradient: LinearGradient(
-                      colors: [hijauGojek.withValues(alpha: 0.3), hijauGojek],
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      isSNInput == "Y"
-                          ? IconButton(
-                              icon: Icon(
-                                Icons.qr_code_scanner_rounded,
-                                color: Colors.white,
-                                size: 28,
-                              ),
-                              onPressed: () => _startQRScan(indetail),
-                              tooltip: "Scan QR Code",
-                            )
-                          : IconButton(
-                              icon: Icon(
-                                Icons.keyboard,
-                                color: Colors.white,
-                                size: 28,
-                              ),
-                              onPressed: () => _startManualInput(indetail),
-                              tooltip: "Input Manual",
+                    // DESCRIPTION realtime
+                    if (indetail.descr?.isNotEmpty ?? false) ...[
+                      SizedBox(height: 8),
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.note,
+                              size: 14,
+                              color: Colors.blue.shade600,
                             ),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                indetail.descr!,
+                                style: TextStyle(
+                                  color: Colors.blue.shade800,
+                                  fontSize: 11,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
-          ],
+
+              // ACTION BUTTONS
+              if (widget.from != "history" && !isReadOnlyMode)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 50,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.only(
+                        topRight: Radius.circular(12),
+                        bottomRight: Radius.circular(12),
+                      ),
+                      gradient: LinearGradient(
+                        colors: [hijauGojek.withValues(alpha: 0.3), hijauGojek],
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        isSNInput == "Y"
+                            ? IconButton(
+                                icon: Icon(
+                                  Icons.qr_code_scanner_rounded,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                                onPressed: () => _startQRScan(indetail),
+                                tooltip: "Scan QR Code",
+                              )
+                            : IconButton(
+                                icon: Icon(
+                                  Icons.keyboard,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                                onPressed: () => _startManualInput(indetail),
+                                tooltip: "Input Manual",
+                              ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -4113,6 +4206,95 @@ class _InDetailPageState extends State<InDetailPage>
     );
   }
 
+  Widget _buildEnhancedHeader() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
+        gradient: LinearGradient(
+          colors: [hijauGojek, hijauGojek],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: _handleBackPress,
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Tampilkan status realtime
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: isReadOnlyMode
+                                  ? Colors.grey
+                                  : Colors.blueAccent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            isReadOnlyMode ? "View Only" : "Realtime",
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        widget.from == "sync"
+                            ? "${widget.flag?.documentno}"
+                            : "${_getCurrentInModel().documentno}",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        isReadOnlyMode
+                            ? "Purchase Order Details (View Only)"
+                            : "Purchase Order Details",
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                ..._buildActions(),
+              ],
+            ),
+          ),
+          // Tampilkan search field jika sedang aktif
+          if (_isSearching && !isReadOnlyMode)
+            Container(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: _buildEnhancedSearchField(),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -4133,16 +4315,29 @@ class _InDetailPageState extends State<InDetailPage>
               onRefresh: _handleRefresh,
               child: Column(
                 children: [
-                  _buildRealtimeHeader(),
+                  // Header dengan search
+                  _buildEnhancedHeader(),
                   Expanded(
                     child: Obx(() {
+                      // Gunakan filtered list untuk search, fallback ke normal list
+                      final displayList = _isSearchActive.value
+                          ? _filteredDetailsList
+                          : (_realtimeDetailsList.isNotEmpty
+                                ? _realtimeDetailsList
+                                : detailsList);
+
                       // Tampilkan loading shimmer
                       if (isDetailsLoading.value) {
                         return _buildShimmerLoading();
                       }
 
-                      // Tampilkan empty state jika tidak ada data
-                      if (detailsList.isEmpty) {
+                      // Tampilkan empty state untuk search
+                      if (_isSearchActive.value && displayList.isEmpty) {
+                        return _buildSearchEmptyState();
+                      }
+
+                      // Tampilkan empty state normal
+                      if (displayList.isEmpty) {
                         return _buildEmptyState();
                       }
 
@@ -4155,14 +4350,14 @@ class _InDetailPageState extends State<InDetailPage>
                               context,
                               index,
                             ) {
-                              if (index < detailsList.length) {
+                              if (index < displayList.length) {
                                 return _buildModernProductCard(
-                                  detailsList[index],
+                                  displayList[index],
                                   index,
                                 );
                               }
                               return SizedBox();
-                            }, childCount: detailsList.length),
+                            }, childCount: displayList.length),
                           ),
                           SliverToBoxAdapter(child: SizedBox(height: 150)),
                         ],
@@ -4294,38 +4489,178 @@ class _InDetailPageState extends State<InDetailPage>
   }
 
   void _showSerialNumberErrorDialog(String serialNumber) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isSmallDevice = screenWidth < 360;
+    final double paddingValue = isSmallDevice ? 16.0 : 20.0;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.error, color: Colors.red),
-            SizedBox(width: 8),
-            Text("Serial Number Sudah Digunakan"),
-          ],
+      barrierDismissible: false, // User harus menekan tombol secara eksplisit
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.0),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Serial number '$serialNumber' sudah digunakan di sistem."),
-            SizedBox(height: 8),
-            Text(
-              "Serial number harus unik secara global untuk semua product dan GR.",
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.orange.shade700,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text("OK"),
+        elevation: 8,
+        backgroundColor: Colors.white,
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: 400, // Maximum width untuk tablet
+            minWidth: isSmallDevice ? 280 : 320,
           ),
-        ],
+          padding: EdgeInsets.all(paddingValue),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header dengan icon dan title
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.error_outline_rounded,
+                      color: Colors.red.shade600,
+                      size: 24,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      "Serial Number Sudah Digunakan",
+                      style: TextStyle(
+                        fontSize: isSmallDevice ? 18 : 20,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade800,
+                        fontFamily: 'MonaSans',
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: 20),
+
+              // Serial Number yang bermasalah
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade100, width: 1.5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Serial Number:",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red.shade700,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      serialNumber,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.red.shade800,
+                        fontFamily: 'Monospace',
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+
+              SizedBox(height: 16),
+
+              // Pesan error
+              Text(
+                "Serial number ini sudah digunakan di sistem dan tidak dapat digunakan kembali.",
+                style: TextStyle(
+                  fontSize: isSmallDevice ? 14 : 15,
+                  color: Colors.grey.shade700,
+                  height: 1.4,
+                ),
+              ),
+
+              SizedBox(height: 8),
+
+              // Informasi tambahan
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade100),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: Colors.orange.shade600,
+                      size: 16,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Serial number harus unik secara global untuk semua product dan Good Receipt (GR).",
+                        style: TextStyle(
+                          fontSize: isSmallDevice ? 12 : 13,
+                          color: Colors.orange.shade800,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              SizedBox(height: 24),
+
+              // Action buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade600,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          vertical: isSmallDevice ? 12 : 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        "OK",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: isSmallDevice ? 14 : 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -4419,28 +4754,65 @@ class _InDetailPageState extends State<InDetailPage>
     );
   }
 
-  Future<void> _sendToCperpWithLoading() async {
+  // Future<void> _sendToCperpWithLoading() async {
+  //   if (_currentGrId == null) return;
+
+  //   try {
+  //     _isSendingToKafka.value = true;
+
+  //     await _inController.sendToKafkaForGR(_currentGrId!);
+
+  //     // Tunggu sebentar untuk memastikan status terupdate
+  //     await Future.delayed(Duration(seconds: 2));
+
+  //     Fluttertoast.showToast(
+  //       msg: "Data berhasil dikirim ke CPERP",
+  //       backgroundColor: Colors.green,
+  //       textColor: Colors.white,
+  //     );
+  //   } catch (e) {
+  //     Fluttertoast.showToast(
+  //       msg: "Gagal mengirim ke CPERP: $e",
+  //       backgroundColor: Colors.red,
+  //       textColor: Colors.white,
+  //     );
+  //   } finally {
+  //     _isSendingToKafka.value = false;
+  //   }
+  // }
+
+  Future<void> _updateGrInStatusToSuccess() async {
     if (_currentGrId == null) return;
 
     try {
       _isSendingToKafka.value = true;
 
-      await _inController.sendToKafkaForGR(_currentGrId!);
+      // Update atau buat field status di Firestore menjadi "success"
+      await FirebaseFirestore.instance.collection('gr_in').doc(_currentGrId!).set(
+        {'status': 'success'},
+        SetOptions(merge: true),
+      ); // merge: true untuk update field yang ada tanpa menghapus field lain
 
       // Tunggu sebentar untuk memastikan status terupdate
       await Future.delayed(Duration(seconds: 2));
 
       Fluttertoast.showToast(
-        msg: "Data berhasil dikirim ke CPERP",
+        msg: "Data berhasil diupdate ke success",
         backgroundColor: Colors.green,
         textColor: Colors.white,
       );
+      Future.delayed(const Duration(seconds: 1), () {
+        Get.to(GrinPage());
+      });
     } catch (e) {
       Fluttertoast.showToast(
-        msg: "Gagal mengirim ke CPERP: $e",
+        msg: "Gagal mengupdate status: $e",
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
+      Future.delayed(const Duration(seconds: 1), () {
+        Get.to(GrinPage());
+      });
     } finally {
       _isSendingToKafka.value = false;
     }
@@ -4690,7 +5062,7 @@ class _InDetailPageState extends State<InDetailPage>
                           final data =
                               snapshot.data!.data() as Map<String, dynamic>? ??
                               {};
-                          final kafkaStatus = data['lastSeenToKafkaLogStatus'];
+                          final kafkaStatus = data['status'];
                           final bool isSent = kafkaStatus == "success";
 
                           return Obx(() {
@@ -4734,7 +5106,7 @@ class _InDetailPageState extends State<InDetailPage>
                             return ElevatedButton.icon(
                               onPressed: isSent
                                   ? null
-                                  : _sendToCperpWithLoading,
+                                  : _updateGrInStatusToSuccess,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: isSent
                                     ? Colors.grey
@@ -4752,7 +5124,7 @@ class _InDetailPageState extends State<InDetailPage>
                                 size: 18,
                               ),
                               label: Text(
-                                isSent ? 'Sudah Terkirim' : 'Kirim CPERP',
+                                isSent ? 'Completed' : 'Complete GR',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 13,
