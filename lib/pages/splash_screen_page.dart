@@ -139,7 +139,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
                       ),
                     ),
                     child: Image.asset(
-                      'data/images/logo-bisi.png',
+                      'assets/icons/bisi.png',
                       fit: BoxFit.contain,
                     ),
                   ),

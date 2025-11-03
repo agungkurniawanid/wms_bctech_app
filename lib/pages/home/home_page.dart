@@ -12,7 +12,7 @@ import 'package:wms_bctech/helpers/number_helper.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
 import 'package:wms_bctech/pages/grin/grin_page.dart';
 import 'package:wms_bctech/pages/out/out_page.dart';
-import 'package:wms_bctech/components/clipper.dart';
+import 'package:wms_bctech/components/home/clipper.dart';
 import 'package:wms_bctech/components/home/home_appbar_widget.dart';
 import 'package:wms_bctech/components/home/home_menu_card_widget.dart';
 import 'package:wms_bctech/components/home/home_more_options_bottom_sheet_widget.dart';
@@ -196,7 +196,6 @@ class _HomePage extends State<HomePage> {
                     ClipPath(
                       clipper: CurveClipper(),
                       child: Container(
-                        height: 350,
                         width: double.infinity,
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -216,6 +215,7 @@ class _HomePage extends State<HomePage> {
                                 HomeAppbarWidget(),
                                 const SizedBox(height: 20),
                                 _buildMenuGrid(),
+                                const SizedBox(height: 40),
                               ],
                             ),
                           ),
@@ -232,21 +232,103 @@ class _HomePage extends State<HomePage> {
                   ],
                 ),
 
-                Flexible(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        _buildSectionHeader('Recent Sales Order'),
-                        const SizedBox(height: 10),
-                        Obx(() {
-                          if (outController.isLoading.value) {
-                            return HomeShimmerLoadingWidget();
-                          }
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      _buildSectionHeader('Recent Sales Order'),
+                      const SizedBox(height: 10),
+                      Obx(() {
+                        if (outController.isLoading.value) {
+                          return HomeShimmerLoadingWidget();
+                        }
 
-                          final data = outController.tolistSO;
+                        final data = outController.tolistSO;
+                        debugPrint('Rendering SO data length: ${data.length}');
+
+                        if (data.isEmpty) {
+                          return SizedBox(
+                            height: 140,
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.inventory_2,
+                                    size: 40,
+                                    color: Colors.grey,
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'No Sales Orders Found',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                  SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: () =>
+                                        outController.refreshDataSO(
+                                          type: RefreshTypeSO.listRecentData,
+                                        ),
+                                    child: Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        final List<Map<String, dynamic>>
+                        mappedSO = data.take(10).map((so) {
+                          final totalLines = so.totallines ?? 0.0;
+                          final totalItems = so.details?.length ?? 0;
+                          final totalQty =
+                              so.details
+                                  ?.fold<num>(
+                                    0,
+                                    (sum, detail) =>
+                                        sum + (detail.qtyordered ?? 0),
+                                  )
+                                  .toString() ??
+                              '0';
+
                           debugPrint(
-                            'Rendering SO data length: ${data.length}',
+                            'Mapping SO: ${so.documentno}, TotalLines: $totalLines, '
+                            'Items: $totalItems, TotalQty: $totalQty',
+                          );
+
+                          return {
+                            'documentNo': so.documentno ?? '-',
+                            'customer': TextHelper.capitalize(
+                              so.cBpartnerName ?? "",
+                            ),
+                            'date': DateHelper.formatDate(so.dateordered),
+                            'totalItems': totalItems.toString(),
+                            'totalQty': NumberHelper.formatNumber(
+                              double.parse(totalQty),
+                            ),
+                          };
+                        }).toList();
+
+                        return HomeRecentOrderCarouselWidget(
+                          data: mappedSO,
+                          contextType: 'SO',
+                        );
+                      }),
+
+                      const SizedBox(height: 20),
+                      _buildSectionHeader('Recent Purchase Orders'),
+
+                      const SizedBox(height: 10),
+                      Obx(() {
+                        if (inController.isLoading.value) {
+                          return HomeShimmerLoadingWidget();
+                        }
+
+                        try {
+                          // GUNAKAN tolistPORecent
+                          final data = inController.tolistPORecent;
+                          debugPrint(
+                            'Rendering PO data length: ${data.length}',
                           );
 
                           if (data.isEmpty) {
@@ -263,15 +345,23 @@ class _HomePage extends State<HomePage> {
                                     ),
                                     SizedBox(height: 8),
                                     Text(
-                                      'No Sales Orders Found',
+                                      'No Active Purchase Orders Found',
                                       style: TextStyle(color: Colors.grey),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'All POs have been fully delivered or no recent orders',
+                                      style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 12,
+                                      ),
+                                      textAlign: TextAlign.center,
                                     ),
                                     SizedBox(height: 8),
                                     TextButton(
-                                      onPressed: () =>
-                                          outController.refreshDataSO(
-                                            type: RefreshTypeSO.listRecentData,
-                                          ),
+                                      onPressed: () => inController.refreshData(
+                                        type: RefreshType.listRecentData,
+                                      ),
                                       child: Text('Retry'),
                                     ),
                                   ],
@@ -281,137 +371,42 @@ class _HomePage extends State<HomePage> {
                           }
 
                           final List<Map<String, dynamic>>
-                          mappedSO = data.take(10).map((so) {
-                            final totalLines = so.totallines ?? 0.0;
-                            final totalItems = so.details?.length ?? 0;
-                            final totalQty =
-                                so.details
-                                    ?.fold<num>(
-                                      0,
-                                      (sum, detail) =>
-                                          sum + (detail.qtyordered ?? 0),
-                                    )
-                                    .toString() ??
-                                '0';
+                          mappedPO = data.take(10).map((po) {
+                            final totalLines = po.totallines ?? 0.0;
+                            final totalItems = po.details?.length ?? 0;
 
                             debugPrint(
-                              'Mapping SO: ${so.documentno}, TotalLines: $totalLines, '
-                              'Items: $totalItems, TotalQty: $totalQty',
+                              'Mapping PO: ${po.documentno}, TotalLines: $totalLines, Items: $totalItems, FullyDelivered: ${po.isFullyDelivered}',
                             );
 
                             return {
-                              'documentNo': so.documentno ?? '-',
-                              'customer': TextHelper.capitalize(
-                                so.cBpartnerName ?? "",
+                              'documentNo': po.documentno ?? '-',
+                              'supplier': TextHelper.capitalize(
+                                po.cBpartnerName,
                               ),
-                              'date': DateHelper.formatDate(so.dateordered),
-                              'totalItems': totalItems.toString(),
-                              'totalQty': NumberHelper.formatNumber(
-                                double.parse(totalQty),
+                              'status': po.docstatus ?? '-',
+                              'date': DateHelper.formatDate(po.dateordered),
+                              'items': NumberHelper.formatNumber(
+                                double.parse(totalItems.toString()),
                               ),
                             };
                           }).toList();
 
                           return HomeRecentOrderCarouselWidget(
-                            data: mappedSO,
-                            contextType: 'SO',
+                            data: mappedPO,
+                            contextType: 'PO',
                           );
-                        }),
-
-                        const SizedBox(height: 20),
-                        _buildSectionHeader('Recent Purchase Orders'),
-
-                        const SizedBox(height: 10),
-                        Obx(() {
-                          if (inController.isLoading.value) {
-                            return HomeShimmerLoadingWidget();
-                          }
-
-                          try {
-                            // GUNAKAN tolistPORecent
-                            final data = inController.tolistPORecent;
-                            debugPrint(
-                              'Rendering PO data length: ${data.length}',
-                            );
-
-                            if (data.isEmpty) {
-                              return SizedBox(
-                                height: 140,
-                                child: Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.inventory_2,
-                                        size: 40,
-                                        color: Colors.grey,
-                                      ),
-                                      SizedBox(height: 8),
-                                      Text(
-                                        'No Active Purchase Orders Found',
-                                        style: TextStyle(color: Colors.grey),
-                                      ),
-                                      SizedBox(height: 4),
-                                      Text(
-                                        'All POs have been fully delivered or no recent orders',
-                                        style: TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 12,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                      SizedBox(height: 8),
-                                      TextButton(
-                                        onPressed: () =>
-                                            inController.refreshData(
-                                              type: RefreshType.listRecentData,
-                                            ),
-                                        child: Text('Retry'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }
-
-                            final List<Map<String, dynamic>>
-                            mappedPO = data.take(10).map((po) {
-                              final totalLines = po.totallines ?? 0.0;
-                              final totalItems = po.details?.length ?? 0;
-
-                              debugPrint(
-                                'Mapping PO: ${po.documentno}, TotalLines: $totalLines, Items: $totalItems, FullyDelivered: ${po.isFullyDelivered}',
-                              );
-
-                              return {
-                                'documentNo': po.documentno ?? '-',
-                                'supplier': TextHelper.capitalize(
-                                  po.cBpartnerName,
-                                ),
-                                'status': po.docstatus ?? '-',
-                                'date': DateHelper.formatDate(po.dateordered),
-                                'items': NumberHelper.formatNumber(
-                                  double.parse(totalItems.toString()),
-                                ),
-                              };
-                            }).toList();
-
-                            return HomeRecentOrderCarouselWidget(
-                              data: mappedPO,
-                              contextType: 'PO',
-                            );
-                          } catch (e) {
-                            debugPrint('Error rendering PO data: $e');
-                            return SizedBox(
-                              height: 140,
-                              child: Center(
-                                child: Text('Error loading data: $e'),
-                              ),
-                            );
-                          }
-                        }),
-                      ],
-                    ),
+                        } catch (e) {
+                          debugPrint('Error rendering PO data: $e');
+                          return SizedBox(
+                            height: 140,
+                            child: Center(
+                              child: Text('Error loading data: $e'),
+                            ),
+                          );
+                        }
+                      }),
+                    ],
                   ),
                 ),
               ],

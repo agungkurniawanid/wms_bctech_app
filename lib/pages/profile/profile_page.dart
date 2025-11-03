@@ -373,7 +373,7 @@ class _ProfilePageState extends State<ProfilePage> {
               access,
               style: TextStyle(
                 fontFamily: 'MonaSans',
-                fontSize: 14 * ffem,
+                fontSize: 12 * ffem,
                 color: Colors.black87,
                 fontWeight: FontWeight.w500,
               ),
@@ -458,7 +458,7 @@ class _ProfilePageState extends State<ProfilePage> {
             splashColor: const Color(0xfff44236).withValues(alpha: 0.2),
             highlightColor: const Color(0xfff44236).withValues(alpha: 0.1),
             child: Container(
-              padding: EdgeInsets.all(20 * fem),
+              padding: EdgeInsets.all(10 * fem),
               width: double.infinity,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -567,7 +567,7 @@ class _ProfilePageState extends State<ProfilePage> {
             splashColor: hijauGojek.withValues(alpha: 0.2),
             highlightColor: hijauGojek.withValues(alpha: 0.1),
             child: Container(
-              padding: EdgeInsets.all(20 * fem),
+              padding: EdgeInsets.all(10 * fem),
               width: double.infinity,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

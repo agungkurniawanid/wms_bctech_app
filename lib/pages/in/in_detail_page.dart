@@ -2327,7 +2327,6 @@ class _InDetailPageState extends State<InDetailPage>
     final qtyOrdered = indetail.qtyordered?.toInt() ?? 0;
     final remainingQty = qtyOrdered - qtyEntered;
     final progress = qtyOrdered > 0 ? (qtyEntered / qtyOrdered) : 0.0;
-    // final progressPercentage = (progress * 100).toInt();
 
     final isSNInput = indetail.isSN;
 
@@ -2336,7 +2335,7 @@ class _InDetailPageState extends State<InDetailPage>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: hijauGojek.withValues(alpha: 0.3), width: 2),
+        border: Border.all(color: hijauGojek.withOpacity(0.3), width: 2),
         boxShadow: [
           BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
@@ -2379,7 +2378,7 @@ class _InDetailPageState extends State<InDetailPage>
                           width: 50,
                           height: 50,
                           decoration: BoxDecoration(
-                            color: hijauGojek.withValues(alpha: 0.2),
+                            color: hijauGojek.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Stack(
@@ -2437,14 +2436,6 @@ class _InDetailPageState extends State<InDetailPage>
                               ),
                               SizedBox(height: 12),
 
-                              // PROGRESS BAR realtime
-                              // _buildProgressBarChart(
-                              //   qtyEntered,
-                              //   qtyOrdered,
-                              //   progressPercentage,
-                              // ),
-                              SizedBox(height: 8),
-
                               // STATUS BADGE realtime
                               if (progress > 0)
                                 Container(
@@ -2455,12 +2446,12 @@ class _InDetailPageState extends State<InDetailPage>
                                   decoration: BoxDecoration(
                                     color: _getStatusColor(
                                       progress,
-                                    ).withValues(alpha: 0.1),
+                                    ).withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: _getStatusColor(
                                         progress,
-                                      ).withValues(alpha: 0.3),
+                                      ).withOpacity(0.3),
                                       width: 1,
                                     ),
                                   ),
@@ -2553,6 +2544,46 @@ class _InDetailPageState extends State<InDetailPage>
                         ),
                       ),
                     ],
+
+                    // VIEW DETAILS BUTTON - TAMBAHAN BARU
+                    SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) =>
+                              ProductDetailBottomSheet(product: indetail),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: hijauGojek,
+                          side: BorderSide(color: hijauGojek.withOpacity(0.5)),
+                          padding: EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 16,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          backgroundColor: Colors.transparent,
+                        ),
+                        icon: Icon(
+                          Icons.visibility_outlined,
+                          size: 16,
+                          color: hijauGojek,
+                        ),
+                        label: Text(
+                          "View Details",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: hijauGojek,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -2571,7 +2602,7 @@ class _InDetailPageState extends State<InDetailPage>
                         bottomRight: Radius.circular(12),
                       ),
                       gradient: LinearGradient(
-                        colors: [hijauGojek.withValues(alpha: 0.3), hijauGojek],
+                        colors: [hijauGojek.withOpacity(0.3), hijauGojek],
                       ),
                     ),
                     child: Column(
@@ -4789,7 +4820,7 @@ class _InDetailPageState extends State<InDetailPage>
 
       // Update atau buat field status di Firestore menjadi "success"
       await FirebaseFirestore.instance.collection('gr_in').doc(_currentGrId!).set(
-        {'status': 'success'},
+        {'status': 'completed'},
         SetOptions(merge: true),
       ); // merge: true untuk update field yang ada tanpa menghapus field lain
 
@@ -4797,7 +4828,7 @@ class _InDetailPageState extends State<InDetailPage>
       await Future.delayed(Duration(seconds: 2));
 
       Fluttertoast.showToast(
-        msg: "Data berhasil diupdate ke success",
+        msg: "Data berhasil diupdate ke Completed",
         backgroundColor: Colors.green,
         textColor: Colors.white,
       );
@@ -7137,9 +7168,10 @@ class _InDetailPageState extends State<InDetailPage>
     // ✅ JIKA DALAM MODE READ-ONLY, LANGSUNG KEMBALI KE HOME PAGE
     if (isReadOnlyMode) {
       _logger.d('🔙 Read-only mode, navigating directly to Home');
-      Get.until((route) => route.isFirst); // Kembali ke home page
+      Get.until((route) => route.isFirst);
       return;
     }
+
     // ✅ CEK APAKAH HALAMAN INI DIBUKA DARI GRIN PAGE
     final bool isFromGrinPage = widget.grId != null;
 
@@ -7160,174 +7192,428 @@ class _InDetailPageState extends State<InDetailPage>
       _logger.d('🔙 Opened from GRIN Page, navigating back to GRIN Page');
 
       if (hasAnyData) {
-        // Ada data yang sudah diinput, tampilkan notifikasi sukses
-        Fluttertoast.showToast(
-          msg: "Data berhasil ditambahkan ke GR ID: $_currentGrId",
-          backgroundColor: Colors.green,
-          textColor: Colors.white,
-        );
+        _showSuccessToast("Data berhasil ditambahkan ke GR ID: $_currentGrId");
       }
 
       _resetGrData();
-      Get.back(); // Langsung kembali ke GRIN Page
+      Get.back();
       return;
     }
 
-    // ✅ LOGIKA UNTUK HALAMAN YANG DIBUKA DARI IN PAGE:
-    // - JIKA ADA DATA → TAWARKAN LIHAT GRIN ATAU LANJUTKAN INPUT
-    // - JIKA TIDAK ADA DATA → KEMBALI KE IN PAGE
-
+    // ✅ LOGIKA UNTUK HALAMAN YANG DIBUKA DARI IN PAGE
     if (hasAnyData && _isGrIdSavedToFirestore && _currentGrId != null) {
       // ✅ ADA DATA YANG SUDAH DIINPUT → TAWARKAN NAVIGASI KE GRIN PAGE
       _logger.d('📦 Data sudah diinput, tawarkan navigasi ke GrinPage');
 
-      final shouldNavigateToGrin =
-          await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Row(
-                children: [
-                  Icon(Icons.inventory_2, color: hijauGojek),
-                  SizedBox(width: 8),
-                  Text("Data GR Telah Disimpan"),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Info GR ID
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.confirmation_number, color: Colors.green),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "GR ID: $_currentGrId",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green.shade800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 12),
-
-                  // Summary data
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Total: ${_pendingGrDetails.length} items",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue.shade800,
-                          ),
-                        ),
-                        if (hasSerialData)
-                          Text(
-                            "• ${_pendingGrDetails.where((d) => d.sn != null && d.sn!.isNotEmpty).length} dengan serial number",
-                          ),
-                        if (hasNonSerialData)
-                          Text(
-                            "• ${_pendingGrDetails.where((d) => d.sn == null || d.sn!.isEmpty).length} tanpa serial number",
-                          ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 12),
-
-                  Text(
-                    "Data telah berhasil disimpan. Apakah Anda ingin melihat daftar GRIN?",
-                    style: TextStyle(fontSize: 14),
-                  ),
-                ],
-              ),
-              actions: [
-                // ✅ Opsi: Lanjutkan Input (tetap di halaman ini)
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text("Lanjutkan Input"),
-                ),
-
-                // ✅ Opsi: Ke GRIN Page
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: ElevatedButton.styleFrom(backgroundColor: hijauGojek),
-                  child: Text("Lihat GRIN"),
-                ),
-              ],
-            ),
-          ) ??
-          false;
+      final shouldNavigateToGrin = await _showDataSavedDialog(
+        hasSerialData: hasSerialData,
+        hasNonSerialData: hasNonSerialData,
+      );
 
       if (shouldNavigateToGrin) {
-        // ✅ ARAHKAN KE GRIN PAGE
         _navigateToGrinPage();
       } else {
-        // ✅ USER MEMILIH LANJUTKAN INPUT - TETAP DI HALAMAN INI
         _logger.d('👤 User memilih untuk lanjutkan input data');
       }
     }
     // ✅ JIKA BELUM ADA DATA SAMA SEKALI → LANGSUNG KEMBALI KE IN PAGE
     else if (!hasAnyData) {
       _logger.d('🔄 Tidak ada data yang diinput, kembali ke InPage');
-
       _resetGrData();
-      Get.back(); // Langsung kembali ke IN Page tanpa konfirmasi
+      Get.back();
     }
-    // ✅ EDGE CASE: Ada data tapi belum disimpan (seharusnya tidak terjadi)
+    // ✅ EDGE CASE: Ada data tapi belum disimpan
     else if (hasAnyData && !_isGrIdSavedToFirestore) {
       _logger.w(
         '⚠️ Ada data yang belum disimpan: ${_pendingGrDetails.length} items',
       );
 
-      final shouldGoBack =
-          await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text("Data Belum Disimpan"),
-              content: Text(
-                "Ada ${_pendingGrDetails.length} item yang belum disimpan. "
-                "Apakah Anda yakin ingin membatalkan?",
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text("Lanjutkan Input"),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                  ),
-                  child: Text("Batalkan Input"),
-                ),
-              ],
-            ),
-          ) ??
-          false;
+      final shouldGoBack = await _showUnsavedDataDialog();
 
       if (shouldGoBack) {
         _resetGrData();
         Get.back();
       }
     }
+  }
+
+  // ================================
+  // MODERN DIALOG COMPONENTS
+  // ================================
+
+  Future<bool> _showDataSavedDialog({
+    required bool hasSerialData,
+    required bool hasNonSerialData,
+  }) async {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallDevice = screenWidth < 360;
+    final isTablet = screenWidth > 600;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: EdgeInsets.all(isTablet ? 80 : 20),
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: isTablet ? 500 : double.infinity,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 20,
+                    offset: Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header dengan gradient
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(
+                        vertical: isSmallDevice ? 16 : 20,
+                        horizontal: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF00C853), Color(0xFF00E676)],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.check_circle_rounded,
+                            color: Colors.white,
+                            size: isSmallDevice ? 24 : 28,
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              "Data GR Telah Disimpan",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: isSmallDevice ? 16 : 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Content
+                    Padding(
+                      padding: EdgeInsets.all(isTablet ? 24 : 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // GR ID Card
+                          _buildInfoCard(
+                            icon: Icons.confirmation_number_outlined,
+                            iconColor: Color(0xFF00C853),
+                            backgroundColor: Color(0xFFE8F5E8),
+                            borderColor: Color(0xFFC8E6C9),
+                            child: Text(
+                              "GR ID: $_currentGrId",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF2E7D32),
+                                fontSize: isSmallDevice ? 14 : 15,
+                              ),
+                            ),
+                          ),
+
+                          SizedBox(height: 16),
+
+                          // Summary Data Card
+                          _buildInfoCard(
+                            icon: Icons.inventory_2_outlined,
+                            iconColor: Color(0xFF2196F3),
+                            backgroundColor: Color(0xFFE3F2FD),
+                            borderColor: Color(0xFFBBDEFB),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Total: ${_pendingGrDetails.length} items",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1565C0),
+                                    fontSize: isSmallDevice ? 14 : 15,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                if (hasSerialData) ...[
+                                  _buildDataItem(
+                                    "Dengan serial number",
+                                    _pendingGrDetails
+                                        .where(
+                                          (d) =>
+                                              d.sn != null && d.sn!.isNotEmpty,
+                                        )
+                                        .length,
+                                  ),
+                                ],
+                                if (hasNonSerialData) ...[
+                                  _buildDataItem(
+                                    "Tanpa serial number",
+                                    _pendingGrDetails
+                                        .where(
+                                          (d) => d.sn == null || d.sn!.isEmpty,
+                                        )
+                                        .length,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+
+                          SizedBox(height: 20),
+
+                          // Description Text
+                          Text(
+                            "Data telah berhasil disimpan. Apakah Anda ingin melihat daftar GRIN?",
+                            style: TextStyle(
+                              fontSize: isSmallDevice ? 14 : 15,
+                              color: Colors.grey[700],
+                              height: 1.4,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Action Buttons
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.only(
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          // Lanjutkan Input Button
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              style: OutlinedButton.styleFrom(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: isSmallDevice ? 10 : 12,
+                                ),
+                                side: BorderSide(color: Colors.grey[400]!),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                "Lanjutkan Input",
+                                style: TextStyle(
+                                  color: Colors.grey[700],
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: isSmallDevice ? 13 : 14,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          SizedBox(width: 12),
+
+                          // Lihat GRIN Button
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () => Navigator.of(context).pop(true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Color(0xFF00C853),
+                                padding: EdgeInsets.symmetric(
+                                  vertical: isSmallDevice ? 10 : 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 2,
+                                shadowColor: Color(0xFF00C853).withOpacity(0.3),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.list_alt_rounded,
+                                    size: isSmallDevice ? 16 : 18,
+                                    color: Colors.white,
+                                  ),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    "Lihat GRIN",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: isSmallDevice ? 13 : 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ) ??
+        false;
+  }
+
+  Future<bool> _showUnsavedDataDialog() async {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallDevice = screenWidth < 360;
+
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.white,
+            title: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                SizedBox(width: 8),
+                Text(
+                  "Data Belum Disimpan",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              "Ada ${_pendingGrDetails.length} item yang belum disimpan. "
+              "Apakah Anda yakin ingin membatalkan?",
+              style: TextStyle(
+                color: Colors.grey[700],
+                fontSize: isSmallDevice ? 14 : 15,
+              ),
+            ),
+            actions: [
+              // Lanjutkan Input Button
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                style: TextButton.styleFrom(foregroundColor: Colors.grey[700]),
+                child: Text(
+                  "Lanjutkan Input",
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+
+              // Batalkan Input Button
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  "Batalkan Input",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  // ================================
+  // REUSABLE WIDGET COMPONENTS
+  // ================================
+
+  Widget _buildInfoCard({
+    required IconData icon,
+    required Color iconColor,
+    required Color backgroundColor,
+    required Color borderColor,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor, width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: iconColor, size: 20),
+          SizedBox(width: 12),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataItem(String label, int count) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: Colors.blue[600],
+              shape: BoxShape.circle,
+            ),
+          ),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              "$label: $count items",
+              style: TextStyle(color: Colors.grey[700], fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSuccessToast(String message) {
+    Fluttertoast.showToast(
+      msg: message,
+      backgroundColor: Color(0xFF00C853),
+      textColor: Colors.white,
+      fontSize: 14,
+      gravity: ToastGravity.BOTTOM,
+    );
   }
 
   Widget _buildAppBarTitle(double fem, double ffem) {
@@ -7414,7 +7700,7 @@ class _InDetailPageState extends State<InDetailPage>
   void _handleCancelPress() {
     if (_isGrIdSavedToFirestore && _currentGrId != null) {
       // Jika sudah disimpan, tampilkan konfirmasi ke GrinPage
-      _showNavigationConfirmation();
+      _handleBackPress();
     } else {
       // Jika belum disimpan, kembali ke InPage
       _showCancelConfirmation();
@@ -7447,29 +7733,215 @@ class _InDetailPageState extends State<InDetailPage>
   }
 
   void _showCancelConfirmation() {
+    final BuildContext context = Get.context!;
+    final bool hasPendingItems = _pendingGrDetails.isNotEmpty;
+    final int pendingCount = _pendingGrDetails.length;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Batalkan Input?"),
-        content: Text(
-          _pendingGrDetails.isNotEmpty
-              ? "Ada ${_pendingGrDetails.length} item yang belum disimpan. Apakah Anda yakin ingin membatalkan?"
-              : "Apakah Anda yakin ingin membatalkan input?",
+      barrierColor: Colors.black54,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(20),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header dengan gradient
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [hijauGojek, hijauGojekSecond],
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    // Icon
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        hasPendingItems
+                            ? Icons.warning_amber_rounded
+                            : Icons.help_rounded,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Title
+                    Text(
+                      hasPendingItems
+                          ? "Batalkan Input?"
+                          : "Konfirmasi Pembatalan",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'MonaSans',
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    // Description
+                    Text(
+                      hasPendingItems
+                          ? "Anda memiliki $pendingCount item yang belum disimpan. Semua data yang belum tersimpan akan hilang."
+                          : "Apakah Anda yakin ingin membatalkan input? Perubahan yang belum disimpan akan hilang.",
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontSize: 16,
+                        height: 1.5,
+                        fontFamily: 'MonaSans',
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Warning indicator untuk pending items
+                    if (hasPendingItems) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBEB),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFFEF3C7)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded,
+                              color: const Color(0xFFD97706),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                "$pendingCount item akan hilang",
+                                style: const TextStyle(
+                                  color: Color(0xFF92400E),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  fontFamily: 'MonaSans',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // Action Buttons
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: Colors.grey.shade200, width: 1),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Lanjutkan Button
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: hijauGojek,
+                          side: const BorderSide(color: hijauGojek),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          backgroundColor: Colors.white,
+                        ),
+                        child: const Text(
+                          "Lanjutkan",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            fontFamily: 'MonaSans',
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Batalkan Button
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _resetGrData();
+                          Get.back();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFDC2626),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                          shadowColor: Colors.transparent,
+                        ),
+                        child: Text(
+                          "Batalkan",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            fontFamily: 'MonaSans',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text("Lanjutkan"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _resetGrData();
-              Get.back();
-            },
-            child: Text("Batalkan"),
-          ),
-        ],
       ),
     );
   }
@@ -7481,7 +7953,7 @@ class _InDetailPageState extends State<InDetailPage>
     bool fromQR = false,
     bool shouldCloseBottomSheet = true,
     bool shouldNavigate = true,
-    VoidCallback? onAfterSave, // ✅ CALLBACK BARU SETELAH SIMPAN
+    VoidCallback? onAfterSave,
   }) {
     final hasSerialNumber = serialNumber != null && serialNumber.isNotEmpty;
     final currentGrId = _currentGrId ?? "Akan digenerate";
@@ -7494,193 +7966,275 @@ class _InDetailPageState extends State<InDetailPage>
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.save_rounded, color: hijauGojek),
-            SizedBox(width: 8),
-            Text("Konfirmasi Simpan Data"),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Informasi GR ID
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade200),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 40,
+                offset: Offset(0, 20),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.confirmation_number, color: Colors.blue, size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "GR ID: $currentGrId",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade800,
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header dengan gradient
+              Container(
+                padding: EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [hijauGojek, hijauGojek.withOpacity(0.8)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.bookmark_added_rounded,
+                        color: Colors.white,
+                        size: 28,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
-
-            // Informasi PO
-            Container(
-              padding: EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.description, color: Colors.green, size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "PO: $poNumber",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.green.shade800,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          "Product: $productName",
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.green.shade600,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
-
-            // Informasi Serial Number
-            Container(
-              padding: EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: hasSerialNumber
-                    ? Colors.orange.shade50
-                    : Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    hasSerialNumber ? Icons.qr_code : Icons.no_sim,
-                    color: hasSerialNumber ? Colors.orange : Colors.grey,
-                    size: 16,
-                  ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          hasSerialNumber
-                              ? "Dengan Serial Number"
-                              : "Tanpa Serial Number",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: hasSerialNumber
-                                ? Colors.orange.shade800
-                                : Colors.grey.shade800,
-                          ),
-                        ),
-                        if (hasSerialNumber) ...[
-                          SizedBox(height: 2),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            "SN: $serialNumber",
+                            "Konfirmasi Penyimpanan",
                             style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.orange.shade600,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            "Periksa kembali data Anda",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.9),
                             ),
                           ),
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            SizedBox(height: 12),
 
-            // Informasi Quantity
-            Container(
-              padding: EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.purple.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.confirmation_number,
-                    color: Colors.purple,
-                    size: 16,
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    "Quantity: $quantity",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.purple.shade800,
+              // Content
+              Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // GR ID Card
+                    _buildInfoCardBackPress(
+                      icon: Icons.tag_rounded,
+                      iconColor: Colors.indigo,
+                      backgroundColor: Colors.indigo.shade50,
+                      title: "GR ID",
+                      value: currentGrId,
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.indigo.shade50,
+                          Colors.indigo.shade100.withOpacity(0.3),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
+                    SizedBox(height: 12),
 
-            Text(
-              "Apakah Anda yakin ingin menyimpan data ini?",
-              style: TextStyle(fontSize: 14),
-            ),
-          ],
+                    // PO & Product Card
+                    _buildInfoCardBackPress(
+                      icon: Icons.receipt_long_rounded,
+                      iconColor: Colors.blue,
+                      backgroundColor: Colors.blue.shade50,
+                      title: "Purchase Order",
+                      value: poNumber,
+                      subtitle: productName,
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.blue.shade50,
+                          Colors.blue.shade100.withOpacity(0.3),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 12),
+
+                    // Serial Number Card
+                    _buildInfoCardBackPress(
+                      icon: hasSerialNumber
+                          ? Icons.qr_code_2_rounded
+                          : Icons.qr_code_scanner_rounded,
+                      iconColor: hasSerialNumber ? Colors.amber : Colors.grey,
+                      backgroundColor: hasSerialNumber
+                          ? Colors.amber.shade50
+                          : Colors.grey.shade50,
+                      title: hasSerialNumber
+                          ? "Serial Number"
+                          : "Tanpa Serial Number",
+                      value: hasSerialNumber ? serialNumber! : "-",
+                      gradient: LinearGradient(
+                        colors: hasSerialNumber
+                            ? [
+                                Colors.amber.shade50,
+                                Colors.amber.shade100.withOpacity(0.3),
+                              ]
+                            : [
+                                Colors.grey.shade50,
+                                Colors.grey.shade100.withOpacity(0.3),
+                              ],
+                      ),
+                    ),
+                    SizedBox(height: 12),
+
+                    // Quantity Card
+                    _buildInfoCardBackPress(
+                      icon: Icons.inventory_2_rounded,
+                      iconColor: Colors.purple,
+                      backgroundColor: Colors.purple.shade50,
+                      title: "Kuantitas",
+                      value: "$quantity unit",
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.purple.shade50,
+                          Colors.purple.shade100.withOpacity(0.3),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 20),
+
+                    // Warning text
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.orange.shade200,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            color: Colors.orange.shade700,
+                            size: 20,
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              "Data yang tersimpan tidak dapat diubah",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange.shade900,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Action Buttons
+              Container(
+                padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: Row(
+                  children: [
+                    // Tombol Batal
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop(false);
+                        },
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: Colors.grey.shade300,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          "Batal",
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+
+                    // Tombol Simpan
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop(true);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: hijauGojek,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          shadowColor: hijauGojek.withOpacity(0.4),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.check_circle_rounded, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              "Ya, Simpan",
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        actions: [
-          // Tombol Batal
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(false);
-            },
-            child: Text("Batal", style: TextStyle(color: Colors.grey.shade700)),
-          ),
-
-          // Tombol Simpan
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop(true);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: hijauGojek),
-            child: Text("Ya, Simpan"),
-          ),
-        ],
       ),
     ).then((confirmed) async {
       if (confirmed == true) {
-        // ✅ JIKA USER MENGKONFIRMASI, LANJUTKAN PENYIMPANAN
         await _saveToFirestore(
           product,
           serialNumber,
@@ -7689,12 +8243,85 @@ class _InDetailPageState extends State<InDetailPage>
           shouldNavigate: shouldNavigate,
         );
 
-        // ✅ PANGGIL CALLBACK SETELAH SIMPAN BERHASIL
         if (onAfterSave != null) {
           onAfterSave();
         }
       }
     });
+  }
+
+  // Helper widget untuk info card
+  Widget _buildInfoCardBackPress({
+    required IconData icon,
+    required Color iconColor,
+    required Color backgroundColor,
+    required String title,
+    required String value,
+    String? subtitle,
+    Gradient? gradient,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: iconColor.withOpacity(0.2), width: 1),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade900,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (subtitle != null) ...[
+                    SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _handleApprovePress(bool isSync) {

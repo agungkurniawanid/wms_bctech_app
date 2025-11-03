@@ -163,15 +163,13 @@ class _GrinPageState extends State<GrinPage> {
       }
 
       // Tampilkan hasil search secara langsung (tanpa grouping)
-      return Expanded(
-        child: ListView.builder(
-          controller: _scrollController,
-          itemCount: grinList.length,
-          itemBuilder: (context, index) {
-            final grin = grinList[index];
-            return _buildSearchResultCard(grin);
-          },
-        ),
+      return ListView.builder(
+        controller: _scrollController,
+        itemCount: grinList.length,
+        itemBuilder: (context, index) {
+          final grin = grinList[index];
+          return _buildSearchResultCard(grin);
+        },
       );
     });
   }
@@ -722,30 +720,17 @@ class _GrinPageState extends State<GrinPage> {
     return Obx(() {
       final groupedData = _groupGrinByPoNumber(_grinController.grinList);
 
-      return Expanded(
-        child: ListView.builder(
-          controller: _scrollController,
-          shrinkWrap: true,
-          clipBehavior: Clip.hardEdge,
-          itemCount: groupedData.length,
-          itemBuilder: (context, groupIndex) {
-            final poNumber = groupedData.keys.elementAt(groupIndex);
-            final grinList = groupedData[poNumber]!;
-            final isSingleGroup = groupedData.length == 1;
+      return ListView.builder(
+        controller: _scrollController,
+        // shrinkWrap: true, // <-- REKOMENDASI: Sebaiknya dihapus
+        clipBehavior: Clip.hardEdge,
+        itemCount: groupedData.length,
+        itemBuilder: (context, groupIndex) {
+          final poNumber = groupedData.keys.elementAt(groupIndex);
+          final grinList = groupedData[poNumber]!;
 
-            if (isSingleGroup) {
-              return Column(
-                children: grinList.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final grinData = entry.value;
-                  return _buildGrinCard(grinData, index, showPoNumber: true);
-                }).toList(),
-              );
-            }
-
-            return _buildPoGroupContainer(poNumber, grinList);
-          },
-        ),
+          return _buildPoGroupContainer(poNumber, grinList);
+        },
       );
     });
   }
@@ -1192,10 +1177,12 @@ class _GrinPageState extends State<GrinPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildInfoRow(
-                          Icons.inventory_2,
-                          'Total Items',
-                          '${grinData.details.length} items',
+                        Expanded(
+                          child: _buildInfoRow(
+                            Icons.inventory_2,
+                            'Total Items',
+                            '${grinData.details.length} items',
+                          ),
                         ),
                         if (isSearchResult)
                           _buildStatusAndKafkaButton(grinData.grId, grinData)
@@ -1436,7 +1423,7 @@ class _GrinPageState extends State<GrinPage> {
                         onSortChanged: _handleSortChange,
                       ),
                     if (!isInSearchMode) const SizedBox(height: 16),
-                    _buildContent(),
+                    Expanded(child: _buildContent()),
                   ],
                 ),
               ),
