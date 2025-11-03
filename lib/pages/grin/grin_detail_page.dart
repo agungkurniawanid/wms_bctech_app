@@ -48,18 +48,76 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
   Map<String, dynamic>? _editingItem;
   int _originalQuantity = 0;
 
+  bool _isLoadingMore = false;
+  bool _hasMoreData = true;
+  int _currentPage = 0;
+  final int _itemsPerPage = 20; // Jumlah item per halaman
+  List<Map<String, dynamic>> _displayedItems = [];
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _loadGrinDetailData();
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _searchController.dispose();
     _quantityController.dispose();
     super.dispose();
+  }
+
+  // Handle scroll untuk pagination
+  void _onScroll() {
+    if (_scrollController.position.pixels ==
+        _scrollController.position.maxScrollExtent) {
+      _loadMoreData();
+    }
+  }
+
+  // Load more data untuk pagination
+  Future<void> _loadMoreData() async {
+    if (_isLoadingMore || !_hasMoreData || _isSearching) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    // Simulasi delay untuk loading
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    final startIndex = _currentPage * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+
+    if (endIndex < _filteredItems.length) {
+      setState(() {
+        _displayedItems.addAll(_filteredItems.sublist(startIndex, endIndex));
+        _currentPage++;
+        _isLoadingMore = false;
+      });
+    } else {
+      final remainingItems = _filteredItems.sublist(startIndex);
+      setState(() {
+        _displayedItems.addAll(remainingItems);
+        _hasMoreData = false;
+        _isLoadingMore = false;
+      });
+    }
+  }
+
+  // Reset pagination ketika filter/search berubah
+  void _resetPagination() {
+    setState(() {
+      _currentPage = 0;
+      _hasMoreData = true;
+      _isLoadingMore = false;
+      _displayedItems = _filteredItems.take(_itemsPerPage).toList();
+    });
   }
 
   Future<void> _loadGrinDetailData() async {
@@ -94,6 +152,7 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
           // Process detail items
           _detailItems = _processDetailItems(_grinData!.details);
           _filteredItems = List.from(_detailItems);
+          _resetPagination(); // Initialize pagination
 
           // Load product names
           await _loadProductNames();
@@ -101,6 +160,7 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
         // Process detail items
         _detailItems = _processDetailItems(_grinData!.details);
         _filteredItems = List.from(_detailItems);
+        _resetPagination(); // Initialize pagination
 
         // Load product names from IN collection
         await _loadProductNames();
@@ -173,6 +233,7 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
           if (mounted) {
             setState(() {
               _filteredItems = _applyFiltersAndSearch(_detailItems);
+              _resetPagination(); // Reset pagination ketika data berubah
             });
           }
         }
@@ -205,12 +266,14 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
       _searchController.clear();
       _isSearching = false;
       _filteredItems = _applyFiltersAndSearch(_detailItems);
+      _resetPagination(); // Reset pagination ketika search di-clear
     });
   }
 
   void _updateSearchQuery(String newQuery) {
     setState(() {
       _filteredItems = _applyFiltersAndSearch(_detailItems);
+      _resetPagination(); // Reset pagination ketika search berubah
     });
   }
 
@@ -218,6 +281,7 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
     setState(() {
       _selectedFilter = value ?? 'All Items';
       _filteredItems = _applyFiltersAndSearch(_detailItems);
+      _resetPagination(); // Reset pagination ketika filter berubah
     });
   }
 
@@ -252,6 +316,275 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
     }
 
     return filtered;
+  }
+
+  // Shimmer untuk load more
+  Widget _buildLoadMoreShimmer() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Column(
+        children: [
+          // Shimmer untuk 20 item loading
+          Shimmer.fromColors(
+            baseColor: Colors.grey.shade300,
+            highlightColor: Colors.grey.shade100,
+            period: const Duration(milliseconds: 1500),
+            child: Column(
+              children: List.generate(20, (index) => _buildShimmerItem()),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Loading indicator kecil di bawah
+          const CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(hijauGojek),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Loading more items...',
+            style: TextStyle(color: _textSecondaryColor, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget untuk satu item shimmer
+  Widget _buildShimmerItem() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left colored indicator
+          Container(
+            width: 6,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Content
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Product name shimmer
+                Container(
+                  width: double.infinity,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Product ID row
+                Row(
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 80,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            width: 120,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Serial number row
+                Row(
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 100,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            width: 150,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Quantity row
+                Row(
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            width: 80,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Indicator untuk akhir list
+  Widget _buildEndOfListIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.0),
+          boxShadow: [
+            BoxShadow(
+              color: _primaryColor.withOpacity(0.08),
+              blurRadius: 12.0,
+              offset: const Offset(0, 4.0),
+              spreadRadius: 1.0,
+            ),
+          ],
+          border: Border.all(color: _primaryColor.withOpacity(0.1), width: 1.0),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 20.0,
+              height: 20.0,
+              decoration: BoxDecoration(
+                color: _primaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_rounded,
+                size: 14.0,
+                color: _primaryColor,
+              ),
+            ),
+            const SizedBox(width: 8.0),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'All items loaded',
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 13.0,
+                      fontWeight: FontWeight.w600,
+                      color: _textPrimaryColor,
+                    ),
+                  ),
+                  Text(
+                    '${_filteredItems.length} items total',
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 11.0,
+                      fontWeight: FontWeight.w400,
+                      color: _textSecondaryColor.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // Fungsi untuk menampilkan bottom sheet edit quantity
@@ -614,8 +947,9 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
           // Update state lokal
           setState(() {
             _editingItem!['qty'] = newQuantity;
-            // Refresh filtered items
+            // Refresh filtered items dan reset pagination
             _filteredItems = _applyFiltersAndSearch(_detailItems);
+            _resetPagination();
           });
 
           if (mounted) {
@@ -744,6 +1078,7 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
           _detailItems[i]['originalIndex'] = i;
         }
         _filteredItems = _applyFiltersAndSearch(_detailItems);
+        _resetPagination();
       });
 
       if (mounted) {
@@ -1137,7 +1472,7 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            '${_filteredItems.length} data shown',
+            '${_displayedItems.length} of ${_filteredItems.length} items shown', // Tampilkan jumlah yang ditampilkan vs total
             style: TextStyle(
               fontFamily: 'MonaSans',
               fontSize: 14,
@@ -1351,9 +1686,26 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
           controller: _scrollController,
           shrinkWrap: true,
           clipBehavior: Clip.hardEdge,
-          itemCount: _filteredItems.length,
-          itemBuilder: (context, index) =>
-              _buildDetailCard(_filteredItems[index], index),
+          itemCount:
+              _displayedItems.length +
+              (_isLoadingMore ? 1 : 0) +
+              (!_hasMoreData && _displayedItems.isNotEmpty ? 1 : 0),
+          itemBuilder: (context, index) {
+            // Loading indicator untuk load more
+            if (_isLoadingMore && index == _displayedItems.length) {
+              return _buildLoadMoreShimmer();
+            }
+
+            // End of list indicator
+            if (!_hasMoreData &&
+                _displayedItems.isNotEmpty &&
+                index == _displayedItems.length) {
+              return _buildEndOfListIndicator();
+            }
+
+            // Item data
+            return _buildDetailCard(_displayedItems[index], index);
+          },
         ),
       ),
     );
@@ -1613,55 +1965,51 @@ class _GrinDetailPageState extends State<GrinDetailPage> {
           systemNavigationBarColor: Colors.white,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        child: SafeArea(
-          child: Scaffold(
-            appBar: AppBar(
-              actions: _buildAppBarActions(),
-              automaticallyImplyLeading: false,
-              leading: IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios,
-                  size: 20.0,
-                  color: Colors.white,
-                ),
-                onPressed: _handleBackPress,
+        child: Scaffold(
+          appBar: AppBar(
+            actions: _buildAppBarActions(),
+            automaticallyImplyLeading: false,
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_ios,
+                size: 20.0,
+                color: Colors.white,
               ),
-              backgroundColor: _primaryColor,
-              elevation: 0,
-              title: _isSearching
-                  ? _buildSearchField()
-                  : Text(
-                      "GRIN Details",
-                      style: TextStyle(
-                        fontFamily: 'MonaSans',
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-              centerTitle: true,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(16),
-                ),
-              ),
+              onPressed: _handleBackPress,
             ),
-            backgroundColor: _backgroundColor,
-            body: Container(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.max,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header Information
-                  _buildHeaderInfo(),
-                  // List Header with filter and count
-                  _buildListHeader(),
-                  const SizedBox(height: 16),
-                  // Content
-                  _buildContent(),
-                ],
-              ),
+            backgroundColor: _primaryColor,
+            elevation: 0,
+            title: _isSearching
+                ? _buildSearchField()
+                : Text(
+                    "GRIN Details",
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+            centerTitle: true,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+            ),
+          ),
+          backgroundColor: _backgroundColor,
+          body: Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.max,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Information
+                _buildHeaderInfo(),
+                // List Header with filter and count
+                _buildListHeader(),
+                const SizedBox(height: 16),
+                // Content
+                _buildContent(),
+              ],
             ),
           ),
         ),

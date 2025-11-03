@@ -167,6 +167,14 @@ class _InDetailPageState extends State<InDetailPage>
   final RxBool _isSearchActive = false.obs;
   final RxList<InDetail> _filteredDetailsList = <InDetail>[].obs;
 
+  // ✅ VARIABEL PAGINATION
+  final ScrollController _scrollController = ScrollController();
+  final RxInt _currentPage = 0.obs;
+  final RxBool _isLoadingMore = false.obs;
+  final RxBool _hasMoreData = true.obs;
+  final int _itemsPerPage = 2;
+  final RxList<InDetail> _paginatedDetailsList = <InDetail>[].obs;
+
   @override
   void initState() {
     super.initState();
@@ -181,11 +189,13 @@ class _InDetailPageState extends State<InDetailPage>
     _isGrIdSavedToFirestore = widget.grId != null;
 
     isReadOnlyMode = widget.isReadOnlyMode;
+    _scrollController.addListener(_onScroll);
 
     // Inisialisasi filtered list dengan data awal
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeWithRealData();
       _startRealtimeListeners();
+      _loadInitialData();
 
       // Set filtered list dengan data awal
       final initialData = _realtimeDetailsList.isNotEmpty
@@ -194,7 +204,85 @@ class _InDetailPageState extends State<InDetailPage>
       _filteredDetailsList.assignAll(initialData);
     });
 
-    _loadDetails();
+    // _loadDetails();
+  }
+
+  // ✅ METHOD UNTUK LOAD DATA AWAL
+  // ✅ METHOD UNTUK LOAD DATA AWAL
+  void _loadInitialData() {
+    // ✅ FIX: Tentukan sourceList berdasarkan status pencarian
+    final sourceList = _isSearchActive.value
+        ? _filteredDetailsList
+        : (_realtimeDetailsList.isNotEmpty
+              ? _realtimeDetailsList
+              : detailsList);
+
+    _paginatedDetailsList.clear();
+
+    if (sourceList.isNotEmpty) {
+      final endIndex = _itemsPerPage > sourceList.length
+          ? sourceList.length
+          : _itemsPerPage;
+      _paginatedDetailsList.addAll(sourceList.sublist(0, endIndex));
+      _currentPage.value = 1;
+      _hasMoreData.value = sourceList.length > _itemsPerPage;
+    } else {
+      // ✅ Pastikan list paginasi kosong jika source (hasil search) juga kosong
+      _currentPage.value = 0;
+      _hasMoreData.value = false;
+    }
+  }
+
+  // ✅ SCROLL LISTENER UNTUK PAGINATION
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoadingMore.value && _hasMoreData.value) {
+        _loadMoreData();
+      }
+    }
+  }
+
+  // ✅ METHOD UNTUK LOAD MORE DATA
+  void _loadMoreData() {
+    if (_isLoadingMore.value || !_hasMoreData.value) return;
+
+    _isLoadingMore.value = true;
+
+    // Simulasi loading delay
+    Future.delayed(const Duration(milliseconds: 500), () {
+      final sourceList = _isSearchActive.value
+          ? _filteredDetailsList
+          : (_realtimeDetailsList.isNotEmpty
+                ? _realtimeDetailsList
+                : detailsList);
+
+      final startIndex = _currentPage.value * _itemsPerPage;
+      final endIndex = startIndex + _itemsPerPage;
+
+      if (startIndex < sourceList.length) {
+        final newItems = sourceList.sublist(
+          startIndex,
+          endIndex > sourceList.length ? sourceList.length : endIndex,
+        );
+
+        _paginatedDetailsList.addAll(newItems);
+        _currentPage.value++;
+        _hasMoreData.value = endIndex < sourceList.length;
+      } else {
+        _hasMoreData.value = false;
+      }
+
+      _isLoadingMore.value = false;
+    });
+  }
+
+  // ✅ METHOD UNTUK RESET PAGINATION
+  void _resetPagination() {
+    _currentPage.value = 0;
+    _hasMoreData.value = true;
+    _paginatedDetailsList.clear();
+    _loadInitialData();
   }
 
   // Method untuk memulai realtime listeners
@@ -210,12 +298,10 @@ class _InDetailPageState extends State<InDetailPage>
       return;
     }
 
-    // Cancel previous subscriptions
     _detailsStreamSubscription?.cancel();
     _poDataStreamSubscription?.cancel();
 
     try {
-      // Start details stream dengan error handling
       _detailsStreamSubscription = inVM
           .getDetailsByDocumentNoWithFilter(documentNo)
           .listen(
@@ -225,7 +311,9 @@ class _InDetailPageState extends State<InDetailPage>
                   _realtimeDetailsList.assignAll(details);
                   detailsList.assignAll(details);
 
-                  // Update filtered list juga
+                  // ✅ RESET PAGINATION SAAT DATA BERUBAH
+                  _resetPagination();
+
                   if (!_isSearchActive.value || _searchQuery.text.isEmpty) {
                     _filteredDetailsList.assignAll(details);
                   }
@@ -318,11 +406,11 @@ class _InDetailPageState extends State<InDetailPage>
     }
   }
 
+  // ✅ UPDATE METHOD _handleRefresh
   Future<void> _handleRefresh() async {
     try {
       setState(() {
         isDetailsLoading.value = true;
-        // Reset search state saat refresh
         if (_isSearchActive.value) {
           _stopSearching();
         }
@@ -330,9 +418,10 @@ class _InDetailPageState extends State<InDetailPage>
 
       // Restart realtime listeners
       _startRealtimeListeners();
-
-      // Juga lakukan manual refresh untuk memastikan data terbaru
       await _loadDetails();
+
+      // ✅ RESET PAGINATION SETELAH REFRESH
+      _resetPagination();
 
       Logger().i('Data berhasil diperbarui dengan realtime listeners.');
     } catch (e) {
@@ -344,6 +433,192 @@ class _InDetailPageState extends State<InDetailPage>
         });
       }
     }
+  }
+
+  Widget _buildShimmerLoading() {
+    return ListView.builder(
+      controller: _scrollController,
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: 5, // Tampilkan 5 shimmer cards
+      itemBuilder: (context, index) {
+        return Container(
+          margin: EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: hijauGojek.withOpacity(0.3), width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Shimmer.fromColors(
+            baseColor: Colors.grey[300]!,
+            highlightColor: Colors.grey[100]!,
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header Row
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Icon Container
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      // Text Content
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Container(
+                              width: 120,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Container(
+                              width: 80,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  SizedBox(height: 12),
+
+                  // Quantity Chips Container
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: List.generate(
+                        3,
+                        (index) => Column(
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Container(
+                              width: 40,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: 12),
+
+                  // Button Shimmer
+                  Container(
+                    width: double.infinity,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ✅ LOADING MORE INDICATOR
+  Widget _buildLoadingMoreIndicator() {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: Column(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(hijauGojek),
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Memuat lebih banyak...',
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ✅ NO MORE DATA INDICATOR
+  Widget _buildNoMoreDataIndicator() {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.check_circle_outline, color: hijauGojek, size: 32),
+            SizedBox(height: 8),
+            Text(
+              'Semua data telah dimuat',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _initializeWithRealData() {
@@ -929,14 +1204,14 @@ class _InDetailPageState extends State<InDetailPage>
 
   @override
   void dispose() {
-    // Hentikan semua stream subscriptions
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _detailsStreamSubscription?.cancel();
     _poDataStreamSubscription?.cancel();
     _searchQuery.dispose();
     _mobileScannerController?.dispose();
     _serialNumberController.dispose();
     _qtyController.dispose();
-    _isDisposed = true;
     _productNameController.dispose();
     _documentNoController.dispose();
     _quantity.dispose();
@@ -1763,69 +2038,6 @@ class _InDetailPageState extends State<InDetailPage>
     );
   }
 
-  Widget _buildShimmerLoading() {
-    return ListView.builder(
-      itemCount: 6,
-      itemBuilder: (context, index) {
-        return Card(
-          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Container(
-            padding: EdgeInsets.all(16),
-            child: Shimmer.fromColors(
-              baseColor: Colors.grey[300]!,
-              highlightColor: Colors.grey[100]!,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: double.infinity,
-                              height: 16,
-                              color: Colors.white,
-                            ),
-                            SizedBox(height: 8),
-                            Container(
-                              width: 100,
-                              height: 14,
-                              color: Colors.white,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   // Widget untuk empty state
   Widget _buildEmptyState() {
     return RefreshIndicator(
@@ -1900,44 +2112,44 @@ class _InDetailPageState extends State<InDetailPage>
       _searchQuery.clear();
       searchQuery = '';
 
-      // Reset ke data asli
+      // ✅ RESET KE DATA REAL-TIME
       _filteredDetailsList.clear();
-      _filteredDetailsList.addAll(
-        _realtimeDetailsList.isNotEmpty ? _realtimeDetailsList : detailsList,
-      );
+      _filteredDetailsList.addAll(_realtimeDetailsList);
+      _resetPagination();
     });
   }
 
   // Method untuk live search
+  // ✅ PERBAIKAN: Gunakan _realtimeDetailsList sebagai sumber utama
   void _performLiveSearch(String query) {
     setState(() {
       searchQuery = query;
 
       if (query.isEmpty) {
-        // Jika query kosong, tampilkan semua data
         _filteredDetailsList.clear();
-        _filteredDetailsList.addAll(
-          _realtimeDetailsList.isNotEmpty ? _realtimeDetailsList : detailsList,
-        );
+        // ✅ GUNAKAN _realtimeDetailsList sebagai sumber data
+        _filteredDetailsList.addAll(_realtimeDetailsList);
+        _resetPagination();
         return;
       }
 
       final searchTerm = query.toLowerCase().trim();
-      final sourceList = _realtimeDetailsList.isNotEmpty
-          ? _realtimeDetailsList
-          : detailsList;
 
-      final filtered = sourceList.where((product) {
+      // ✅ SELALU gunakan _realtimeDetailsList sebagai sumber
+      final filtered = _realtimeDetailsList.where((product) {
         final productId = product.mProductId?.toLowerCase() ?? '';
         final productName = product.mProductName?.toLowerCase() ?? '';
         final matnr = product.matnr?.toLowerCase() ?? '';
+        final maktxUI = product.maktxUI?.toLowerCase() ?? '';
 
         return productId.contains(searchTerm) ||
             productName.contains(searchTerm) ||
-            matnr.contains(searchTerm);
+            matnr.contains(searchTerm) ||
+            maktxUI.contains(searchTerm);
       }).toList();
 
       _filteredDetailsList.assignAll(filtered);
+      _resetPagination();
     });
   }
 
@@ -4253,75 +4465,77 @@ class _InDetailPageState extends State<InDetailPage>
           BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
         ],
       ),
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: _handleBackPress,
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Tampilkan status realtime
-                      Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: isReadOnlyMode
-                                  ? Colors.grey
-                                  : Colors.blueAccent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            isReadOnlyMode ? "View Only" : "Realtime",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        widget.from == "sync"
-                            ? "${widget.flag?.documentno}"
-                            : "${_getCurrentInModel().documentno}",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        isReadOnlyMode
-                            ? "Purchase Order Details (View Only)"
-                            : "Purchase Order Details",
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                    ],
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: _handleBackPress,
                   ),
-                ),
-                ..._buildActions(),
-              ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Tampilkan status realtime
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: isReadOnlyMode
+                                    ? Colors.grey
+                                    : Colors.blueAccent,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              isReadOnlyMode ? "View Only" : "Realtime",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          widget.from == "sync"
+                              ? "${widget.flag?.documentno}"
+                              : "${_getCurrentInModel().documentno}",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          isReadOnlyMode
+                              ? "Purchase Order Details (View Only)"
+                              : "Purchase Order Details",
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ..._buildActions(),
+                ],
+              ),
             ),
-          ),
-          // Tampilkan search field jika sedang aktif
-          if (_isSearching && !isReadOnlyMode)
-            Container(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: _buildEnhancedSearchField(),
-            ),
-        ],
+            // Tampilkan search field jika sedang aktif
+            if (_isSearching && !isReadOnlyMode)
+              Container(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: _buildEnhancedSearchField(),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -4337,69 +4551,78 @@ class _InDetailPageState extends State<InDetailPage>
           systemNavigationBarColor: Colors.white,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        child: SafeArea(
-          child: Scaffold(
-            backgroundColor: Colors.grey.shade50,
-            body: RefreshIndicator(
-              backgroundColor: Colors.white,
-              color: hijauGojek,
-              onRefresh: _handleRefresh,
-              child: Column(
-                children: [
-                  // Header dengan search
-                  _buildEnhancedHeader(),
-                  Expanded(
-                    child: Obx(() {
-                      // Gunakan filtered list untuk search, fallback ke normal list
-                      final displayList = _isSearchActive.value
-                          ? _filteredDetailsList
-                          : (_realtimeDetailsList.isNotEmpty
-                                ? _realtimeDetailsList
-                                : detailsList);
+        child: Scaffold(
+          backgroundColor: Colors.grey.shade50,
+          body: RefreshIndicator(
+            backgroundColor: Colors.white,
+            color: hijauGojek,
+            onRefresh: _handleRefresh,
+            child: Column(
+              children: [
+                _buildEnhancedHeader(),
+                Expanded(
+                  child: Obx(() {
+                    // Tampilkan loading shimmer
+                    if (isDetailsLoading.value) {
+                      return _buildShimmerLoading();
+                    }
 
-                      // Tampilkan loading shimmer
-                      if (isDetailsLoading.value) {
-                        return _buildShimmerLoading();
-                      }
+                    // Tampilkan empty state untuk search
+                    if (_isSearchActive.value &&
+                        _paginatedDetailsList.isEmpty) {
+                      return _buildSearchEmptyState();
+                    }
 
-                      // Tampilkan empty state untuk search
-                      if (_isSearchActive.value && displayList.isEmpty) {
-                        return _buildSearchEmptyState();
-                      }
+                    // Tampilkan empty state normal
+                    if (_paginatedDetailsList.isEmpty) {
+                      return _buildEmptyState();
+                    }
 
-                      // Tampilkan empty state normal
-                      if (displayList.isEmpty) {
-                        return _buildEmptyState();
-                      }
+                    // ✅ TAMPILKAN DATA DENGAN PAGINATION
+                    return CustomScrollView(
+                      controller: _scrollController,
+                      slivers: [
+                        SliverToBoxAdapter(child: _buildModernHeaderInfo()),
 
-                      // Tampilkan data
-                      return CustomScrollView(
-                        slivers: [
-                          SliverToBoxAdapter(child: _buildModernHeaderInfo()),
-                          SliverList(
-                            delegate: SliverChildBuilderDelegate((
-                              context,
-                              index,
-                            ) {
-                              if (index < displayList.length) {
-                                return _buildModernProductCard(
-                                  displayList[index],
-                                  index,
-                                );
-                              }
-                              return SizedBox();
-                            }, childCount: displayList.length),
+                        // ✅ LIST DATA DENGAN PAGINATION
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            if (index < _paginatedDetailsList.length) {
+                              return _buildModernProductCard(
+                                _paginatedDetailsList[index],
+                                index,
+                              );
+                            }
+                            return SizedBox();
+                          }, childCount: _paginatedDetailsList.length),
+                        ),
+
+                        // ✅ LOADING MORE INDICATOR
+                        if (_isLoadingMore.value)
+                          SliverToBoxAdapter(
+                            child: _buildLoadingMoreIndicator(),
                           ),
-                          SliverToBoxAdapter(child: SizedBox(height: 150)),
-                        ],
-                      );
-                    }),
-                  ),
-                ],
-              ),
+
+                        // ✅ NO MORE DATA INDICATOR
+                        if (!_hasMoreData.value &&
+                            _paginatedDetailsList.isNotEmpty)
+                          SliverToBoxAdapter(
+                            child: _buildNoMoreDataIndicator(),
+                          ),
+
+                        // Bottom spacing
+                        SliverToBoxAdapter(child: SizedBox(height: 150)),
+                      ],
+                    );
+                  }),
+                ),
+              ],
             ),
-            bottomSheet: _buildModernBottomActionBar(),
           ),
+          bottomSheet: _buildModernBottomActionBar(),
         ),
       ),
     );

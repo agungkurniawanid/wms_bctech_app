@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:logger/web.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:wms_bctech/constants/grin/grin_constant.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/controllers/grin/grin_controller.dart';
@@ -37,6 +38,10 @@ class _GrinPageState extends State<GrinPage> {
   final Logger _logger = Logger();
   final _inController = Get.find<InVM>();
 
+  final Color _primaryColor = hijauGojek;
+  final Color _textPrimaryColor = const Color(0xFF2D2D2D);
+  final Color _textSecondaryColor = const Color(0xFF6B7280);
+
   Timer? _searchDebounce;
   late final StreamSubscription<bool> _searchStateSubscription;
   late final StreamSubscription<String> _searchQuerySubscription;
@@ -45,6 +50,9 @@ class _GrinPageState extends State<GrinPage> {
   void initState() {
     super.initState();
     _logger.d('🎯 GrinPage initState');
+
+    // Setup scroll controller untuk pagination
+    _scrollController.addListener(_onScroll);
 
     _searchStateSubscription = _grinController.isSearching.listen((searching) {
       _logger.d('🔄 Search state changed in UI: $searching');
@@ -55,20 +63,37 @@ class _GrinPageState extends State<GrinPage> {
 
     _searchQuerySubscription = _grinController.searchQuery.listen((query) {
       _logger.d('📝 Search query in UI: "$query"');
-      // Sync search controller text
       if (_searchController.text != query) {
         _searchController.text = query;
       }
     });
   }
 
+  // Handle scroll untuk pagination
+  void _onScroll() {
+    if (_scrollController.position.pixels ==
+        _scrollController.position.maxScrollExtent) {
+      _loadMoreData();
+    }
+  }
+
+  Future<void> _loadMoreData() async {
+    // Jangan load more jika sedang search mode
+    if (_grinController.isSearching.value) {
+      return;
+    }
+
+    await _grinController.loadMoreGrinData();
+  }
+
   @override
   void dispose() {
     _logger.d('🧹 GrinPage dispose');
     _searchDebounce?.cancel();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchStateSubscription.cancel();
     _searchQuerySubscription.cancel();
-    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -121,13 +146,15 @@ class _GrinPageState extends State<GrinPage> {
       final searchQuery = _grinController.searchQuery.value;
       final hasSearchResults = _grinController.grinList.isNotEmpty;
       final isLoading = _grinController.isLoading.value;
+      // final isLoadingMore = _grinController.isLoadingMoreData; // <-- Dihapus
+      // final hasMoreData = _grinController.hasMoreData; // <-- Dihapus
 
       _logger.d(
         '📊 _buildContent - isSearching: $isSearching, searchQuery: "$searchQuery", hasResults: $hasSearchResults',
       );
 
-      // Jika sedang loading
-      if (isLoading) {
+      // Jika sedang loading awal
+      if (isLoading && _grinController.grinList.isEmpty) {
         return const GrinShimmerWidget();
       }
 
@@ -141,16 +168,138 @@ class _GrinPageState extends State<GrinPage> {
 
       // Jika tidak ada data sama sekali
       if (_grinController.grinList.isEmpty) {
-        return GrinEmptyWidget(
-          onRefresh: _grinController.handleRefreshGrinPage,
-        );
+        return GrinEmptyWidget(onRefresh: _grinController.refreshData);
       }
 
-      // Default view - grouped list
+      // ✅ FIX: Hapus Column dan kembalikan _buildGroupedGrinList secara langsung
+      // Logika indikator sekarang ada di dalam _buildGroupedGrinList
       return _buildGroupedGrinList();
     });
   }
 
+  Widget _buildLoadMoreShimmer() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Shimmer.fromColors(
+        baseColor: Colors.grey.shade300,
+        highlightColor: Colors.grey.shade100,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(width: 120, height: 16, color: Colors.white),
+                        const SizedBox(height: 8),
+                        Container(width: 80, height: 14, color: Colors.white),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Indicator untuk akhir list
+  Widget _buildEndOfListIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.0),
+          boxShadow: [
+            BoxShadow(
+              color: _primaryColor.withOpacity(0.08),
+              blurRadius: 12.0,
+              offset: const Offset(0, 4.0),
+              spreadRadius: 1.0,
+            ),
+          ],
+          border: Border.all(color: _primaryColor.withOpacity(0.1), width: 1.0),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 20.0,
+              height: 20.0,
+              decoration: BoxDecoration(
+                color: _primaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_rounded,
+                size: 14.0,
+                color: _primaryColor,
+              ),
+            ),
+            const SizedBox(width: 8.0),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'All items loaded',
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 13.0,
+                      fontWeight: FontWeight.w600,
+                      color: _textPrimaryColor,
+                    ),
+                  ),
+                  Text(
+                    '${_grinController.totalLoaded} items total',
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 11.0,
+                      fontWeight: FontWeight.w400,
+                      color: _textSecondaryColor.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Update juga method search results untuk handle scroll
   Widget _buildSearchResults() {
     return Obx(() {
       final searchQuery = _grinController.searchQuery.value
@@ -162,7 +311,6 @@ class _GrinPageState extends State<GrinPage> {
         return const Center(child: Text('Start typing to search...'));
       }
 
-      // Tampilkan hasil search secara langsung (tanpa grouping)
       return ListView.builder(
         controller: _scrollController,
         itemCount: grinList.length,
@@ -596,9 +744,9 @@ class _GrinPageState extends State<GrinPage> {
         String statusLabel;
         Widget actionButton;
 
-        if (kafkaStatus == 'success') {
+        if (kafkaStatus == 'completed') {
           badgeColor = Colors.green;
-          statusLabel = 'Terkirim';
+          statusLabel = 'Completed';
           actionButton = _buildCheckIcon();
         } else if (kafkaStatus == 'error') {
           badgeColor = Colors.red;
@@ -606,7 +754,7 @@ class _GrinPageState extends State<GrinPage> {
           actionButton = _buildResendButton(grId);
         } else {
           badgeColor = Colors.orange;
-          statusLabel = 'Belum Dikirim';
+          statusLabel = 'Belum Submit';
           actionButton = _buildAddButton(grinData);
         }
 
@@ -719,14 +867,41 @@ class _GrinPageState extends State<GrinPage> {
   Widget _buildGroupedGrinList() {
     return Obx(() {
       final groupedData = _groupGrinByPoNumber(_grinController.grinList);
+      final groupedDataCount = groupedData.length;
+
+      // Ambil status dari controller
+      final isLoadingMore = _grinController.isLoadingMoreData;
+      final hasMoreData = _grinController.hasMoreData;
+      final isListNotEmpty = _grinController.grinList.isNotEmpty;
+
+      // ✅ FIX: Tentukan itemCount
+      int itemCount = groupedDataCount;
+      if (isLoadingMore) {
+        itemCount += 1; // Tambah 1 untuk shimmer
+      } else if (!hasMoreData && isListNotEmpty) {
+        itemCount += 1; // Tambah 1 untuk end indicator
+      }
 
       return ListView.builder(
         controller: _scrollController,
-        // shrinkWrap: true, // <-- REKOMENDASI: Sebaiknya dihapus
         clipBehavior: Clip.hardEdge,
-        itemCount: groupedData.length,
-        itemBuilder: (context, groupIndex) {
-          final poNumber = groupedData.keys.elementAt(groupIndex);
+        // ✅ Tambahkan padding di bawah agar item terakhir tidak terpotong
+        padding: const EdgeInsets.only(bottom: 80.0),
+        itemCount: itemCount, // Gunakan itemCount yang baru
+        itemBuilder: (context, index) {
+          // ✅ FIX: Logic untuk menampilkan indicator di item terakhir
+          if (index == groupedDataCount) {
+            if (isLoadingMore) {
+              return _buildLoadMoreShimmer();
+            } else if (!hasMoreData && isListNotEmpty) {
+              return _buildEndOfListIndicator();
+            }
+            // Jika tidak ada kondisi di atas, return box kosong
+            return const SizedBox.shrink();
+          }
+
+          // Ini adalah item data normal
+          final poNumber = groupedData.keys.elementAt(index);
           final grinList = groupedData[poNumber]!;
 
           return _buildPoGroupContainer(poNumber, grinList);
@@ -1390,42 +1565,40 @@ class _GrinPageState extends State<GrinPage> {
           systemNavigationBarColor: Colors.white,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        child: SafeArea(
-          child: Scaffold(
-            appBar: GrinAppbarWidget(
-              isSearching: isInSearchMode, // GUNAKAN STATE DARI CONTROLLER
-              onBackPressed: _handleBackPress,
-              onClearSearch: _clearSearchQuery,
-              onRefresh: _grinController.handleRefreshGrinPage,
-              onStartSearch: _startSearch,
-              grinController: _grinController,
-              searchController: _searchController,
-              onSearchChanged: _onSearchChanged,
-            ),
-            backgroundColor: GrinConstants.backgroundColor,
-            body: RefreshIndicator(
-              backgroundColor: Colors.white,
-              color: GrinConstants.primaryColor,
-              onRefresh: _grinController.handleRefreshGrinPage,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.max,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!isInSearchMode)
-                      GrinAddButtonWidget(onPressed: _handleAddGrin),
-                    if (!isInSearchMode)
-                      GrinHeaderWidget.fromReactiveList(
-                        reactiveList: _grinController.grinList,
-                        selectedSort: GrinConstants.defaultSort,
-                        sortList: GrinConstants.sortOptions,
-                        onSortChanged: _handleSortChange,
-                      ),
-                    if (!isInSearchMode) const SizedBox(height: 16),
-                    Expanded(child: _buildContent()),
-                  ],
-                ),
+        child: Scaffold(
+          appBar: GrinAppbarWidget(
+            isSearching: isInSearchMode, // GUNAKAN STATE DARI CONTROLLER
+            onBackPressed: _handleBackPress,
+            onClearSearch: _clearSearchQuery,
+            onRefresh: _grinController.handleRefreshGrinPage,
+            onStartSearch: _startSearch,
+            grinController: _grinController,
+            searchController: _searchController,
+            onSearchChanged: _onSearchChanged,
+          ),
+          backgroundColor: GrinConstants.backgroundColor,
+          body: RefreshIndicator(
+            backgroundColor: Colors.white,
+            color: GrinConstants.primaryColor,
+            onRefresh: _grinController.handleRefreshGrinPage,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!isInSearchMode)
+                    GrinAddButtonWidget(onPressed: _handleAddGrin),
+                  if (!isInSearchMode)
+                    GrinHeaderWidget.fromReactiveList(
+                      reactiveList: _grinController.grinList,
+                      selectedSort: GrinConstants.defaultSort,
+                      sortList: GrinConstants.sortOptions,
+                      onSortChanged: _handleSortChange,
+                    ),
+                  if (!isInSearchMode) const SizedBox(height: 16),
+                  Expanded(child: _buildContent()),
+                ],
               ),
             ),
           ),

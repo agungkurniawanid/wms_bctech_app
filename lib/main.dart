@@ -10,6 +10,7 @@ import 'package:wms_bctech/controllers/out_controller.dart';
 import 'package:wms_bctech/controllers/role_controller.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
 import 'package:wms_bctech/helpers/config_helper.dart';
+import 'package:wms_bctech/helpers/network_helper.dart';
 import 'package:wms_bctech/pages/splash_screen_page.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
@@ -25,6 +26,10 @@ void main() async {
   } catch (e) {
     Logger().e('Firebase initialization error: $e');
   }
+
+  // Initialize NetworkListener
+  final networkListener = NetworkHelper();
+  networkListener.startListening();
 
   Get.put(GlobalVM());
   Get.put(Rolevm());

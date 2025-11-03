@@ -31,11 +31,19 @@ class GrinController extends GetxController {
   bool _isSearchOperationRunning = false;
   String _lastCompletedSearchQuery = '';
 
+  // Pagination variables
+  final int _pageSize = 20; // Fetch 20 data per kali
+  DocumentSnapshot? _lastDocument; // Last document untuk pagination
+  final RxBool _hasMoreData = true.obs; // Flag apakah masih ada data
+  final RxInt _totalLoaded = 0.obs; // Total data yang sudah diload
+  final RxBool isLoadingMore = false.obs;
+
   @override
   void onReady() {
     _logger.d('🎯 GrinController onReady dipanggil');
     super.onReady();
-    loadGrinData();
+    // loadGrinData();
+    loadInitialGrinData();
   }
 
   @override
@@ -47,6 +55,128 @@ class GrinController extends GetxController {
     ever(searchQuery, (String query) {
       _handleSearchQueryChange(query);
     });
+  }
+
+  // Method untuk load data awal
+  Future<void> loadInitialGrinData() async {
+    _logger.d('📥 loadInitialGrinData dipanggil');
+    try {
+      isLoading.value = true;
+      _hasMoreData.value = true;
+      _lastDocument = null;
+      _totalLoaded.value = 0;
+      grinList.clear();
+      grinListBackup.clear();
+
+      await _loadMoreGrinData(isInitial: true);
+
+      _logger.d('✅ Data GRIN awal berhasil diload: ${grinList.length} items');
+    } catch (e, stackTrace) {
+      _logger.e('❌ Error loading initial GRIN data: $e');
+      _logger.e('📋 Stack trace: $stackTrace');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Method untuk load lebih banyak data (pagination)
+  Future<void> loadMoreGrinData() async {
+    if (isLoadingMore.value || !_hasMoreData.value || isSearching.value) {
+      return;
+    }
+
+    try {
+      isLoadingMore.value = true;
+      await _loadMoreGrinData(isInitial: false);
+    } catch (e, stackTrace) {
+      _logger.e('❌ Error loading more GRIN data: $e');
+      _logger.e('📋 Stack trace: $stackTrace');
+    } finally {
+      isLoadingMore.value = false;
+    }
+  }
+
+  // Core method untuk load data dengan pagination
+  Future<void> _loadMoreGrinData({required bool isInitial}) async {
+    _logger.d(
+      '📥 _loadMoreGrinData - isInitial: $isInitial, lastDocument: $_lastDocument',
+    );
+
+    try {
+      Query query = _firestore
+          .collection('gr_in')
+          .orderBy('createdat', descending: true)
+          .limit(_pageSize);
+
+      // Jika bukan initial load, gunakan lastDocument untuk pagination
+      if (!isInitial && _lastDocument != null) {
+        query = query.startAfterDocument(_lastDocument!);
+      }
+
+      final snapshot = await query.get();
+
+      if (snapshot.docs.isEmpty) {
+        _hasMoreData.value = false;
+        _logger.d('🏁 Tidak ada data lagi untuk diload');
+        return;
+      }
+
+      final List<GoodReceiveSerialNumberModel> newGrList = [];
+
+      for (final doc in snapshot.docs) {
+        try {
+          final grModel = GoodReceiveSerialNumberModel.fromFirestore(
+            doc as DocumentSnapshot<Map<String, dynamic>>,
+            null,
+          );
+          newGrList.add(grModel);
+        } catch (e) {
+          _logger.e('❌ Error parsing GR document ${doc.id}: $e');
+        }
+      }
+
+      // Update last document untuk pagination berikutnya
+      _lastDocument = snapshot.docs.last;
+
+      // Tambahkan data baru ke list
+      if (isInitial) {
+        grinList.assignAll(newGrList);
+        grinListBackup.assignAll(newGrList);
+      } else {
+        grinList.addAll(newGrList);
+        grinListBackup.addAll(newGrList);
+      }
+
+      _totalLoaded.value = grinList.length;
+
+      // Cek apakah masih ada data lagi
+      _hasMoreData.value = snapshot.docs.length == _pageSize;
+
+      _logger.d(
+        '✅ Loaded ${newGrList.length} GR documents, total: ${grinList.length}',
+      );
+      _logger.d('📊 Has more data: ${_hasMoreData.value}');
+    } catch (e, stackTrace) {
+      _logger.e('❌ Error in _loadMoreGrinData: $e');
+      _logger.e('📋 Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  // Refresh data (pull to refresh)
+  Future<void> refreshData() async {
+    _logger.d('🔄 refreshData dipanggil');
+    try {
+      // Cancel search mode jika aktif
+      if (isSearching.value) {
+        clearSearch();
+      }
+
+      await loadInitialGrinData();
+    } catch (e, stackTrace) {
+      _logger.e('❌ Error refreshing data: $e');
+      _logger.e('📋 Stack trace: $stackTrace');
+    }
   }
 
   void _handleSearchQueryChange(String query) {
@@ -752,17 +882,17 @@ class GrinController extends GetxController {
     }
   }
 
-  Future<void> refreshData() async {
-    try {
-      isLoading.value = true;
-      await Future.delayed(const Duration(seconds: 1));
-      loadGrinData();
-    } catch (e) {
-      _logger.e('Error refreshing GRIN data: $e');
-    } finally {
-      isLoading.value = false;
-    }
-  }
+  // Future<void> refreshData() async {
+  //   try {
+  //     isLoading.value = true;
+  //     await Future.delayed(const Duration(seconds: 1));
+  //     loadGrinData();
+  //   } catch (e) {
+  //     _logger.e('Error refreshing GRIN data: $e');
+  //   } finally {
+  //     isLoading.value = false;
+  //   }
+  // }
 
   void sortGrin(String sortBy) {
     selectedSort.value = sortBy;
@@ -983,6 +1113,11 @@ class GrinController extends GetxController {
   Future<void> handleRefreshGrinPage() async {
     await refreshData();
   }
+
+  // Getter untuk access dari UI
+  bool get hasMoreData => _hasMoreData.value;
+  bool get isLoadingMoreData => isLoadingMore.value;
+  int get totalLoaded => _totalLoaded.value;
 
   @override
   void onClose() {

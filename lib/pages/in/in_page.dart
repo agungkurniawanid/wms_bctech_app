@@ -27,47 +27,181 @@ class _InPageState extends State<InPage> {
   final Color _textSecondaryColor = const Color(0xFF6B7280);
 
   // Inisialisasi controller
-  final InVM _inController = Get.find<InVM>();
+  late final InVM _inController;
   final _logger = Logger();
-
-  // // Data dummy untuk kategori (dinonaktifkan sementara)
-  // final List<Map<String, String>> _listChoice = [
-  //   {'id': '1', 'label': 'FZ', 'labelName': 'Frozen'},
-  //   {'id': '2', 'label': 'CH', 'labelName': 'Chemical'},
-  //   {'id': '3', 'label': 'ALL', 'labelName': 'All'},
-  // ];
 
   final List<String> _sortList = ['All', 'PO Date', 'Vendor'];
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
   bool _isSearching = false;
-  // String _selectedChoiceId = '3';
-  String _selectedSort = 'All'; // Default ke 'All'
+  String _selectedSort = 'All';
   String choiceInValue = 'ALL';
   Timer? _searchDebounce;
   bool _isLiveSearching = false;
 
+  // Pagination variables
+  bool _isLoadingMore = false;
+  bool _hasMoreData = true;
+  int _currentPage = 0;
+  final int _itemsPerPage = 20;
+  final List<InModel> _displayedItems = [];
+
+  // Worker untuk reactive updates
+  Worker? _filterWorker;
+
   @override
   void initState() {
     super.initState();
-    _inController.refreshData(type: RefreshType.listPOData);
+
+    // Inisialisasi controller dengan error handling
+    try {
+      _inController = Get.find<InVM>();
+    } catch (e) {
+      _logger.e('Error finding InVM controller: $e');
+      // Jika controller belum ada, buat instance baru
+      _inController = Get.put(InVM());
+    }
+
+    // Setup listeners
+    _scrollController.addListener(_onScroll);
     _searchController.addListener(_onSearchChanged);
+
+    // Setup reactive worker untuk filtered list changes
+    _setupReactiveWorker();
+
+    // Load initial data
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadInitialData();
+    });
+  }
+
+  void _setupReactiveWorker() {
+    // Gunakan ever hanya sekali di initState
+    _filterWorker = ever(_inController.filteredPOList, (List<InModel> newList) {
+      if (mounted && !_isLoadingMore) {
+        _resetPagination();
+      }
+    });
+  }
+
+  Future<void> _loadInitialData() async {
+    try {
+      await _inController.refreshData(type: RefreshType.listPOData);
+      if (mounted) {
+        _resetPagination();
+      }
+    } catch (e) {
+      _logger.e('Error loading initial data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading data: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
-    _searchDebounce?.cancel();
+    // Dispose workers
+    _filterWorker?.dispose();
+
+    // Dispose controllers and timers
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _searchDebounce?.cancel();
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+
     super.dispose();
+  }
+
+  // Handle scroll untuk pagination
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMoreData();
+    }
+  }
+
+  // Load more data untuk pagination
+  Future<void> _loadMoreData() async {
+    if (_isLoadingMore || !_hasMoreData || _isSearching) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      // Simulasi delay untuk loading
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      final sourceList = _inController.filteredPOList;
+      final startIndex = (_currentPage + 1) * _itemsPerPage;
+      final endIndex = startIndex + _itemsPerPage;
+
+      if (startIndex >= sourceList.length) {
+        setState(() {
+          _hasMoreData = false;
+          _isLoadingMore = false;
+        });
+        return;
+      }
+
+      if (endIndex < sourceList.length) {
+        setState(() {
+          _displayedItems.addAll(sourceList.sublist(startIndex, endIndex));
+          _currentPage++;
+          _isLoadingMore = false;
+        });
+      } else {
+        final remainingItems = sourceList.sublist(startIndex);
+        setState(() {
+          _displayedItems.addAll(remainingItems);
+          _currentPage++;
+          _hasMoreData = false;
+          _isLoadingMore = false;
+        });
+      }
+    } catch (e) {
+      _logger.e('Error loading more data: $e');
+      setState(() {
+        _isLoadingMore = false;
+      });
+    }
+  }
+
+  // Reset pagination ketika filter/search berubah
+  void _resetPagination() {
+    if (!mounted) return;
+
+    setState(() {
+      _currentPage = 0;
+      _hasMoreData = true;
+      _isLoadingMore = false;
+      _displayedItems.clear();
+
+      final sourceList = _inController.filteredPOList;
+      if (sourceList.isNotEmpty) {
+        final itemsToShow = sourceList.length > _itemsPerPage
+            ? _itemsPerPage
+            : sourceList.length;
+        _displayedItems.addAll(sourceList.take(itemsToShow).toList());
+        _hasMoreData = sourceList.length > _itemsPerPage;
+      }
+    });
   }
 
   void _onSearchChanged() {
     if (_searchDebounce?.isActive ?? false) _searchDebounce?.cancel();
 
     _searchDebounce = Timer(const Duration(milliseconds: 400), () {
-      if (_isLiveSearching) {
+      if (_isLiveSearching && mounted) {
         _performSearch(_searchController.text);
       }
     });
@@ -93,13 +227,27 @@ class _InPageState extends State<InPage> {
       _isSearching = false;
       _isLiveSearching = false;
       _searchController.clear();
-      _inController.clearFilters();
     });
+    _inController.clearFilters();
   }
 
   Future<void> _handleRefresh() async {
-    await _inController.refreshData(type: RefreshType.listPOData);
-    _showSyncDialog();
+    try {
+      await _inController.refreshData(type: RefreshType.listPOData);
+      if (mounted) {
+        _showSyncDialog();
+      }
+    } catch (e) {
+      _logger.e('Error refreshing data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error refreshing data: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _showSyncDialog() {
@@ -194,22 +342,37 @@ class _InPageState extends State<InPage> {
 
   void _syncDocument(String documentNumber) async {
     if (documentNumber.isEmpty) return;
-    final result = await _inController.getPoWithDoc(documentNumber);
-    if (result != "0") {
-      _inController.refreshData(type: RefreshType.listPOData);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Document $documentNumber synced successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
+
+    try {
+      final result = await _inController.getPoWithDoc(documentNumber);
+      if (result != "0") {
+        await _inController.refreshData(type: RefreshType.listPOData);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Document $documentNumber synced successfully'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Document $documentNumber not found'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
       }
-    } else {
+    } catch (e) {
+      _logger.e('Error syncing document: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Document $documentNumber not found'),
+            content: Text('Error syncing document: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -217,26 +380,217 @@ class _InPageState extends State<InPage> {
     }
   }
 
-  // void _handleChoiceSelection(Map<String, String> choice) {
-  //   setState(() {
-  //     _selectedChoiceId = choice['id']!;
-  //     _stopSearching();
-  //     choiceInValue = choice['labelName']!;
-
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       SnackBar(
-  //         content: Text('Filter ${choice['labelName']} sedang dinonaktifkan'),
-  //         duration: const Duration(seconds: 2),
-  //       ),
-  //     );
-  //   });
-  // }
-
   void _handleSortChange(String? value) {
+    if (value == null) return;
+
     setState(() {
-      _selectedSort = value ?? 'All';
-      _inController.sortPOData(_selectedSort);
+      _selectedSort = value;
     });
+    _inController.sortPOData(_selectedSort);
+  }
+
+  // Shimmer untuk load more
+  Widget _buildLoadMoreShimmer() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Column(
+        children: [
+          Shimmer.fromColors(
+            baseColor: Colors.grey.shade300,
+            highlightColor: Colors.grey.shade100,
+            child: Column(
+              children: List.generate(
+                _itemsPerPage,
+                (index) => _buildShimmerCard(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(hijauGojek),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Loading more items...',
+            style: TextStyle(color: _textSecondaryColor, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShimmerCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 6,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      width: 120,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    Container(
+                      width: 80,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            width: 150,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Indicator untuk akhir list
+  Widget _buildEndOfListIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16.0),
+          boxShadow: [
+            BoxShadow(
+              color: _primaryColor.withOpacity(0.08),
+              blurRadius: 12.0,
+              offset: const Offset(0, 4.0),
+              spreadRadius: 1.0,
+            ),
+          ],
+          border: Border.all(color: _primaryColor.withOpacity(0.1), width: 1.0),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 20.0,
+              height: 20.0,
+              decoration: BoxDecoration(
+                color: _primaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_rounded,
+                size: 14.0,
+                color: _primaryColor,
+              ),
+            ),
+            const SizedBox(width: 8.0),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'All data loaded',
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 13.0,
+                      fontWeight: FontWeight.w600,
+                      color: _textPrimaryColor,
+                    ),
+                  ),
+                  Text(
+                    '${_inController.filteredPOList.length} items total',
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 11.0,
+                      fontWeight: FontWeight.w400,
+                      color: _textSecondaryColor.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   List<Widget> _buildAppBarActions() {
@@ -250,17 +604,13 @@ class _InPageState extends State<InPage> {
     }
 
     return [
-      Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.refresh_outlined, color: Colors.white),
-            onPressed: _handleRefresh,
-          ),
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.white),
-            onPressed: _startSearch,
-          ),
-        ],
+      IconButton(
+        icon: const Icon(Icons.refresh_outlined, color: Colors.white),
+        onPressed: _handleRefresh,
+      ),
+      IconButton(
+        icon: const Icon(Icons.search, color: Colors.white),
+        onPressed: _startSearch,
       ),
     ];
   }
@@ -269,78 +619,17 @@ class _InPageState extends State<InPage> {
     return TextField(
       controller: _searchController,
       autofocus: true,
-      decoration: InputDecoration(
+      decoration: const InputDecoration(
         hintText: 'Search PO Number, Vendor...',
         border: InputBorder.none,
         hintStyle: TextStyle(color: Colors.white70),
-        // Hapus suffixIcon untuk menghilangkan tombol clear
       ),
-      style: TextStyle(color: Colors.white, fontSize: 16.0),
-      // Hapus onSubmitted dan textInputAction untuk menghindari keyboard search
+      style: const TextStyle(color: Colors.white, fontSize: 16.0),
       textInputAction: TextInputAction.search,
       onSubmitted: (value) {
-        // Kosongkan agar tidak trigger search manual
+        // Search is handled by live listener
       },
     );
-  }
-
-  // Widget _buildChoiceChips() {
-  //   return Row(
-  //     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-  //     children: _listChoice.map((choice) {
-  //       final isSelected = _selectedChoiceId == choice['id'];
-  //       final labelText = choice['labelName']!;
-
-  //       return Container(
-  //         decoration: BoxDecoration(
-  //           borderRadius: BorderRadius.circular(20),
-  //           boxShadow: isSelected
-  //               ? [
-  //                   BoxShadow(
-  //                     color: _getChoiceChipColor(
-  //                       choice['label']!,
-  //                     ).withValues(alpha: 0.3),
-  //                     blurRadius: 8,
-  //                     offset: const Offset(0, 2),
-  //                   ),
-  //                 ]
-  //               : null,
-  //         ),
-  //         child: ChoiceChip(
-  //           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-  //           label: Text(
-  //             labelText,
-  //             style: TextStyle(
-  //               color: isSelected ? Colors.white : _textSecondaryColor,
-  //               fontWeight: FontWeight.w500,
-  //             ),
-  //           ),
-  //           backgroundColor: Colors.grey.shade100,
-  //           selected: isSelected,
-  //           selectedColor: _getChoiceChipColor(choice['label']!),
-  //           elevation: 0,
-  //           checkmarkColor: Colors.white,
-  //           shape: RoundedRectangleBorder(
-  //             borderRadius: BorderRadius.circular(20),
-  //           ),
-  //           onSelected: (_) => _handleChoiceSelection(choice),
-  //         ),
-  //       );
-  //     }).toList(),
-  //   );
-  // }
-
-  Color _getChoiceChipColor(String choice) {
-    switch (choice) {
-      case "ALL":
-        return const Color(0xFFFF6B35);
-      case "FZ":
-        return const Color(0xFF00AA13);
-      case "CH":
-        return const Color(0xFF8B5FBF);
-      default:
-        return const Color(0xfff44236);
-    }
   }
 
   Widget _buildHeader() {
@@ -352,7 +641,7 @@ class _InPageState extends State<InPage> {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -362,7 +651,7 @@ class _InPageState extends State<InPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '${_inController.filteredPOList.length} data shown',
+              '${_displayedItems.length} of ${_inController.filteredPOList.length} items shown',
               style: TextStyle(
                 fontFamily: 'MonaSans',
                 fontSize: 14,
@@ -423,7 +712,7 @@ class _InPageState extends State<InPage> {
 
   Widget _buildContent() {
     return Obx(() {
-      if (_inController.isLoading.value) {
+      if (_inController.isLoading.value && _displayedItems.isEmpty) {
         return _buildShimmerLoader();
       }
 
@@ -512,7 +801,7 @@ class _InPageState extends State<InPage> {
                     vertical: 12,
                   ),
                 ),
-                child: Text(
+                child: const Text(
                   'Clear Search',
                   style: TextStyle(
                     fontFamily: 'MonaSans',
@@ -535,7 +824,7 @@ class _InPageState extends State<InPage> {
                       vertical: 12,
                     ),
                   ),
-                  child: Text(
+                  child: const Text(
                     'Refresh',
                     style: TextStyle(
                       fontFamily: 'MonaSans',
@@ -551,19 +840,106 @@ class _InPageState extends State<InPage> {
   }
 
   Widget _buildPoList() {
-    return Obx(
-      () => Expanded(
-        child: ListView.builder(
-          controller: _scrollController,
-          shrinkWrap: true,
-          clipBehavior: Clip.hardEdge,
-          itemCount: _inController.filteredPOList.length,
-          itemBuilder: (context, index) => GestureDetector(
+    return Expanded(
+      child: ListView.builder(
+        controller: _scrollController,
+        shrinkWrap: true,
+        clipBehavior: Clip.hardEdge,
+        itemCount:
+            _displayedItems.length +
+            (_isLoadingMore ? 1 : 0) +
+            (!_hasMoreData && _displayedItems.isNotEmpty ? 1 : 0),
+        itemBuilder: (context, index) {
+          // Loading indicator untuk load more
+          if (_isLoadingMore && index == _displayedItems.length) {
+            return _buildLoadMoreShimmer();
+          }
+
+          // End of list indicator
+          if (!_hasMoreData &&
+              _displayedItems.isNotEmpty &&
+              index == _displayedItems.length) {
+            return _buildEndOfListIndicator();
+          }
+
+          // Item data
+          return GestureDetector(
             onTap: () {
-              final po = _inController.filteredPOList[index];
-              Logger().d('Tapped on PO: ${po.documentno}');
+              final po = _displayedItems[index];
+              _logger.d('Tapped on PO: ${po.documentno}');
             },
-            child: _buildPoCard(_inController.filteredPOList[index], index),
+            child: _buildPoCard(_displayedItems[index], index),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          _handleBackPress();
+        }
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Color(0xFF00AA13),
+          statusBarIconBrightness: Brightness.light,
+          systemNavigationBarColor: Colors.white,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        ),
+        child: Scaffold(
+          appBar: AppBar(
+            actions: _buildAppBarActions(),
+            automaticallyImplyLeading: false,
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_ios,
+                size: 20.0,
+                color: Colors.white,
+              ),
+              onPressed: _handleBackPress,
+            ),
+            backgroundColor: _primaryColor,
+            elevation: 0,
+            title: _isSearching
+                ? _buildSearchField()
+                : const Text(
+                    "Purchase Order",
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+            centerTitle: true,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+            ),
+          ),
+          backgroundColor: _backgroundColor,
+          body: RefreshIndicator(
+            backgroundColor: Colors.white,
+            color: hijauGojek,
+            onRefresh: () async {
+              await _inController.refreshData(type: RefreshType.listPOData);
+            },
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 16),
+                  _buildContent(),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -578,7 +954,7 @@ class _InPageState extends State<InPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -623,10 +999,10 @@ class _InPageState extends State<InPage> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: _primaryColor.withValues(alpha: 0.1),
+                          color: _primaryColor.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: _primaryColor.withValues(alpha: 0.3),
+                            color: _primaryColor.withOpacity(0.3),
                           ),
                         ),
                         child: Text(
@@ -665,16 +1041,23 @@ class _InPageState extends State<InPage> {
                     children: [
                       InkWell(
                         onTap: () async {
-                          final result = await Get.to(
-                            () =>
-                                InDetailPage(index, 'In Detail', poData, null),
-                          );
-
-                          // Refresh data jika kembali dari detail page
-                          if (result == true) {
-                            await _inController.refreshData(
-                              type: RefreshType.listPOData,
+                          try {
+                            final result = await Get.to(
+                              () => InDetailPage(
+                                index,
+                                'In Detail',
+                                poData,
+                                null,
+                              ),
                             );
+
+                            if (result == true && mounted) {
+                              await _inController.refreshData(
+                                type: RefreshType.listPOData,
+                              );
+                            }
+                          } catch (e) {
+                            _logger.e('Error navigating to detail: $e');
                           }
                         },
                         child: Text(
@@ -689,23 +1072,30 @@ class _InPageState extends State<InPage> {
                       ),
                       InkWell(
                         onTap: () async {
-                          final result = await Get.to(
-                            () =>
-                                InDetailPage(index, 'In Detail', poData, null),
-                          );
-
-                          // Refresh data jika kembali dari detail page
-                          if (result == true) {
-                            await _inController.refreshData(
-                              type: RefreshType.listPOData,
+                          try {
+                            final result = await Get.to(
+                              () => InDetailPage(
+                                index,
+                                'In Detail',
+                                poData,
+                                null,
+                              ),
                             );
+
+                            if (result == true && mounted) {
+                              await _inController.refreshData(
+                                type: RefreshType.listPOData,
+                              );
+                            }
+                          } catch (e) {
+                            _logger.e('Error navigating to detail: $e');
                           }
                         },
                         child: Container(
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: _primaryColor.withValues(alpha: 0.1),
+                            color: _primaryColor.withOpacity(0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
@@ -734,7 +1124,7 @@ class _InPageState extends State<InPage> {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: _primaryColor.withValues(alpha: 0.1),
+            color: _primaryColor.withOpacity(0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, size: 16, color: _primaryColor),
@@ -775,87 +1165,10 @@ class _InPageState extends State<InPage> {
   Future<void> _handleBackPress() async {
     try {
       _logger.d('🔄 Navigate back to GrinPage from InPage');
-      Get.offAll(() => GrinPage());
+      Get.offAll(() => const GrinPage());
     } catch (e) {
       _logger.e('Error handling back press: $e');
-      Get.offAll(() => GrinPage());
+      Get.offAll(() => const GrinPage());
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: const SystemUiOverlayStyle(
-          statusBarColor: Color(0xFF00AA13),
-          statusBarIconBrightness: Brightness.light,
-          systemNavigationBarColor: Colors.white,
-          systemNavigationBarIconBrightness: Brightness.dark,
-        ),
-        child: SafeArea(
-          child: Scaffold(
-            appBar: AppBar(
-              actions: _buildAppBarActions(),
-              automaticallyImplyLeading: false,
-              leading: IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios,
-                  size: 20.0,
-                  color: Colors.white,
-                ),
-                onPressed: _handleBackPress,
-              ),
-              backgroundColor: _primaryColor,
-              elevation: 0,
-              title: _isSearching
-                  ? _buildSearchField()
-                  : Text(
-                      "Purchase Order",
-                      style: TextStyle(
-                        fontFamily: 'MonaSans',
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-              centerTitle: true,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(16),
-                ),
-              ),
-            ),
-            backgroundColor: _backgroundColor,
-            body: RefreshIndicator(
-              backgroundColor: Colors.white,
-              color: hijauGojek,
-              onRefresh: () async {
-                await _inController.refreshData(type: RefreshType.listPOData);
-              },
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.max,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Filter Chips (tetap ditampilkan tapi fungsinya dinonaktifkan)
-                    // Padding(
-                    //   padding: const EdgeInsets.only(bottom: 16),
-                    //   child: _buildChoiceChips(),
-                    // ),
-                    // Header dengan info dan sort
-                    _buildHeader(),
-                    const SizedBox(height: 16),
-                    // Content
-                    _buildContent(),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
