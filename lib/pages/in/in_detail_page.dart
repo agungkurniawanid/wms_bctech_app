@@ -172,7 +172,7 @@ class _InDetailPageState extends State<InDetailPage>
   final RxInt _currentPage = 0.obs;
   final RxBool _isLoadingMore = false.obs;
   final RxBool _hasMoreData = true.obs;
-  final int _itemsPerPage = 2;
+  final int _itemsPerPage = 20;
   final RxList<InDetail> _paginatedDetailsList = <InDetail>[].obs;
 
   @override
