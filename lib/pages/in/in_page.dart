@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
-import 'package:wms_bctech/controllers/in_controller.dart';
+import 'package:wms_bctech/controllers/in/in_controller.dart';
 import 'package:wms_bctech/helpers/date_helper.dart';
 import 'package:wms_bctech/models/in/in_model.dart';
-import 'package:wms_bctech/pages/grin/grin_page.dart';
+import 'package:wms_bctech/pages/good_receipt/good_receipt_page.dart';
 import 'package:wms_bctech/pages/in/in_detail_page.dart';
 import 'package:logger/logger.dart';
 import 'package:shimmer/shimmer.dart';
@@ -428,7 +428,7 @@ class _InPageState extends State<InPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -535,13 +535,16 @@ class _InPageState extends State<InPage> {
           borderRadius: BorderRadius.circular(16.0),
           boxShadow: [
             BoxShadow(
-              color: _primaryColor.withOpacity(0.08),
+              color: _primaryColor.withValues(alpha: 0.08),
               blurRadius: 12.0,
               offset: const Offset(0, 4.0),
               spreadRadius: 1.0,
             ),
           ],
-          border: Border.all(color: _primaryColor.withOpacity(0.1), width: 1.0),
+          border: Border.all(
+            color: _primaryColor.withValues(alpha: 0.1),
+            width: 1.0,
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -551,7 +554,7 @@ class _InPageState extends State<InPage> {
               width: 20.0,
               height: 20.0,
               decoration: BoxDecoration(
-                color: _primaryColor.withOpacity(0.1),
+                color: _primaryColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -581,7 +584,7 @@ class _InPageState extends State<InPage> {
                       fontFamily: 'MonaSans',
                       fontSize: 11.0,
                       fontWeight: FontWeight.w400,
-                      color: _textSecondaryColor.withOpacity(0.8),
+                      color: _textSecondaryColor.withValues(alpha: 0.8),
                     ),
                   ),
                 ],
@@ -641,7 +644,7 @@ class _InPageState extends State<InPage> {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -879,10 +882,9 @@ class _InPageState extends State<InPage> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
-        if (!didPop) {
-          _handleBackPress();
-        }
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (didPop) return;
+        _handleBackPress();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
@@ -954,7 +956,7 @@ class _InPageState extends State<InPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -999,10 +1001,10 @@ class _InPageState extends State<InPage> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: _primaryColor.withOpacity(0.1),
+                          color: _primaryColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: _primaryColor.withOpacity(0.3),
+                            color: _primaryColor.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Text(
@@ -1095,7 +1097,7 @@ class _InPageState extends State<InPage> {
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: _primaryColor.withOpacity(0.1),
+                            color: _primaryColor.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
@@ -1124,7 +1126,7 @@ class _InPageState extends State<InPage> {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: _primaryColor.withOpacity(0.1),
+            color: _primaryColor.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, size: 16, color: _primaryColor),
@@ -1165,10 +1167,10 @@ class _InPageState extends State<InPage> {
   Future<void> _handleBackPress() async {
     try {
       _logger.d('🔄 Navigate back to GrinPage from InPage');
-      Get.offAll(() => const GrinPage());
+      Get.offAll(() => const GoodReceiptPage());
     } catch (e) {
       _logger.e('Error handling back press: $e');
-      Get.offAll(() => const GrinPage());
+      Get.offAll(() => const GoodReceiptPage());
     }
   }
 }

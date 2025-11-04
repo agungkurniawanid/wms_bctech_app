@@ -1,9 +1,11 @@
 // todo:✅ Clean Code checked
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:wms_bctech/controllers/in_controller.dart';
+import 'package:wms_bctech/controllers/in/in_controller.dart';
+import 'package:wms_bctech/controllers/out/out_controller.dart';
 import 'package:wms_bctech/pages/in/in_detail_page.dart';
 import 'package:wms_bctech/components/home/home_recent_order_card_widget.dart';
+import 'package:wms_bctech/pages/out/out_detail_page.dart';
 
 class HomeRecentOrderCarouselWidget extends StatefulWidget {
   final List<Map<String, dynamic>> data;
@@ -23,43 +25,70 @@ class HomeRecentOrderCarouselWidget extends StatefulWidget {
 class _HomeRecentOrderCarouselWidgetState
     extends State<HomeRecentOrderCarouselWidget> {
   final InVM inController = Get.find<InVM>();
+  final OutController outController = Get.find<OutController>();
 
-  void _navigateToPOReadOnly(Map<String, dynamic> item) {
+  void _navigateToDetail(Map<String, dynamic> item) {
     try {
       final String documentNo = item['documentNo'] ?? '';
+      final String type = widget.contextType; // ✅ Bisa 'PO' atau 'SO'
 
       if (documentNo.isEmpty) {
         _showErrorSnackbar('Document number not found');
         return;
       }
 
-      // ✅ CARI PO YANG SESUAI DARI CONTROLLER DENGAN ERROR HANDLING
-      final poList = inController.tolistPORecent;
-      final matchingPO = poList.firstWhere(
-        (po) => po.documentno == documentNo,
-        orElse: () {
-          throw Exception('PO not found for documentNo: $documentNo');
-        },
-      );
+      if (type == 'PO') {
+        // ✅ Ambil data dari controller PO
+        final poList = inController.tolistPORecent;
+        final matchingPO = poList.firstWhere(
+          (po) => po.documentno == documentNo,
+          orElse: () {
+            throw Exception('PO not found for documentNo: $documentNo');
+          },
+        );
 
-      // ✅ NAVIGASI KE IN_DETAIL_PAGE DENGAN MODE READ-ONLY
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => InDetailPage(
-            0, // index tidak penting di mode read-only
-            "recent", // from - gunakan nilai khusus untuk mode recent
-            matchingPO, // flag - data PO yang akan ditampilkan
-            null, // grId - tidak perlu GR ID di mode read-only
-            isReadOnlyMode: false, // ✅ PARAMETER READ-ONLY
+        // ✅ Navigasi ke halaman IN DETAIL (PO)
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => InDetailPage(
+              0,
+              "recent",
+              matchingPO,
+              null,
+              isReadOnlyMode: false, // ✅ Mode read-only
+            ),
           ),
-        ),
-      );
+        );
+      } else if (type == 'SO') {
+        // ✅ Ambil data dari controller SO
+        final soList = outController.tolistSalesOrderRecent;
+        final matchingSO = soList.firstWhere(
+          (so) => so.documentno == documentNo,
+          orElse: () {
+            throw Exception('SO not found for documentNo: $documentNo');
+          },
+        );
+
+        // ✅ Navigasi ke halaman OUT DETAIL (SO)
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OutDetailPage(
+              0,
+              "recent",
+              matchingSO,
+              null,
+              isReadOnlyMode: false, // ✅ Mode read-only
+            ),
+          ),
+        );
+      } else {
+        throw Exception('Unknown context type: $type');
+      }
     } catch (e) {
-      debugPrint('Error navigating to PO details: $e');
-      _showErrorSnackbar(
-        'Failed to open purchase order details: ${e.toString()}',
-      );
+      debugPrint('Error navigating to detail: $e');
+      _showErrorSnackbar('Failed to open details: ${e.toString()}');
     }
   }
 
@@ -82,7 +111,7 @@ class _HomeRecentOrderCarouselWidgetState
         children: widget.data.map((item) {
           if (widget.contextType == 'PO') {
             return GestureDetector(
-              onTap: () => _navigateToPOReadOnly(item),
+              onTap: () => _navigateToDetail(item),
               child: Padding(
                 padding: const EdgeInsets.only(right: 16),
                 child: HomeRecentOrderCardWidget(
@@ -99,18 +128,21 @@ class _HomeRecentOrderCarouselWidgetState
               ),
             );
           } else {
-            return Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: HomeRecentOrderCardWidget(
-                documentNo: item['documentNo'] ?? '-',
-                partnerName: item['customer'] ?? '-', // ✅ Nama Customer
-                title1: 'Document No',
-                value1: item['documentNo'] ?? '-',
-                title2: 'SO Date',
-                value2: item['date'] ?? '-',
-                title3: 'Total Items',
-                value3: item['totalItems']?.toString() ?? '0',
-                contextType: 'SO',
+            return GestureDetector(
+              onTap: () => _navigateToDetail(item),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: HomeRecentOrderCardWidget(
+                  documentNo: item['documentNo'] ?? '-',
+                  partnerName: item['customer'] ?? '-', // ✅ Nama Customer
+                  title1: 'Document No',
+                  value1: item['documentNo'] ?? '-',
+                  title2: 'SO Date',
+                  value2: item['date'] ?? '-',
+                  title3: 'Total Items',
+                  value3: item['totalItems']?.toString() ?? '0',
+                  contextType: 'SO',
+                ),
               ),
             );
           }

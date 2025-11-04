@@ -6,22 +6,22 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:wms_bctech/config/global_variable_config.dart';
-import 'package:wms_bctech/constants/grin/grin_constant.dart';
+import 'package:wms_bctech/constants/good_receipt/good_receipt_constant.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/constants/utils_constant.dart';
-import 'package:wms_bctech/controllers/grin/grin_controller.dart';
+import 'package:wms_bctech/controllers/good_receipt/good_receipt_controller.dart';
 import 'package:wms_bctech/helpers/date_helper.dart';
 import 'package:wms_bctech/helpers/number_helper.dart';
 import 'package:wms_bctech/models/category_model.dart';
-import 'package:wms_bctech/models/grin/good_receive_serial_number_detail_model.dart';
+import 'package:wms_bctech/models/good_receipt/good_receipt_detail_model.dart';
 import 'package:wms_bctech/models/in/in_detail_model.dart';
 import 'package:wms_bctech/models/in/in_model.dart';
 import 'package:wms_bctech/models/item_choice_model.dart';
-import 'package:wms_bctech/pages/grin/grin_page.dart';
+import 'package:wms_bctech/pages/good_receipt/good_receipt_page.dart';
 import 'package:wms_bctech/pages/my_dialog_page.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
-import 'package:wms_bctech/controllers/in_controller.dart';
-import 'package:wms_bctech/components/product_detail_bottomsheet_widget.dart';
+import 'package:wms_bctech/controllers/in/in_controller.dart';
+import 'package:wms_bctech/components/in/in_product_detail_bottomsheet_widget.dart';
 import 'package:wms_bctech/components/scanner_dialog_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -82,14 +82,14 @@ class _InDetailPageState extends State<InDetailPage>
   TextEditingController? _controllerctn;
   TextEditingController? _controllerpcs;
   TextEditingController? _controllerkg;
-  bool _isDisposed = false;
+  final bool _isDisposed = false;
   late bool isReadOnlyMode;
 
   // ✅ VARIABLE PENAMPUNG GR ID DAN STATUS
   String? _currentGrId; // Menyimpan grId yang pertama kali digenerate
   bool _isGrIdSavedToFirestore =
       false; // Status apakah grId sudah disimpan ke Firestore
-  final List<GoodReceiveSerialNumberDetailModel> _pendingGrDetails =
+  final List<GoodReceiptDetailModel> _pendingGrDetails =
       []; // Menampung detail sementara
 
   int typeIndexctn = 0;
@@ -124,8 +124,6 @@ class _InDetailPageState extends State<InDetailPage>
 
   String? ebeln;
   String? barcodeScanRes;
-
-  final _inController = Get.find<InVM>();
 
   final RxList<InDetail> detailsList = <InDetail>[].obs;
   final RxBool isDetailsLoading = false.obs;
@@ -191,17 +189,29 @@ class _InDetailPageState extends State<InDetailPage>
     isReadOnlyMode = widget.isReadOnlyMode;
     _scrollController.addListener(_onScroll);
 
-    // Inisialisasi filtered list dengan data awal
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _initializeWithRealData();
-      _startRealtimeListeners();
-      _loadInitialData();
 
-      // Set filtered list dengan data awal
+      // ✅ PERBAIKAN 1: Panggil _startRealtimeListeners() DULUAN.
+      // Ini akan memasang listener di background. Listener mungkin
+      // akan mengirim list kosong, tapi tidak apa-apa.
+      _startRealtimeListeners();
+
+      // ✅ PERBAIKAN 2: SEKARANG, panggil dan TUNGGU _loadDetails().
+      // Ini akan mengambil data secara manual (one-time fetch)
+      // dan MENGGANTI list kosong dari stream dengan data yang valid.
+      await _loadDetails();
+
+      // ✅ PERBAIKAN 3: Urutan ini sudah benar dari saran saya sebelumnya.
+      // Set filtered list dari data yang baru saja kita dapatkan.
       final initialData = _realtimeDetailsList.isNotEmpty
           ? _realtimeDetailsList
           : detailsList;
       _filteredDetailsList.assignAll(initialData);
+
+      // ✅ PERBAIKAN 4: Panggil _loadInitialData() SETELAH
+      // _filteredDetailsList dijamin berisi data.
+      _loadInitialData();
     });
 
     // _loadDetails();
@@ -446,7 +456,10 @@ class _InDetailPageState extends State<InDetailPage>
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: hijauGojek.withOpacity(0.3), width: 2),
+            border: Border.all(
+              color: hijauGojek.withValues(alpha: 0.3),
+              width: 2,
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black12,
@@ -1009,7 +1022,8 @@ class _InDetailPageState extends State<InDetailPage>
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
-          builder: (context) => ProductDetailBottomSheet(product: product),
+          builder: (context) =>
+              InProductDetailBottomsheetWidget(product: product),
         );
       }
     } else {
@@ -1110,7 +1124,7 @@ class _InDetailPageState extends State<InDetailPage>
   //       barrierDismissible: false,
   //       builder: (context) => CameraScannerDialog(
   //         onBarcodeDetected: (barcode) {
-  //           // Langsung panggil _processBarcodeResult yang sudah menggunakan ProductDetailBottomSheet
+  //           // Langsung panggil _processBarcodeResult yang sudah menggunakan InProductDetailBottomsheetWidget
   //           _processBarcodeResult(barcode);
   //           Navigator.of(context).pop();
   //         },
@@ -1183,14 +1197,14 @@ class _InDetailPageState extends State<InDetailPage>
       descr: "Scanned product",
     );
 
-    // Tampilkan ProductDetailBottomSheet untuk simulated product
+    // Tampilkan InProductDetailBottomsheetWidget untuk simulated product
     if (mounted) {
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (context) =>
-            ProductDetailBottomSheet(product: simulatedDetail),
+            InProductDetailBottomsheetWidget(product: simulatedDetail),
       );
     }
   }
@@ -1806,26 +1820,26 @@ class _InDetailPageState extends State<InDetailPage>
     }
   }
 
-  void _restartQRScanner(InDetail product) async {
-    _logger.d('🔄 Restart QR Scanner...');
+  // void _restartQRScanner(InDetail product) async {
+  //   _logger.d('🔄 Restart QR Scanner...');
 
-    // Reset form terlebih dahulu
-    _resetForm();
+  //   // Reset form terlebih dahulu
+  //   _resetForm();
 
-    // Set state untuk scanning
-    setState(() {
-      isScanning = true;
-      scannedSerialNumber = "";
-    });
+  //   // Set state untuk scanning
+  //   setState(() {
+  //     isScanning = true;
+  //     scannedSerialNumber = "";
+  //   });
 
-    // Tunggu sebentar sebelum memulai scanner
-    await Future.delayed(const Duration(milliseconds: 300));
+  //   // Tunggu sebentar sebelum memulai scanner
+  //   await Future.delayed(const Duration(milliseconds: 300));
 
-    if (mounted) {
-      _logger.d('📷 Memulai ulang QR Scanner...');
-      await _startQRScan(product);
-    }
-  }
+  //   if (mounted) {
+  //     _logger.d('📷 Memulai ulang QR Scanner...');
+  //     await _startQRScan(product);
+  //   }
+  // }
 
   void _resetQuantityForMode(bool isScanMode) {
     if (isScanMode) {
@@ -1963,7 +1977,7 @@ class _InDetailPageState extends State<InDetailPage>
     return Container(
       margin: EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
+        color: Colors.white.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(25),
       ),
       child: Row(
@@ -2000,7 +2014,7 @@ class _InDetailPageState extends State<InDetailPage>
 
   // Widget untuk empty search state
   Widget _buildSearchEmptyState() {
-    return Container(
+    return SizedBox(
       height: 200,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -2153,24 +2167,24 @@ class _InDetailPageState extends State<InDetailPage>
     });
   }
 
-  void _clearSearchQuery() {
-    setState(() {
-      _searchQuery.clear();
-      _isSearching = false;
+  // void _clearSearchQuery() {
+  //   setState(() {
+  //     _searchQuery.clear();
+  //     _isSearching = false;
 
-      final sourceData = listindetaillocal;
+  //     final sourceData = listindetaillocal;
 
-      if (widget.from == "sync") {
-        widget.flag?.details?.clear();
-        widget.flag?.details?.addAll(sourceData);
-      } else {
-        final currentModel = _getCurrentInModel();
-        final tData = currentModel.details ?? [];
-        tData.clear();
-        tData.addAll(sourceData);
-      }
-    });
-  }
+  //     if (widget.from == "sync") {
+  //       widget.flag?.details?.clear();
+  //       widget.flag?.details?.addAll(sourceData);
+  //     } else {
+  //       final currentModel = _getCurrentInModel();
+  //       final tData = currentModel.details ?? [];
+  //       tData.clear();
+  //       tData.addAll(sourceData);
+  //     }
+  //   });
+  // }
 
   Widget modalBottomSheet(InDetail indetail) {
     double baseWidth = 360;
@@ -2547,19 +2561,22 @@ class _InDetailPageState extends State<InDetailPage>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: hijauGojek.withOpacity(0.3), width: 2),
+        border: Border.all(color: hijauGojek.withValues(alpha: 0.3), width: 2),
         boxShadow: [
           BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
       child: InkWell(
-        splashColor: GrinConstants.primaryColor.withOpacity(0.1),
-        highlightColor: GrinConstants.primaryColor.withOpacity(0.05),
+        splashColor: GoodReceiptConstant.primaryColor.withValues(alpha: 0.1),
+        highlightColor: GoodReceiptConstant.primaryColor.withValues(
+          alpha: 0.05,
+        ),
         onTap: () => showModalBottomSheet(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
-          builder: (context) => ProductDetailBottomSheet(product: indetail),
+          builder: (context) =>
+              InProductDetailBottomsheetWidget(product: indetail),
         ),
         child: Container(
           decoration: BoxDecoration(
@@ -2590,7 +2607,7 @@ class _InDetailPageState extends State<InDetailPage>
                           width: 50,
                           height: 50,
                           decoration: BoxDecoration(
-                            color: hijauGojek.withOpacity(0.2),
+                            color: hijauGojek.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Stack(
@@ -2658,12 +2675,12 @@ class _InDetailPageState extends State<InDetailPage>
                                   decoration: BoxDecoration(
                                     color: _getStatusColor(
                                       progress,
-                                    ).withOpacity(0.1),
+                                    ).withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: _getStatusColor(
                                         progress,
-                                      ).withOpacity(0.3),
+                                      ).withValues(alpha: 0.3),
                                       width: 1,
                                     ),
                                   ),
@@ -2759,7 +2776,7 @@ class _InDetailPageState extends State<InDetailPage>
 
                     // VIEW DETAILS BUTTON - TAMBAHAN BARU
                     SizedBox(height: 12),
-                    Container(
+                    SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: () => showModalBottomSheet(
@@ -2767,11 +2784,15 @@ class _InDetailPageState extends State<InDetailPage>
                           isScrollControlled: true,
                           backgroundColor: Colors.transparent,
                           builder: (context) =>
-                              ProductDetailBottomSheet(product: indetail),
+                              InProductDetailBottomsheetWidget(
+                                product: indetail,
+                              ),
                         ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: hijauGojek,
-                          side: BorderSide(color: hijauGojek.withOpacity(0.5)),
+                          side: BorderSide(
+                            color: hijauGojek.withValues(alpha: 0.5),
+                          ),
                           padding: EdgeInsets.symmetric(
                             vertical: 8,
                             horizontal: 16,
@@ -2814,7 +2835,7 @@ class _InDetailPageState extends State<InDetailPage>
                         bottomRight: Radius.circular(12),
                       ),
                       gradient: LinearGradient(
-                        colors: [hijauGojek.withOpacity(0.3), hijauGojek],
+                        colors: [hijauGojek.withValues(alpha: 0.3), hijauGojek],
                       ),
                     ),
                     child: Column(
@@ -3718,7 +3739,7 @@ class _InDetailPageState extends State<InDetailPage>
         throw Exception("PO Number tidak ditemukan");
       }
 
-      final grinController = Get.find<GrinController>();
+      final grinController = Get.find<GoodReceiptController>();
 
       final result = await grinController.saveGrWithGeneratedId(
         poNumber: poNumber,
@@ -3747,8 +3768,8 @@ class _InDetailPageState extends State<InDetailPage>
   }
 
   bool _isSameProductWithoutSerial(
-    GoodReceiveSerialNumberDetailModel existingDetail,
-    GoodReceiveSerialNumberDetailModel newDetail,
+    GoodReceiptDetailModel existingDetail,
+    GoodReceiptDetailModel newDetail,
   ) {
     // Product ID harus sama
     if (existingDetail.productid != newDetail.productid) {
@@ -3764,13 +3785,11 @@ class _InDetailPageState extends State<InDetailPage>
   }
 
   // ✅ METHOD UNTUK MENJUMLAHKAN QUANTITY PADA DETAIL YANG SAMA
-  List<GoodReceiveSerialNumberDetailModel> _mergeDuplicateDetails(
-    List<GoodReceiveSerialNumberDetailModel> existingDetails,
-    GoodReceiveSerialNumberDetailModel newDetail,
+  List<GoodReceiptDetailModel> _mergeDuplicateDetails(
+    List<GoodReceiptDetailModel> existingDetails,
+    GoodReceiptDetailModel newDetail,
   ) {
-    final mergedDetails = List<GoodReceiveSerialNumberDetailModel>.from(
-      existingDetails,
-    );
+    final mergedDetails = List<GoodReceiptDetailModel>.from(existingDetails);
     bool isMerged = false;
 
     for (int i = 0; i < mergedDetails.length; i++) {
@@ -3779,7 +3798,7 @@ class _InDetailPageState extends State<InDetailPage>
       // Cek apakah detail sama (product id sama & tanpa serial number)
       if (_isSameProductWithoutSerial(existingDetail, newDetail)) {
         // Jumlahkan quantity
-        mergedDetails[i] = GoodReceiveSerialNumberDetailModel(
+        mergedDetails[i] = GoodReceiptDetailModel(
           sn: null, // Tetap tanpa serial number
           productid: existingDetail.productid,
           qty: existingDetail.qty + newDetail.qty,
@@ -3818,7 +3837,7 @@ class _InDetailPageState extends State<InDetailPage>
       }
 
       // --- START FIX: USE GRINCONTROLLER'S GLOBAL CHECK ---
-      final grinController = Get.find<GrinController>();
+      final grinController = Get.find<GoodReceiptController>();
       final isUnique = await grinController.isSerialNumberUnique(trimmedSerial);
 
       if (!isUnique) {
@@ -3892,10 +3911,10 @@ class _InDetailPageState extends State<InDetailPage>
         _logger.d('✅ : $trimmedSerial');
       }
 
-      final grinController = Get.find<GrinController>();
+      final grinController = Get.find<GoodReceiptController>();
 
       // ✅ BUAT DETAIL DATA
-      final newDetail = GoodReceiveSerialNumberDetailModel(
+      final newDetail = GoodReceiptDetailModel(
         sn: hasSerialNumber ? trimmedSerial : null,
         productid: productId,
         qty: quantity,
@@ -4221,7 +4240,7 @@ class _InDetailPageState extends State<InDetailPage>
     _resetGrData();
 
     _logger.d('✅ Navigate to GrinPage with GR ID: $_currentGrId');
-    Get.offAll(() => GrinPage());
+    Get.offAll(() => GoodReceiptPage());
   }
 
   // ✅ METHOD UNTUK KOSONGKAN VARIABLE PENAMPUNG
@@ -4452,40 +4471,46 @@ class _InDetailPageState extends State<InDetailPage>
   Widget _buildEnhancedHeader() {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(20),
+          bottomRight: Radius.circular(20),
         ),
         gradient: LinearGradient(
           colors: [hijauGojek, hijauGojek],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        boxShadow: [
-          BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
         ],
       ),
       child: SafeArea(
+        bottom: false, // biar tidak nambah padding ekstra bawah
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   IconButton(
-                    icon: Icon(Icons.arrow_back, color: Colors.white),
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
                     onPressed: _handleBackPress,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Tampilkan status realtime
+                        // Status realtime
                         Row(
                           children: [
                             Container(
-                              width: 8,
-                              height: 8,
+                              width: 6,
+                              height: 6,
                               decoration: BoxDecoration(
                                 color: isReadOnlyMode
                                     ? Colors.grey
@@ -4493,33 +4518,36 @@ class _InDetailPageState extends State<InDetailPage>
                                 shape: BoxShape.circle,
                               ),
                             ),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Text(
                               isReadOnlyMode ? "View Only" : "Realtime",
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: Colors.white70,
-                                fontSize: 12,
+                                fontSize: 11,
                               ),
                             ),
                           ],
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           widget.from == "sync"
                               ? "${widget.flag?.documentno}"
                               : "${_getCurrentInModel().documentno}",
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           isReadOnlyMode
-                              ? "Purchase Order Details (View Only)"
-                              : "Purchase Order Details",
-                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                              ? "Purchase Order (View Only)"
+                              : "Purchase Order",
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -4528,10 +4556,9 @@ class _InDetailPageState extends State<InDetailPage>
                 ],
               ),
             ),
-            // Tampilkan search field jika sedang aktif
             if (_isSearching && !isReadOnlyMode)
-              Container(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                 child: _buildEnhancedSearchField(),
               ),
           ],
@@ -4622,104 +4649,107 @@ class _InDetailPageState extends State<InDetailPage>
               ],
             ),
           ),
-          bottomSheet: _buildModernBottomActionBar(),
+          bottomNavigationBar: SafeArea(
+            top: false,
+            child: SingleChildScrollView(child: _buildModernBottomActionBar()),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildRealtimeHeader() {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-        gradient: LinearGradient(
-          colors: [hijauGojek, hijauGojek],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: _handleBackPress,
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Tampilkan status realtime
-                      Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: isReadOnlyMode
-                                  ? Colors.grey
-                                  : Colors.blueAccent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            isReadOnlyMode
-                                ? "View Only"
-                                : "Realtime", // ✅ TAMPILKAN STATUS MODE
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        widget.from == "sync"
-                            ? "${widget.flag?.documentno}"
-                            : "${_getCurrentInModel().documentno}",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        isReadOnlyMode
-                            ? "Purchase Order Details (View Only)" // ✅ TEKS BERBEDA UNTUK MODE READ-ONLY
-                            : "Purchase Order Details",
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                // ✅ SEMBUNYIKAN ACTION BUTTONS DI MODE READ-ONLY
-                if (!isReadOnlyMode) ..._buildActions(),
-              ],
-            ),
-          ),
-          if (_isSearching &&
-              !isReadOnlyMode) // ✅ HANYA TAMPILKAN SEARCH JIKA BUKAN READ-ONLY
-            Container(
-              padding: EdgeInsets.all(16),
-              color: hijauGojek.withValues(alpha: 0.8),
-              child: _buildSearchField(),
-            ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildRealtimeHeader() {
+  //   return Container(
+  //     decoration: BoxDecoration(
+  //       borderRadius: BorderRadius.only(
+  //         bottomLeft: Radius.circular(24),
+  //         bottomRight: Radius.circular(24),
+  //       ),
+  //       gradient: LinearGradient(
+  //         colors: [hijauGojek, hijauGojek],
+  //         begin: Alignment.topLeft,
+  //         end: Alignment.bottomRight,
+  //       ),
+  //       boxShadow: [
+  //         BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
+  //       ],
+  //     ),
+  //     child: Column(
+  //       children: [
+  //         Padding(
+  //           padding: EdgeInsets.all(16),
+  //           child: Row(
+  //             children: [
+  //               IconButton(
+  //                 icon: Icon(Icons.arrow_back, color: Colors.white),
+  //                 onPressed: _handleBackPress,
+  //               ),
+  //               Expanded(
+  //                 child: Column(
+  //                   crossAxisAlignment: CrossAxisAlignment.start,
+  //                   children: [
+  //                     // Tampilkan status realtime
+  //                     Row(
+  //                       children: [
+  //                         Container(
+  //                           width: 8,
+  //                           height: 8,
+  //                           decoration: BoxDecoration(
+  //                             color: isReadOnlyMode
+  //                                 ? Colors.grey
+  //                                 : Colors.blueAccent,
+  //                             shape: BoxShape.circle,
+  //                           ),
+  //                         ),
+  //                         SizedBox(width: 8),
+  //                         Text(
+  //                           isReadOnlyMode
+  //                               ? "View Only"
+  //                               : "Realtime", // ✅ TAMPILKAN STATUS MODE
+  //                           style: TextStyle(
+  //                             color: Colors.white70,
+  //                             fontSize: 12,
+  //                           ),
+  //                         ),
+  //                       ],
+  //                     ),
+  //                     SizedBox(height: 4),
+  //                     Text(
+  //                       widget.from == "sync"
+  //                           ? "${widget.flag?.documentno}"
+  //                           : "${_getCurrentInModel().documentno}",
+  //                       style: TextStyle(
+  //                         color: Colors.white,
+  //                         fontSize: 18,
+  //                         fontWeight: FontWeight.bold,
+  //                       ),
+  //                     ),
+  //                     SizedBox(height: 4),
+  //                     Text(
+  //                       isReadOnlyMode
+  //                           ? "Purchase Order Details (View Only)" // ✅ TEKS BERBEDA UNTUK MODE READ-ONLY
+  //                           : "Purchase Order Details",
+  //                       style: TextStyle(color: Colors.white70, fontSize: 14),
+  //                     ),
+  //                   ],
+  //                 ),
+  //               ),
+  //               // ✅ SEMBUNYIKAN ACTION BUTTONS DI MODE READ-ONLY
+  //               if (!isReadOnlyMode) ..._buildActions(),
+  //             ],
+  //           ),
+  //         ),
+  //         if (_isSearching &&
+  //             !isReadOnlyMode) // ✅ HANYA TAMPILKAN SEARCH JIKA BUKAN READ-ONLY
+  //           Container(
+  //             padding: EdgeInsets.all(16),
+  //             color: hijauGojek.withValues(alpha: 0.8),
+  //             child: _buildSearchField(),
+  //           ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Future<bool> _validateSerialNumberBeforeSave(String serialNumber) async {
     try {
@@ -4727,7 +4757,7 @@ class _InDetailPageState extends State<InDetailPage>
         return true; // No serial number is allowed
       }
 
-      final grinController = Get.find<GrinController>();
+      final grinController = Get.find<GoodReceiptController>();
       final isUnique = await grinController.isSerialNumberUnique(serialNumber);
 
       if (!isUnique) {
@@ -5042,10 +5072,13 @@ class _InDetailPageState extends State<InDetailPage>
       _isSendingToKafka.value = true;
 
       // Update atau buat field status di Firestore menjadi "success"
-      await FirebaseFirestore.instance.collection('gr_in').doc(_currentGrId!).set(
-        {'status': 'completed'},
-        SetOptions(merge: true),
-      ); // merge: true untuk update field yang ada tanpa menghapus field lain
+      await FirebaseFirestore.instance
+          .collection('good_receipt')
+          .doc(_currentGrId!)
+          .set(
+            {'status': 'completed'},
+            SetOptions(merge: true),
+          ); // merge: true untuk update field yang ada tanpa menghapus field lain
 
       // Tunggu sebentar untuk memastikan status terupdate
       await Future.delayed(Duration(seconds: 2));
@@ -5056,7 +5089,7 @@ class _InDetailPageState extends State<InDetailPage>
         textColor: Colors.white,
       );
       Future.delayed(const Duration(seconds: 1), () {
-        Get.to(GrinPage());
+        Get.to(GoodReceiptPage());
       });
     } catch (e) {
       Fluttertoast.showToast(
@@ -5065,7 +5098,7 @@ class _InDetailPageState extends State<InDetailPage>
         textColor: Colors.white,
       );
       Future.delayed(const Duration(seconds: 1), () {
-        Get.to(GrinPage());
+        Get.to(GoodReceiptPage());
       });
     } finally {
       _isSendingToKafka.value = false;
@@ -5305,7 +5338,7 @@ class _InDetailPageState extends State<InDetailPage>
                     Expanded(
                       child: FutureBuilder<DocumentSnapshot>(
                         future: FirebaseFirestore.instance
-                            .collection('gr_in')
+                            .collection('good_receipt')
                             .doc(_currentGrId)
                             .get(),
                         builder: (context, snapshot) {
@@ -7672,7 +7705,9 @@ class _InDetailPageState extends State<InDetailPage>
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 elevation: 2,
-                                shadowColor: Color(0xFF00C853).withOpacity(0.3),
+                                shadowColor: Color(
+                                  0xFF00C853,
+                                ).withValues(alpha: 0.3),
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -7930,30 +7965,30 @@ class _InDetailPageState extends State<InDetailPage>
     }
   }
 
-  void _showNavigationConfirmation() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Lihat GRIN?"),
-        content: Text(
-          "Data GR sudah disimpan. Apakah Anda ingin melihat halaman GRIN?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text("Tambah Lagi"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _navigateToGrinPage();
-            },
-            child: Text("Lihat GRIN"),
-          ),
-        ],
-      ),
-    );
-  }
+  // void _showNavigationConfirmation() {
+  //   showDialog(
+  //     context: context,
+  //     builder: (context) => AlertDialog(
+  //       title: Text("Lihat GRIN?"),
+  //       content: Text(
+  //         "Data GR sudah disimpan. Apakah Anda ingin melihat halaman GRIN?",
+  //       ),
+  //       actions: [
+  //         TextButton(
+  //           onPressed: () => Navigator.of(context).pop(),
+  //           child: Text("Tambah Lagi"),
+  //         ),
+  //         ElevatedButton(
+  //           onPressed: () {
+  //             Navigator.of(context).pop();
+  //             _navigateToGrinPage();
+  //           },
+  //           child: Text("Lihat GRIN"),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   void _showCancelConfirmation() {
     final BuildContext context = Get.context!;
@@ -7973,7 +8008,7 @@ class _InDetailPageState extends State<InDetailPage>
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 30,
                 offset: const Offset(0, 10),
               ),
@@ -8004,7 +8039,7 @@ class _InDetailPageState extends State<InDetailPage>
                       width: 60,
                       height: 60,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -8200,7 +8235,7 @@ class _InDetailPageState extends State<InDetailPage>
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 40,
                 offset: Offset(0, 20),
               ),
@@ -8214,7 +8249,7 @@ class _InDetailPageState extends State<InDetailPage>
                 padding: EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [hijauGojek, hijauGojek.withOpacity(0.8)],
+                    colors: [hijauGojek, hijauGojek.withValues(alpha: 0.8)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -8228,7 +8263,7 @@ class _InDetailPageState extends State<InDetailPage>
                     Container(
                       padding: EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -8255,7 +8290,7 @@ class _InDetailPageState extends State<InDetailPage>
                             "Periksa kembali data Anda",
                             style: TextStyle(
                               fontSize: 13,
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                             ),
                           ),
                         ],
@@ -8281,7 +8316,7 @@ class _InDetailPageState extends State<InDetailPage>
                       gradient: LinearGradient(
                         colors: [
                           Colors.indigo.shade50,
-                          Colors.indigo.shade100.withOpacity(0.3),
+                          Colors.indigo.shade100.withValues(alpha: 0.3),
                         ],
                       ),
                     ),
@@ -8298,7 +8333,7 @@ class _InDetailPageState extends State<InDetailPage>
                       gradient: LinearGradient(
                         colors: [
                           Colors.blue.shade50,
-                          Colors.blue.shade100.withOpacity(0.3),
+                          Colors.blue.shade100.withValues(alpha: 0.3),
                         ],
                       ),
                     ),
@@ -8316,16 +8351,16 @@ class _InDetailPageState extends State<InDetailPage>
                       title: hasSerialNumber
                           ? "Serial Number"
                           : "Tanpa Serial Number",
-                      value: hasSerialNumber ? serialNumber! : "-",
+                      value: hasSerialNumber ? serialNumber : "-",
                       gradient: LinearGradient(
                         colors: hasSerialNumber
                             ? [
                                 Colors.amber.shade50,
-                                Colors.amber.shade100.withOpacity(0.3),
+                                Colors.amber.shade100.withValues(alpha: 0.3),
                               ]
                             : [
                                 Colors.grey.shade50,
-                                Colors.grey.shade100.withOpacity(0.3),
+                                Colors.grey.shade100.withValues(alpha: 0.3),
                               ],
                       ),
                     ),
@@ -8341,7 +8376,7 @@ class _InDetailPageState extends State<InDetailPage>
                       gradient: LinearGradient(
                         colors: [
                           Colors.purple.shade50,
-                          Colors.purple.shade100.withOpacity(0.3),
+                          Colors.purple.shade100.withValues(alpha: 0.3),
                         ],
                       ),
                     ),
@@ -8431,7 +8466,7 @@ class _InDetailPageState extends State<InDetailPage>
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          shadowColor: hijauGojek.withOpacity(0.4),
+                          shadowColor: hijauGojek.withValues(alpha: 0.4),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -8487,7 +8522,7 @@ class _InDetailPageState extends State<InDetailPage>
       decoration: BoxDecoration(
         gradient: gradient,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: iconColor.withOpacity(0.2), width: 1),
+        border: Border.all(color: iconColor.withValues(alpha: 0.2), width: 1),
       ),
       child: Padding(
         padding: EdgeInsets.all(16),
@@ -8496,7 +8531,7 @@ class _InDetailPageState extends State<InDetailPage>
             Container(
               padding: EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.15),
+                color: iconColor.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: iconColor, size: 22),

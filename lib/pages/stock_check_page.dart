@@ -4,7 +4,7 @@ import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/models/stock_check_model.dart';
 import 'package:wms_bctech/pages/detail_stock_check_page.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
-import 'package:wms_bctech/controllers/in_controller.dart';
+import 'package:wms_bctech/controllers/in/in_controller.dart';
 import 'package:wms_bctech/controllers/stock_check_controlller.dart';
 import 'package:wms_bctech/controllers/weborder_controller.dart';
 import 'package:wms_bctech/components/out_card_widget.dart';

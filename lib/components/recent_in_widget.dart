@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:wms_bctech/constants/utils_constant.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
-import 'package:wms_bctech/controllers/in_controller.dart';
+import 'package:wms_bctech/controllers/in/in_controller.dart';
 
 class RecentIn extends StatelessWidget {
   RecentIn({

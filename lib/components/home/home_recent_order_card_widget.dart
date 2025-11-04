@@ -51,13 +51,16 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(16), // ✅ Dikurangi dari 20 ke 16
         boxShadow: [
           BoxShadow(
-            color: _primaryColor.withOpacity(0.08),
+            color: _primaryColor.withValues(alpha: 0.08),
             blurRadius: 12,
             offset: const Offset(0, 4),
             spreadRadius: 0,
           ),
         ],
-        border: Border.all(color: _primaryColor.withOpacity(0.15), width: 1),
+        border: Border.all(
+          color: _primaryColor.withValues(alpha: 0.15),
+          width: 1,
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -73,8 +76,8 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    _primaryColor.withOpacity(0.08),
-                    _primaryColor.withOpacity(0.03),
+                    _primaryColor.withValues(alpha: 0.08),
+                    _primaryColor.withValues(alpha: 0.03),
                   ],
                 ),
               ),
@@ -197,10 +200,10 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
                 vertical: 10,
               ), // ✅ Dikurangi dari 14 ke 10
               decoration: BoxDecoration(
-                color: _primaryColor.withOpacity(0.04),
+                color: _primaryColor.withValues(alpha: 0.04),
                 border: Border(
                   top: BorderSide(
-                    color: _primaryColor.withOpacity(0.1),
+                    color: _primaryColor.withValues(alpha: 0.1),
                     width: 1,
                   ),
                 ),
@@ -239,7 +242,7 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(6), // ✅ Dikurangi dari 8 ke 6
           decoration: BoxDecoration(
-            color: _primaryColor.withOpacity(0.08),
+            color: _primaryColor.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Icon(

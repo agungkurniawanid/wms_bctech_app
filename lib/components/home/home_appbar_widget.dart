@@ -1,10 +1,9 @@
-// todo:✅ Clean Code checked
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:wms_bctech/constants/app_constant.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
-import 'package:wms_bctech/controllers/auth_controller.dart';
+import 'package:wms_bctech/controllers/auth/auth_controller.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
 
 class HomeAppbarWidget extends StatefulWidget {

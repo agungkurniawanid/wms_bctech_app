@@ -2227,7 +2227,7 @@ class _InDetailPageState extends State<InDetailPage>
       // Cek apakah ini akan update quantity (hanya untuk kasus tanpa SN dan productId sama)
       if ((serialNumber.isEmpty) && poNumber.isNotEmpty) {
         final grQuery = await _firestore
-            .collection('gr_in')
+            .collection('good_receipt')
             .where('ponumber', isEqualTo: poNumber)
             .limit(1)
             .get();
@@ -2317,8 +2317,8 @@ class _InDetailPageState extends State<InDetailPage>
 
       // === VALIDASI SERIAL NUMBER UNIK SECARA GLOBAL ===
       if (serialNumber != null && serialNumber.isNotEmpty) {
-        // Cek di SEMUA document gr_in, tidak peduli PO mana
-        final allGrQuery = await _firestore.collection('gr_in').get();
+        // Cek di SEMUA document good_receipt, tidak peduli PO mana
+        final allGrQuery = await _firestore.collection('good_receipt').get();
 
         for (final doc in allGrQuery.docs) {
           final existingGr = GoodReceiveSerialNumberModel.fromFirestore(
@@ -2344,7 +2344,7 @@ class _InDetailPageState extends State<InDetailPage>
 
       // Cek apakah document sudah ada untuk PO ini
       final grQuery = await _firestore
-          .collection('gr_in')
+          .collection('good_receipt')
           .where('ponumber', isEqualTo: poNumber)
           .limit(1)
           .get();
@@ -2380,7 +2380,7 @@ class _InDetailPageState extends State<InDetailPage>
                   qty: updatedDetails[existingWithoutSnIndex].qty + quantity,
                 );
 
-            await _firestore.collection('gr_in').doc(grId).update({
+            await _firestore.collection('good_receipt').doc(grId).update({
               'details': updatedDetails
                   .map((detail) => detail.toMap())
                   .toList(),
@@ -2405,7 +2405,7 @@ class _InDetailPageState extends State<InDetailPage>
 
         final updatedDetails = [...existingGr.details, newDetail];
 
-        await _firestore.collection('gr_in').doc(grId).update({
+        await _firestore.collection('good_receipt').doc(grId).update({
           'details': updatedDetails.map((detail) => detail.toMap()).toList(),
         });
       } else {
@@ -2426,7 +2426,7 @@ class _InDetailPageState extends State<InDetailPage>
           details: [newDetail],
         );
 
-        await _firestore.collection('gr_in').doc(grId).set(newGr.toFirestore());
+        await _firestore.collection('good_receipt').doc(grId).set(newGr.toFirestore());
       }
 
       debugPrint(
@@ -2446,7 +2446,7 @@ class _InDetailPageState extends State<InDetailPage>
     try {
       // Cari GR ID terakhir untuk tahun ini
       final lastGrQuery = await _firestore
-          .collection('gr_in')
+          .collection('good_receipt')
           .where('grid', isGreaterThanOrEqualTo: 'GR$currentYear')
           .where('grid', isLessThan: 'GR${int.parse(currentYear) + 1}')
           .orderBy('grid', descending: true)

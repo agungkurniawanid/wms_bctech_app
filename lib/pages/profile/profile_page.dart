@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
-import 'package:wms_bctech/pages/login_page.dart';
-import 'package:wms_bctech/controllers/auth_controller.dart';
-import 'package:wms_bctech/models/user/user_model.dart';
+import 'package:wms_bctech/pages/auth/login_page.dart';
+import 'package:wms_bctech/controllers/auth/auth_controller.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});

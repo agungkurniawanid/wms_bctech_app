@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
-import 'package:wms_bctech/controllers/out_controller.dart';
+import 'package:wms_bctech/controllers/out/out_controller.dart';
 import 'package:wms_bctech/helpers/date_helper.dart';
 import 'package:wms_bctech/models/out/out_model.dart';
 import 'package:logger/logger.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:get/get.dart';
+import 'package:wms_bctech/pages/out/out_detail_page.dart';
 
 class OutPage extends StatefulWidget {
   const OutPage({super.key});
@@ -26,26 +27,28 @@ class _OutPageState extends State<OutPage> {
   // Inisialisasi controller
   final OutController _outController = Get.find<OutController>();
 
-  // Data dummy untuk kategori (dinonaktifkan sementara)
-  final List<Map<String, String>> _listChoice = [
-    {'id': '1', 'label': 'FZ', 'labelName': 'Frozen'},
-    {'id': '2', 'label': 'CH', 'labelName': 'Chemical'},
-    {'id': '3', 'label': 'ALL', 'labelName': 'All'},
-  ];
+  // // Data dummy untuk kategori (dinonaktifkan sementara)
+  // final List<Map<String, String>> _listChoice = [
+  //   {'id': '1', 'label': 'FZ', 'labelName': 'Frozen'},
+  //   {'id': '2', 'label': 'CH', 'labelName': 'Chemical'},
+  //   {'id': '3', 'label': 'ALL', 'labelName': 'All'},
+  // ];
 
   final List<String> _sortList = ['All', 'PO Date', 'Vendor'];
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
   bool _isSearching = false;
-  String _selectedChoiceId = '3';
+  // String _selectedChoiceId = '3';
   String _selectedSort = 'PO Date';
   String choiceInValue = 'ALL';
 
   @override
   void initState() {
     super.initState();
-    _outController.refreshDataSO(type: RefreshTypeSO.listPOData);
+    _outController.refreshDataSO(
+      type: RefreshTypeSalesOrder.listSalesOrderData,
+    );
   }
 
   @override
@@ -61,12 +64,12 @@ class _OutPageState extends State<OutPage> {
     });
   }
 
-  void _stopSearching() {
-    _clearSearchQuery();
-    setState(() {
-      _isSearching = false;
-    });
-  }
+  // void _stopSearching() {
+  //   _clearSearchQuery();
+  //   setState(() {
+  //     _isSearching = false;
+  //   });
+  // }
 
   void _clearSearchQuery() {
     setState(() {
@@ -94,7 +97,9 @@ class _OutPageState extends State<OutPage> {
   }
 
   Future<void> _handleRefresh() async {
-    await _outController.refreshDataSO(type: RefreshTypeSO.listPOData);
+    await _outController.refreshDataSO(
+      type: RefreshTypeSalesOrder.listSalesOrderData,
+    );
     _showSyncDialog();
   }
 
@@ -192,7 +197,9 @@ class _OutPageState extends State<OutPage> {
     if (documentNumber.isEmpty) return;
     final result = await _outController.getSoWithDoc(documentNumber);
     if (result != "0") {
-      _outController.refreshDataSO(type: RefreshTypeSO.listPOData);
+      _outController.refreshDataSO(
+        type: RefreshTypeSalesOrder.listSalesOrderData,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -213,20 +220,20 @@ class _OutPageState extends State<OutPage> {
     }
   }
 
-  void _handleChoiceSelection(Map<String, String> choice) {
-    setState(() {
-      _selectedChoiceId = choice['id']!;
-      _stopSearching();
-      choiceInValue = choice['labelName']!;
+  // void _handleChoiceSelection(Map<String, String> choice) {
+  //   setState(() {
+  //     _selectedChoiceId = choice['id']!;
+  //     _stopSearching();
+  //     choiceInValue = choice['labelName']!;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Filter ${choice['labelName']} sedang dinonaktifkan'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    });
-  }
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(
+  //         content: Text('Filter ${choice['labelName']} sedang dinonaktifkan'),
+  //         duration: const Duration(seconds: 2),
+  //       ),
+  //     );
+  //   });
+  // }
 
   void _handleSortChange(String? value) {
     setState(() {
@@ -234,13 +241,13 @@ class _OutPageState extends State<OutPage> {
 
       // Sort logic - bisa diimplementasikan di controller jika diperlukan
       if (value == "PO Date") {
-        _outController.tolistSO.sort((a, b) {
+        _outController.tolistSalesOrder.sort((a, b) {
           final aDate = a.dateordered ?? '';
           final bDate = b.dateordered ?? '';
           return bDate.compareTo(aDate);
         });
       } else {
-        _outController.tolistSO.sort((a, b) {
+        _outController.tolistSalesOrder.sort((a, b) {
           final aLifnr = a.cBpartnerId ?? '';
           final bLifnr = b.cBpartnerId ?? '';
           return aLifnr.compareTo(bLifnr);
@@ -335,18 +342,18 @@ class _OutPageState extends State<OutPage> {
   //   );
   // }
 
-  Color _getChoiceChipColor(String choice) {
-    switch (choice) {
-      case "ALL":
-        return const Color(0xFFFF6B35);
-      case "FZ":
-        return const Color(0xFF00AA13);
-      case "CH":
-        return const Color(0xFF8B5FBF);
-      default:
-        return const Color(0xfff44236);
-    }
-  }
+  // Color _getChoiceChipColor(String choice) {
+  //   switch (choice) {
+  //     case "ALL":
+  //       return const Color(0xFFFF6B35);
+  //     case "FZ":
+  //       return const Color(0xFF00AA13);
+  //     case "CH":
+  //       return const Color(0xFF8B5FBF);
+  //     default:
+  //       return const Color(0xfff44236);
+  //   }
+  // }
 
   Widget _buildHeader() {
     return Obx(
@@ -367,7 +374,7 @@ class _OutPageState extends State<OutPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '${_outController.tolistSO.length} data shown',
+              '${_outController.tolistSalesOrder.length} data shown',
               style: TextStyle(
                 fontFamily: 'MonaSans',
                 fontSize: 14,
@@ -432,7 +439,7 @@ class _OutPageState extends State<OutPage> {
         return _buildShimmerLoader();
       }
 
-      if (_outController.tolistSO.isEmpty) {
+      if (_outController.tolistSalesOrder.isEmpty) {
         return _buildEmptyState();
       }
 
@@ -540,14 +547,14 @@ class _OutPageState extends State<OutPage> {
           controller: _scrollController,
           shrinkWrap: true,
           clipBehavior: Clip.hardEdge,
-          itemCount: _outController.tolistSO.length,
+          itemCount: _outController.tolistSalesOrder.length,
           itemBuilder: (context, index) => GestureDetector(
             onTap: () {
               // Navigate to detail page
-              final po = _outController.tolistSO[index];
+              final po = _outController.tolistSalesOrder[index];
               Logger().d('Tapped on PO: ${po.documentno}');
             },
-            child: _buildPoCard(_outController.tolistSO[index], index),
+            child: _buildPoCard(_outController.tolistSalesOrder[index], index),
           ),
         ),
       ),
@@ -662,18 +669,19 @@ class _OutPageState extends State<OutPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       InkWell(
-                        // onTap: () async {
-                        //   final result = await Get.to(
-                        //     () => OutD(index, 'In Detail', poData),
-                        //   );
+                        onTap: () async {
+                          final result = await Get.to(
+                            () =>
+                                OutDetailPage(index, 'In Detail', poData, null),
+                          );
 
-                        //   // Refresh data jika kembali dari detail page
-                        //   if (result == true) {
-                        //     await _outController.refreshDataSOSO(
-                        //       type: RefreshTypeSOSO.listPOData,
-                        //     );
-                        //   }
-                        // },
+                          // Refresh data jika kembali dari detail page
+                          if (result == true) {
+                            await _outController.refreshDataSO(
+                              type: RefreshTypeSalesOrder.listSalesOrderData,
+                            );
+                          }
+                        },
                         child: Text(
                           'View Details',
                           style: TextStyle(
@@ -685,18 +693,19 @@ class _OutPageState extends State<OutPage> {
                         ),
                       ),
                       InkWell(
-                        // onTap: () async {
-                        //   final result = await Get.to(
-                        //     () => InDetailPage(index, 'In Detail', poData),
-                        //   );
+                        onTap: () async {
+                          final result = await Get.to(
+                            () =>
+                                OutDetailPage(index, 'In Detail', poData, null),
+                          );
 
-                        //   // Refresh data jika kembali dari detail page
-                        //   if (result == true) {
-                        //     await _outController.refreshDataSO(
-                        //       type: RefreshTypeSO.listPOData,
-                        //     );
-                        //   }
-                        // },
+                          // Refresh data jika kembali dari detail page
+                          if (result == true) {
+                            await _outController.refreshDataSO(
+                              type: RefreshTypeSalesOrder.listSalesOrderData,
+                            );
+                          }
+                        },
                         child: Container(
                           width: 32,
                           height: 32,
@@ -822,7 +831,7 @@ class _OutPageState extends State<OutPage> {
               color: hijauGojek,
               onRefresh: () async {
                 await _outController.refreshDataSO(
-                  type: RefreshTypeSO.listPOData,
+                  type: RefreshTypeSalesOrder.listSalesOrderData,
                 );
               },
               child: Container(

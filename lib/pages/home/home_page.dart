@@ -4,14 +4,14 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:wms_bctech/constants/home/home_constant.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
-import 'package:wms_bctech/controllers/in_controller.dart';
-import 'package:wms_bctech/controllers/auth_controller.dart';
-import 'package:wms_bctech/controllers/out_controller.dart';
+import 'package:wms_bctech/controllers/in/in_controller.dart';
+import 'package:wms_bctech/controllers/auth/auth_controller.dart';
+import 'package:wms_bctech/controllers/out/out_controller.dart';
 import 'package:wms_bctech/helpers/date_helper.dart';
 import 'package:wms_bctech/helpers/number_helper.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
-import 'package:wms_bctech/pages/grin/grin_page.dart';
-import 'package:wms_bctech/pages/out/out_page.dart';
+import 'package:wms_bctech/pages/delivery_order/delivery_order_page.dart';
+import 'package:wms_bctech/pages/good_receipt/good_receipt_page.dart';
 import 'package:wms_bctech/components/home/clipper.dart';
 import 'package:wms_bctech/components/home/home_appbar_widget.dart';
 import 'package:wms_bctech/components/home/home_menu_card_widget.dart';
@@ -67,7 +67,7 @@ class _HomePage extends State<HomePage> {
       debugPrint('[OutController] Loading state: $loading');
     });
 
-    ever(outController.tolistSOapprove, (list) {
+    ever(outController.tolistSalesOrderapprove, (list) {
       _logListUpdate('SO', list);
     });
   }
@@ -104,14 +104,14 @@ class _HomePage extends State<HomePage> {
     } else if (title == 'In') {
       // PERBAIKAN: Gunakan Get.to() untuk konsistensi navigasi
       Get.to(
-        () => const GrinPage(),
+        () => const GoodReceiptPage(),
         transition: Transition.rightToLeft,
         duration: const Duration(milliseconds: 300),
       );
     } else if (title == 'Out') {
       // PERBAIKAN: Gunakan Get.to() untuk konsistensi navigasi
       Get.to(
-        () => const OutPage(),
+        () => const DeliveryOrderPage(),
         transition: Transition.rightToLeft,
         duration: const Duration(milliseconds: 300),
       );
@@ -181,7 +181,9 @@ class _HomePage extends State<HomePage> {
           onRefresh: () async {
             await Future.wait([
               inController.refreshData(type: RefreshType.listRecentData),
-              outController.refreshDataSO(type: RefreshTypeSO.listRecentData),
+              outController.refreshDataSO(
+                type: RefreshTypeSalesOrder.listRecentData,
+              ),
             ]);
           },
           color: hijauGojek,
@@ -243,7 +245,7 @@ class _HomePage extends State<HomePage> {
                           return HomeShimmerLoadingWidget();
                         }
 
-                        final data = outController.tolistSO;
+                        final data = outController.tolistSalesOrder;
                         debugPrint('Rendering SO data length: ${data.length}');
 
                         if (data.isEmpty) {
@@ -267,7 +269,8 @@ class _HomePage extends State<HomePage> {
                                   TextButton(
                                     onPressed: () =>
                                         outController.refreshDataSO(
-                                          type: RefreshTypeSO.listRecentData,
+                                          type: RefreshTypeSalesOrder
+                                              .listRecentData,
                                         ),
                                     child: Text('Retry'),
                                   ),

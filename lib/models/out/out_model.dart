@@ -7,7 +7,7 @@ class OutModel implements ImmobileItem {
   String? documentno;
   String? docstatus;
   String? adClientId;
-  List<dynamic>? adOrgId;
+  List<String>? adOrgId;
   String? cBpartnerId;
   String? cBpartnerName;
   String? cCurrencyId;
@@ -16,6 +16,7 @@ class OutModel implements ImmobileItem {
   String? deliveryviarule;
   List<OutDetailModel>? details;
   String? freightcostrule;
+  String? isFullyDelivered;
   String? mPricelistId;
   String? mProductCategoryId;
   String? mWarehouseId;
@@ -33,6 +34,9 @@ class OutModel implements ImmobileItem {
   String? invoiceno;
   String? vendorpo;
 
+  // variable testing
+  String? approvedate;
+
   OutModel({
     this.dateordered,
     this.documentno,
@@ -47,6 +51,7 @@ class OutModel implements ImmobileItem {
     this.deliveryviarule,
     this.details,
     this.freightcostrule,
+    this.isFullyDelivered,
     this.mPricelistId,
     this.mProductCategoryId,
     this.mWarehouseId,
@@ -63,6 +68,9 @@ class OutModel implements ImmobileItem {
     this.truck,
     this.invoiceno,
     this.vendorpo,
+
+    // variable testing
+    this.approvedate,
   });
 
   @override
@@ -88,6 +96,7 @@ class OutModel implements ImmobileItem {
       deliveryviarule: data.deliveryviarule,
       details: data.details?.map((item) => OutDetailModel.clone(item)).toList(),
       freightcostrule: data.freightcostrule,
+      isFullyDelivered: data.isFullyDelivered,
       mPricelistId: data.mPricelistId,
       mProductCategoryId: data.mProductCategoryId,
       mWarehouseId: data.mWarehouseId,
@@ -113,9 +122,12 @@ class OutModel implements ImmobileItem {
       documentno: json['documentno'],
       docstatus: json['docstatus'],
       adClientId: json['ad_client_id'],
-      adOrgId: json['ad_org_id'] != null
-          ? List<dynamic>.from(json['ad_org_id'])
-          : null,
+      adOrgId:
+          (json['ad_org_id'] as List?) // <-- DIPERBAIKI: Konversi List<dynamic>
+              ?.map(
+                (e) => e.toString(),
+              ) // <-- DIPERBAIKI: Konversi setiap item ke String
+              .toList(), // <-- DIPERBAIKI
       cBpartnerId: json['c_bpartner_id'],
       cBpartnerName: json['c_bpartner_name'],
       cCurrencyId: json['c_currency_id'],
@@ -126,6 +138,7 @@ class OutModel implements ImmobileItem {
           ?.map((e) => OutDetailModel.fromJson(e as Map<String, dynamic>))
           .toList(),
       freightcostrule: json['freightcostrule'],
+      isFullyDelivered: json['is_fully_delivered'],
       mPricelistId: json['m_pricelist_id'],
       mProductCategoryId: json['m_product_category_id'],
       mWarehouseId: json['m_warehouse_id'],
@@ -142,12 +155,14 @@ class OutModel implements ImmobileItem {
       truck: json['truck'],
       invoiceno: json['invoiceno'],
       vendorpo: json['vendorpo'],
+
+      // variable testing
+      approvedate: json['approvedate'],
     );
   }
 
   factory OutModel.fromDocumentSnapshot(DocumentSnapshot documentSnapshot) {
     final data = documentSnapshot.data() as Map<String, dynamic>?;
-
     if (data == null) return OutModel();
 
     return OutModel(
@@ -155,9 +170,12 @@ class OutModel implements ImmobileItem {
       documentno: data['documentno'] ?? "",
       docstatus: data['docstatus'] ?? "",
       adClientId: data['ad_client_id'] ?? "",
-      adOrgId: data['ad_org_id'] != null
-          ? List<dynamic>.from(data['ad_org_id'])
-          : [],
+      adOrgId:
+          (data['ad_org_id'] as List?) // <-- DIPERBAIKI: Konversi List<dynamic>
+              ?.map(
+                (e) => e.toString(),
+              ) // <-- DIPERBAIKI: Konversi setiap item ke String
+              .toList(), // <-- DIPERBAIKI
       cBpartnerId: data['c_bpartner_id'] ?? "",
       cBpartnerName: data['c_bpartner_name'] ?? "",
       cCurrencyId: data['c_currency_id'] ?? "",
@@ -168,6 +186,9 @@ class OutModel implements ImmobileItem {
           ?.map((e) => OutDetailModel.fromJson(e as Map<String, dynamic>))
           .toList(),
       freightcostrule: data['freightcostrule'] ?? "",
+      isFullyDelivered:
+          data['is_fully_delivered'] ??
+          "", // <-- DIPERBAIKI: Default value harus String, bukan boolean false
       mPricelistId: data['m_pricelist_id'] ?? "",
       mProductCategoryId: data['m_product_category_id'] ?? "",
       mWarehouseId: data['m_warehouse_id'] ?? "",
@@ -179,11 +200,14 @@ class OutModel implements ImmobileItem {
       createdby: data['createdby'] ?? "",
       updated: data['updated'] ?? "",
       updatedby: data['updatedby'] ?? "",
-      issync: data['sync'] ?? "",
+      issync: data['issync'] ?? "", // <-- DIPERBAIKI: Key 'issync' bukan 'sync'
       orgid: data['orgid'] ?? "",
-      truck: data['TRUCK'] ?? "",
-      invoiceno: data['INVOICENO'] ?? "",
-      vendorpo: data['VENDORPO'] ?? "",
+      truck: data['truck'] ?? "", // <-- DIPERBAIKI: Key 'truck' (lowercase)
+      invoiceno:
+          data['invoiceno'] ??
+          "", // <-- DIPERBAIKI: Key 'invoiceno' (lowercase)
+      vendorpo:
+          data['vendorpo'] ?? "", // <-- DIPERBAIKI: Key 'vendorpo' (lowercase)
     );
   }
 
@@ -202,6 +226,7 @@ class OutModel implements ImmobileItem {
       'deliveryviarule': deliveryviarule,
       'details': details?.map((e) => e.toJson()).toList(),
       'freightcostrule': freightcostrule,
+      'is_fully_delivered': isFullyDelivered,
       'm_pricelist_id': mPricelistId,
       'm_product_category_id': mProductCategoryId,
       'm_warehouse_id': mWarehouseId,
@@ -218,6 +243,9 @@ class OutModel implements ImmobileItem {
       'truck': truck,
       'invoiceno': invoiceno,
       'vendorpo': vendorpo,
+
+      // variable testing
+      'approvedate': approvedate,
     };
   }
 
@@ -234,4 +262,8 @@ class OutModel implements ImmobileItem {
   String? get dlvComp => deliveryviarule;
   String? get bwart => freightcostrule;
   List<OutDetailModel>? get tData => details;
+
+  // code testing
+  set tData(List<OutDetailModel>? value) => details = value;
+  set dlvComp(String? value) => deliveryviarule = value;
 }

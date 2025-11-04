@@ -1,12 +1,13 @@
-// todo:✅ Clean Code checked
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:wms_bctech/controllers/auth_controller.dart';
-import 'package:wms_bctech/controllers/grin/gr_sequence_controller.dart';
-import 'package:wms_bctech/controllers/grin/grin_controller.dart';
-import 'package:wms_bctech/controllers/in_controller.dart';
-import 'package:wms_bctech/controllers/out_controller.dart';
+import 'package:wms_bctech/controllers/auth/auth_controller.dart';
+import 'package:wms_bctech/controllers/delivery_order/delivery_order_controller.dart';
+import 'package:wms_bctech/controllers/delivery_order/delivery_order_sequence_controller.dart';
+import 'package:wms_bctech/controllers/good_receipt/good_receipt_sequence_controller.dart';
+import 'package:wms_bctech/controllers/good_receipt/good_receipt_controller.dart';
+import 'package:wms_bctech/controllers/in/in_controller.dart';
+import 'package:wms_bctech/controllers/out/out_controller.dart';
 import 'package:wms_bctech/controllers/role_controller.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
 import 'package:wms_bctech/helpers/config_helper.dart';
@@ -20,6 +21,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
+  // Initialize Firebase
   try {
     await Firebase.initializeApp();
     Logger().i('Firebase initialized successfully');
@@ -27,21 +29,28 @@ void main() async {
     Logger().e('Firebase initialization error: $e');
   }
 
-  // Initialize NetworkListener
+  // Fungsi untuk memantau koneksi internet
   final networkListener = NetworkHelper();
   networkListener.startListening();
 
+  // Initialize GetX Controller
   Get.put(GlobalVM());
   Get.put(Rolevm());
   Get.put(NewAuthController());
   Get.put(InVM());
   Get.put(OutController());
-  Get.put(GrinController());
-  Get.put(GrSequenceService());
+  Get.put(GoodReceiptController());
+  Get.put(GoodReceiptSequenceController());
+  Get.put(DeliveryOrderController());
+  Get.put(DeliveryOrderSequenceController());
 
+  // Generate collection auth jika belum ada
   final authController = Get.find<NewAuthController>();
   await authController.generateAuthCollectionIfNotExists();
+
   runApp(const MyApp());
+
+  // Konfigurasi EasyLoading
   ConfigHelper.configLoading();
 }
 

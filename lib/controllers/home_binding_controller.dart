@@ -4,7 +4,7 @@ import 'package:wms_bctech/controllers/pid_controller.dart';
 import 'package:wms_bctech/models/out/out_model.dart';
 import 'category_controller.dart';
 import 'weborder_controller.dart';
-import 'in_controller.dart';
+import 'in/in_controller.dart';
 import 'stock_check_controlller.dart';
 import 'global_controller.dart';
 import 'reports_controller.dart';

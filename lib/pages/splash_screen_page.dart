@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:wms_bctech/config/global_variable_config.dart';
 import 'package:wms_bctech/constants/app_constant.dart';
-import 'package:wms_bctech/controllers/auth_controller.dart';
+import 'package:wms_bctech/controllers/auth/auth_controller.dart';
 import 'package:wms_bctech/controllers/role_controller.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
 
