@@ -19,11 +19,9 @@ import 'package:wms_bctech/controllers/out/out_controller.dart';
 import 'package:wms_bctech/helpers/date_helper.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
 import 'package:wms_bctech/models/delivery_order_serial_number/delivery_order_model.dart';
-import 'package:wms_bctech/models/in/in_model.dart';
 import 'package:wms_bctech/models/out/out_model.dart';
 import 'package:wms_bctech/pages/app_bottom_navigation_page.dart';
 import 'package:wms_bctech/pages/delivery_order/delivery_order_detail_page.dart';
-import 'package:wms_bctech/pages/in/in_detail_page.dart';
 import 'package:wms_bctech/pages/out/out_detail_page.dart';
 import 'package:wms_bctech/pages/out/out_page.dart';
 
