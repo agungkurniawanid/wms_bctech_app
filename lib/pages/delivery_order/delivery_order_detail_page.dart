@@ -1016,7 +1016,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                     width: 64,
                     height: 64,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -1181,7 +1181,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                         backgroundColor: Colors.red.shade600,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shadowColor: Colors.red.shade600.withOpacity(0.3),
+                        shadowColor: Colors.red.shade600.withValues(alpha: 0.3),
                       ),
                       child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
