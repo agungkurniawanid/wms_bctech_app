@@ -7,7 +7,7 @@ import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/models/category_model.dart';
 import 'package:wms_bctech/models/item_choice_model.dart';
 import 'package:wms_bctech/models/stock_take_model.dart';
-import 'package:wms_bctech/pages/stock_take_detail_page.dart';
+import 'package:wms_bctech/pages/stock_take/stock_take_detail_page.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
 import 'package:wms_bctech/controllers/stock_tick_controller.dart';
 import 'package:wms_bctech/components/out_card_widget.dart';
@@ -333,7 +333,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader> {
     FontWeight fontWeight,
     Color color,
   ) {
-    return safeGoogleFont(
+    return Tex(
       'Roboto',
       fontSize: fontSize * _ffem,
       fontWeight: fontWeight,

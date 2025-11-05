@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/logger.dart';
 import 'stock_take_detail_model.dart';
 
-class StocktickModel {
+class StockTakeModel {
   final List<StockTakeDetailModel> detail;
   final List<String> lGORT;
   String updated;
@@ -13,7 +13,7 @@ class StocktickModel {
   final String doctype;
   final String documentno;
 
-  StocktickModel({
+  StockTakeModel({
     required this.detail,
     required this.lGORT,
     required this.updated,
@@ -25,7 +25,7 @@ class StocktickModel {
     required this.documentno,
   });
 
-  factory StocktickModel.fromJson(Map<String, dynamic> data) {
+  factory StockTakeModel.fromJson(Map<String, dynamic> data) {
     try {
       final detailList =
           (data['detail'] as List<dynamic>?)
@@ -39,7 +39,7 @@ class StocktickModel {
         data['LGORT'] as List<dynamic>? ?? [],
       );
 
-      return StocktickModel(
+      return StockTakeModel(
         detail: detailList,
         lGORT: lgortList,
         updated: data['updated'] as String? ?? '',
@@ -51,24 +51,24 @@ class StocktickModel {
         documentno: data['documentno'] as String? ?? '',
       );
     } catch (e) {
-      Logger().e('Error in StocktickModel.fromJson: $e');
-      return StocktickModel.empty();
+      Logger().e('Error in StockTakeModel.fromJson: $e');
+      return StockTakeModel.empty();
     }
   }
 
-  factory StocktickModel.fromDocumentSnapshot(
+  factory StockTakeModel.fromDocumentSnapshot(
     DocumentSnapshot documentSnapshot,
   ) {
     try {
       final data = documentSnapshot.data() as Map<String, dynamic>;
-      return StocktickModel.fromJson(data);
+      return StockTakeModel.fromJson(data);
     } catch (e) {
-      Logger().e('Error in StocktickModel.fromDocumentSnapshot: $e');
-      return StocktickModel.empty();
+      Logger().e('Error in StockTakeModel.fromDocumentSnapshot: $e');
+      return StockTakeModel.empty();
     }
   }
 
-  factory StocktickModel.fromDocumentSnapshotWithDetail(
+  factory StockTakeModel.fromDocumentSnapshotWithDetail(
     DocumentSnapshot documentSnapshot,
   ) {
     try {
@@ -88,7 +88,7 @@ class StocktickModel {
         data['LGORT'] as List<dynamic>? ?? [],
       );
 
-      return StocktickModel(
+      return StockTakeModel(
         detail: detailList,
         lGORT: lgortList,
         updated: data['updated'] as String? ?? '',
@@ -100,13 +100,13 @@ class StocktickModel {
         documentno: data['documentno'] as String? ?? '',
       );
     } catch (e) {
-      Logger().e('Error in StocktickModel.fromDocumentSnapshotWithDetail: $e');
-      return StocktickModel.empty();
+      Logger().e('Error in StockTakeModel.fromDocumentSnapshotWithDetail: $e');
+      return StockTakeModel.empty();
     }
   }
 
-  factory StocktickModel.empty() {
-    return StocktickModel(
+  factory StockTakeModel.empty() {
+    return StockTakeModel(
       detail: [],
       lGORT: [],
       updated: '',
@@ -119,7 +119,7 @@ class StocktickModel {
     );
   }
 
-  StocktickModel copyWith({
+  StockTakeModel copyWith({
     List<StockTakeDetailModel>? detail,
     List<String>? lGORT,
     String? updated,
@@ -130,7 +130,7 @@ class StocktickModel {
     String? doctype,
     String? documentno,
   }) {
-    return StocktickModel(
+    return StockTakeModel(
       detail: detail ?? this.detail,
       lGORT: lGORT ?? this.lGORT,
       updated: updated ?? this.updated,
@@ -160,7 +160,7 @@ class StocktickModel {
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is StocktickModel &&
+    return other is StockTakeModel &&
         other.documentno == documentno &&
         other.doctype == doctype;
   }

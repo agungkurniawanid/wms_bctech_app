@@ -18,6 +18,7 @@ import 'package:wms_bctech/components/home/home_menu_card_widget.dart';
 import 'package:wms_bctech/components/home/home_more_options_bottom_sheet_widget.dart';
 import 'package:wms_bctech/components/home/home_recent_order_carousel_widget.dart';
 import 'package:wms_bctech/components/home/home_shimmer_loading_widget.dart';
+import 'package:wms_bctech/pages/stock_take/stock_take_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -112,6 +113,13 @@ class _HomePage extends State<HomePage> {
       // PERBAIKAN: Gunakan Get.to() untuk konsistensi navigasi
       Get.to(
         () => const DeliveryOrderPage(),
+        transition: Transition.rightToLeft,
+        duration: const Duration(milliseconds: 300),
+      );
+    } else if (title == 'Stock\nTake') {
+      // PERBAIKAN: Gunakan Get.to() untuk konsistensi navigasi
+      Get.to(
+        () => const StockTakePage(),
         transition: Transition.rightToLeft,
         duration: const Duration(milliseconds: 300),
       );

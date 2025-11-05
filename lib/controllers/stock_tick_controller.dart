@@ -22,17 +22,17 @@ class StockTickVM extends GetxController {
   final RxString selectchoice = "UU".obs;
   final RxList<dynamic> stocktickvm = <dynamic>[].obs;
   final RxString documentno = "".obs;
-  final RxList<StocktickModel> tolistforscan = <StocktickModel>[].obs;
+  final RxList<StockTakeModel> tolistforscan = <StockTakeModel>[].obs;
   final RxList<InputStockTake> tolistforinputstocktake = <InputStockTake>[].obs;
   final RxList<InputStockTake> tolistcounted = <InputStockTake>[].obs;
   final RxList<InputStockTake> tolistinput = <InputStockTake>[].obs;
-  final RxList<StocktickModel> toliststock = <StocktickModel>[].obs;
-  final RxList<StocktickModel> tolistdocument = <StocktickModel>[].obs;
-  final RxList<StocktickModel> tolistdocumentnosame = <StocktickModel>[].obs;
-  final RxList<StocktickModel> tolistdocumentsearch = <StocktickModel>[].obs;
-  final RxList<StocktickModel> tolistdocumentcounted = <StocktickModel>[].obs;
-  final RxList<StocktickModel> tolistdetail = <StocktickModel>[].obs;
-  final RxList<StocktickModel> stockhistory = <StocktickModel>[].obs;
+  final RxList<StockTakeModel> toliststock = <StockTakeModel>[].obs;
+  final RxList<StockTakeModel> tolistdocument = <StockTakeModel>[].obs;
+  final RxList<StockTakeModel> tolistdocumentnosame = <StockTakeModel>[].obs;
+  final RxList<StockTakeModel> tolistdocumentsearch = <StockTakeModel>[].obs;
+  final RxList<StockTakeModel> tolistdocumentcounted = <StockTakeModel>[].obs;
+  final RxList<StockTakeModel> tolistdetail = <StockTakeModel>[].obs;
+  final RxList<StockTakeModel> stockhistory = <StockTakeModel>[].obs;
   final RxString searchValue = ''.obs;
   final RxString choicesr = "".obs;
   final RxString document = "".obs;
@@ -51,12 +51,12 @@ class StockTickVM extends GetxController {
 
   List<String> choicelocation = [];
   String choiceforchip = "";
-  final Rx<List<StocktickModel>> stocklist = Rx<List<StocktickModel>>([]);
-  List<StocktickModel> stocktickModellocal = [];
+  final Rx<List<StockTakeModel>> stocklist = Rx<List<StockTakeModel>>([]);
+  List<StockTakeModel> stockTakeStockTakeModellocal = [];
   List<InputStockTake> listinputstocktake = [];
   List<InputStockTake> listcountedstocktake = [];
-  List<StocktickModel> stocktickModellocalout = [];
-  List<StocktickModel> stockforhistory = [];
+  List<StockTakeModel> stockTakeStockTakeModellocalout = [];
+  List<StockTakeModel> stockforhistory = [];
 
   @override
   void onReady() {
@@ -77,7 +77,7 @@ class StockTickVM extends GetxController {
     stocklist.bindStream(listDetailAll());
   }
 
-  Future<List<StocktickModel>> listcounted() async {
+  Future<List<StockTakeModel>> listcounted() async {
     try {
       final QuerySnapshot querySnapshot = await FirebaseFirestore.instance
           .collection('history_stocktake')
@@ -85,8 +85,8 @@ class StockTickVM extends GetxController {
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
-        stocktickModellocal = [];
-        stocktickModellocalout = [];
+        stockTakeStockTakeModellocal = [];
+        stockTakeStockTakeModellocalout = [];
         listcountedstocktake = [];
 
         for (final QueryDocumentSnapshot doc in querySnapshot.docs) {
@@ -106,7 +106,7 @@ class StockTickVM extends GetxController {
     return [];
   }
 
-  Stream<List<StocktickModel>> listDetailAll() {
+  Stream<List<StockTakeModel>> listDetailAll() {
     try {
       return FirebaseFirestore.instance
           .collection('stocktakes')
@@ -133,7 +133,7 @@ class StockTickVM extends GetxController {
     }
   }
 
-  Stream<List<StocktickModel>> listDetail() {
+  Stream<List<StockTakeModel>> listDetail() {
     try {
       return FirebaseFirestore.instance
           .collection('stocktakes')
@@ -160,7 +160,7 @@ class StockTickVM extends GetxController {
     }
   }
 
-  Stream<List<StocktickModel>> listDocumentStream() {
+  Stream<List<StockTakeModel>> listDocumentStream() {
     try {
       final String thisMonth = DateFormat(
         'yyyy-MM-dd',
@@ -177,11 +177,11 @@ class StockTickVM extends GetxController {
 
             if (querySnapshot.docs.isNotEmpty) {
               for (final QueryDocumentSnapshot stock in querySnapshot.docs) {
-                final StocktickModel returnstock =
-                    StocktickModel.fromDocumentSnapshotWithDetail(stock);
+                final StockTakeModel returnstock =
+                    StockTakeModel.fromDocumentSnapshotWithDetail(stock);
 
                 if (returnstock.isapprove == choiceforchip) {
-                  stocktickModellocalout.add(returnstock);
+                  stockTakeStockTakeModellocalout.add(returnstock);
 
                   final List<StockTakeDetailModel> uniqueDetails = [];
                   final Set<String> uniqueMATNRs = <String>{};
@@ -193,8 +193,8 @@ class StockTickVM extends GetxController {
                     }
                   }
 
-                  stocktickModellocal.add(
-                    StocktickModel(
+                  stockTakeStockTakeModellocal.add(
+                    StockTakeModel(
                       documentno: returnstock.documentno,
                       detail: uniqueDetails,
                       lGORT: returnstock.lGORT,
@@ -210,8 +210,8 @@ class StockTickVM extends GetxController {
               }
             }
 
-            tolistdocumentnosame.assignAll(stocktickModellocal);
-            tolistdocument.assignAll(stocktickModellocalout);
+            tolistdocumentnosame.assignAll(stockTakeStockTakeModellocal);
+            tolistdocument.assignAll(stockTakeStockTakeModellocalout);
             isLoading.value = false;
 
             return toliststock;
@@ -222,7 +222,7 @@ class StockTickVM extends GetxController {
     }
   }
 
-  Future<List<StocktickModel>> listStock() async {
+  Future<List<StockTakeModel>> listStock() async {
     try {
       final QuerySnapshot querySnapshot = await FirebaseFirestore.instance
           .collection('sloc')
@@ -232,18 +232,18 @@ class StockTickVM extends GetxController {
       _resetLocalLists();
 
       for (final QueryDocumentSnapshot stock in querySnapshot.docs) {
-        final StocktickModel returnstock = StocktickModel.fromDocumentSnapshot(
+        final StockTakeModel returnstock = StockTakeModel.fromDocumentSnapshot(
           stock,
         );
 
         if (returnstock.isapprove == "N") {
-          stocktickModellocal.add(returnstock);
-          stocktickModellocalout.add(returnstock);
+          stockTakeStockTakeModellocal.add(returnstock);
+          stockTakeStockTakeModellocalout.add(returnstock);
         }
       }
 
-      tolistforscan.assignAll(stocktickModellocal);
-      toliststock.assignAll(stocktickModellocalout);
+      tolistforscan.assignAll(stockTakeStockTakeModellocal);
+      toliststock.assignAll(stockTakeStockTakeModellocalout);
       isLoading.value = false;
 
       return toliststock;
@@ -294,37 +294,37 @@ class StockTickVM extends GetxController {
     }
   }
 
-  Future<void> forcounted(InputStockTake stocktickModel2) async {
+  Future<void> forcounted(InputStockTake stockTakeStockTakeModel2) async {
     try {
       await FirebaseFirestore.instance
           .collection('history_stocktake')
           .doc(
-            '${stocktickModel2.documentNo}'
-            '${stocktickModel2.batchId}'
-            '${stocktickModel2.matnr}'
-            '${stocktickModel2.section}'
+            '${stockTakeStockTakeModel2.documentNo}'
+            '${stockTakeStockTakeModel2.batchId}'
+            '${stockTakeStockTakeModel2.matnr}'
+            '${stockTakeStockTakeModel2.section}'
             '${globalvm.username.value}'
-            '${stocktickModel2.selectedChoice}',
+            '${stockTakeStockTakeModel2.selectedChoice}',
           )
-          .set(stocktickModel2.toMap());
+          .set(stockTakeStockTakeModel2.toMap());
     } catch (e) {
       Logger().e("Error in forcounted: $e");
     }
   }
 
-  Future<void> sendtohistory(InputStockTake stocktickModel2) async {
+  Future<void> sendtohistory(InputStockTake stockTakeStockTakeModel2) async {
     try {
       await FirebaseFirestore.instance
           .collection('stocktakes')
-          .doc(stocktickModel2.documentNo)
+          .doc(stockTakeStockTakeModel2.documentNo)
           .collection('batchid')
           .doc(
-            '${stocktickModel2.batchId}'
-            '${stocktickModel2.matnr}'
-            '${stocktickModel2.section}'
-            '${stocktickModel2.selectedChoice}',
+            '${stockTakeStockTakeModel2.batchId}'
+            '${stockTakeStockTakeModel2.matnr}'
+            '${stockTakeStockTakeModel2.section}'
+            '${stockTakeStockTakeModel2.selectedChoice}',
           )
-          .set(stocktickModel2.toMap());
+          .set(stockTakeStockTakeModel2.toMap());
     } catch (e) {
       Logger().e("Error in sendtohistory: $e");
     }
@@ -349,7 +349,7 @@ class StockTickVM extends GetxController {
   }
 
   Future<void> updatedetail(
-    InputStockTake stocktickModel2,
+    InputStockTake stockTakeStockTakeModel2,
     List<StockTakeDetailModel> indetail,
   ) async {
     try {
@@ -359,7 +359,7 @@ class StockTickVM extends GetxController {
 
       await FirebaseFirestore.instance
           .collection('stocktakes')
-          .doc(stocktickModel2.documentNo)
+          .doc(stockTakeStockTakeModel2.documentNo)
           .update({'detail': detailList});
     } catch (e) {
       Logger().e("Error in updatedetail: $e");
@@ -555,13 +555,13 @@ class StockTickVM extends GetxController {
   }
 
   Future<void> changeflag(
-    StocktickModel stocktickModel,
+    StockTakeModel stockTakeStockTakeModel,
     List<Map<String, dynamic>> detail,
   ) async {
     try {
       final DocumentReference documentReference = FirebaseFirestore.instance
           .collection('stocktakes')
-          .doc(stocktickModel.documentno);
+          .doc(stockTakeStockTakeModel.documentno);
 
       await documentReference.update({"detail": detail});
     } catch (e) {
@@ -569,16 +569,16 @@ class StockTickVM extends GetxController {
     }
   }
 
-  Future<void> approveall(StocktickModel stocktickModel) async {
+  Future<void> approveall(StockTakeModel stockTakeStockTakeModel) async {
     try {
       final DocumentReference documentReference = FirebaseFirestore.instance
           .collection('stocktakes')
-          .doc(stocktickModel.documentno);
+          .doc(stockTakeStockTakeModel.documentno);
 
       await documentReference.update({
         "isapprove": "Y",
-        "updated": stocktickModel.updated,
-        "updatedby": stocktickModel.updatedby,
+        "updated": stockTakeStockTakeModel.updated,
+        "updatedby": stockTakeStockTakeModel.updatedby,
       });
     } catch (e) {
       Logger().e("Error in approveall: $e");
@@ -599,7 +599,7 @@ class StockTickVM extends GetxController {
       return [];
     }
 
-    final List<StocktickModel> matchedDocs = tolistdocumentnosame
+    final List<StockTakeModel> matchedDocs = tolistdocumentnosame
         .where((element) => element.documentno == documentno)
         .toList();
 
@@ -607,7 +607,7 @@ class StockTickVM extends GetxController {
       return [];
     }
 
-    final StocktickModel selectedDoc = matchedDocs.first;
+    final StockTakeModel selectedDoc = matchedDocs.first;
 
     if (searchValue.value.trim().isNotEmpty) {
       return selectedDoc.detail
@@ -626,7 +626,7 @@ class StockTickVM extends GetxController {
     }
   }
 
-  StocktickModel newStockTickModel(String namechoice, int index) {
+  StockTakeModel newStockTakeModel(String namechoice, int index) {
     return namechoice == "ALL"
         ? searchValue.value == ''
               ? tolistdocument[index]
@@ -637,8 +637,8 @@ class StockTickVM extends GetxController {
   }
 
   void _resetLocalLists() {
-    stocktickModellocal = [];
-    stocktickModellocalout = [];
+    stockTakeStockTakeModellocal = [];
+    stockTakeStockTakeModellocalout = [];
     stockforhistory = [];
     tolistforscan.value = [];
     listinputstocktake = [];
