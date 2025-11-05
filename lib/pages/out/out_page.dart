@@ -792,66 +792,62 @@ class _OutPageState extends State<OutPage> {
           systemNavigationBarColor: Colors.white,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        child: SafeArea(
-          child: Scaffold(
-            appBar: AppBar(
-              actions: _buildAppBarActions(),
-              automaticallyImplyLeading: false,
-              leading: IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios,
-                  size: 20.0,
-                  color: Colors.white,
-                ),
-                onPressed: _handleBackPress,
+        child: Scaffold(
+          appBar: AppBar(
+            actions: _buildAppBarActions(),
+            automaticallyImplyLeading: false,
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_ios,
+                size: 20.0,
+                color: Colors.white,
               ),
-              backgroundColor: _primaryColor,
-              elevation: 0,
-              title: _isSearching
-                  ? _buildSearchField()
-                  : Text(
-                      "DO Sales Order",
-                      style: TextStyle(
-                        fontFamily: 'MonaSans',
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-              centerTitle: true,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(16),
-                ),
-              ),
+              onPressed: _handleBackPress,
             ),
-            backgroundColor: _backgroundColor,
-            body: RefreshIndicator(
-              backgroundColor: Colors.white,
-              color: hijauGojek,
-              onRefresh: () async {
-                await _outController.refreshDataSO(
-                  type: RefreshTypeSalesOrder.listSalesOrderData,
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.max,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Filter Chips (tetap ditampilkan tapi fungsinya dinonaktifkan)
-                    // Padding(
-                    //   padding: const EdgeInsets.only(bottom: 16),
-                    //   child: _buildChoiceChips(),
-                    // ),
-                    // Header dengan info dan sort
-                    _buildHeader(),
-                    const SizedBox(height: 16),
-                    // Content
-                    _buildContent(),
-                  ],
-                ),
+            backgroundColor: _primaryColor,
+            elevation: 0,
+            title: _isSearching
+                ? _buildSearchField()
+                : Text(
+                    "DO Sales Order",
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+            centerTitle: true,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+            ),
+          ),
+          backgroundColor: _backgroundColor,
+          body: RefreshIndicator(
+            backgroundColor: Colors.white,
+            color: hijauGojek,
+            onRefresh: () async {
+              await _outController.refreshDataSO(
+                type: RefreshTypeSalesOrder.listSalesOrderData,
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Filter Chips (tetap ditampilkan tapi fungsinya dinonaktifkan)
+                  // Padding(
+                  //   padding: const EdgeInsets.only(bottom: 16),
+                  //   child: _buildChoiceChips(),
+                  // ),
+                  // Header dengan info dan sort
+                  _buildHeader(),
+                  const SizedBox(height: 16),
+                  // Content
+                  _buildContent(),
+                ],
               ),
             ),
           ),

@@ -2171,7 +2171,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
             title: _isSearching
                 ? _buildSearchField()
                 : Text(
-                    "GRIN Details",
+                    "Delivery Order Detail",
                     style: TextStyle(
                       fontFamily: 'MonaSans',
                       color: Colors.white,
