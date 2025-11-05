@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:wms_bctech/models/delivery_order_serial_number/delivery_order_detail_model.dart';
+import 'package:wms_bctech/models/delivery_order/delivery_order_detail_model.dart';
 
 class DeliveryOrderModel {
   final String grId;

@@ -866,43 +866,200 @@ class _InDetailPageState extends State<InDetailPage>
 
   void _showManualBarcodeInput() {
     TextEditingController manualController = TextEditingController();
+    final FocusNode focusNode = FocusNode();
+
+    // Request focus setelah dialog muncul
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      focusNode.requestFocus();
+    });
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Input Barcode Manual"),
-        content: TextField(
-          controller: manualController,
-          decoration: const InputDecoration(
-            labelText: 'Masukkan kode barcode',
-            border: OutlineInputBorder(),
-            hintText: 'Contoh: SKU-001, SKU-002, dll.',
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
           ),
-          autofocus: true,
-          onSubmitted: (value) {
-            if (value.isNotEmpty) {
-              Navigator.of(context).pop();
-              _processBarcodeResult(value);
-            }
-          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon Header
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Colors.purple.shade400, Colors.purple.shade600],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.purple.shade200,
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.keyboard_rounded,
+                  color: Colors.white,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Title
+              const Text(
+                'Input Barcode Manual',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Description
+              Text(
+                'Ketik kode barcode produk yang ingin Anda cari',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Input Field
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.purple.shade200, width: 2),
+                ),
+                child: TextField(
+                  controller: manualController,
+                  focusNode: focusNode,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Kode Barcode',
+                    labelStyle: TextStyle(
+                      color: Colors.purple.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    hintText: 'Contoh: SKU-001, SKU-002',
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: 14,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.barcode_reader,
+                      color: Colors.purple.shade600,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(20),
+                  ),
+                  onSubmitted: (value) {
+                    if (value.isNotEmpty) {
+                      Navigator.of(context).pop();
+                      // Tambahkan delay untuk memastikan dialog tertutup
+                      Future.delayed(const Duration(milliseconds: 100), () {
+                        _processBarcodeResult(value);
+                      });
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Action Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: BorderSide(
+                          color: Colors.grey.shade300,
+                          width: 1.5,
+                        ),
+                        foregroundColor: Colors.grey.shade700,
+                      ),
+                      child: const Text(
+                        'Batal',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (manualController.text.isNotEmpty) {
+                          Navigator.of(context).pop();
+                          // Tambahkan delay untuk memastikan dialog tertutup
+                          Future.delayed(const Duration(milliseconds: 100), () {
+                            _processBarcodeResult(manualController.text);
+                          });
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        backgroundColor: Colors.purple.shade600,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.search_rounded, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Scan',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Batal"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (manualController.text.isNotEmpty) {
-                Navigator.of(context).pop();
-                _processBarcodeResult(manualController.text);
-              }
-            },
-            child: const Text("Scan"),
-          ),
-        ],
       ),
-    );
+    ).then((_) {
+      // Cleanup focus node saat dialog ditutup
+      focusNode.dispose();
+      manualController.dispose();
+    });
   }
 
   List<InDetail> _findProductByBarcode(String barcode) {
@@ -980,15 +1137,6 @@ class _InDetailPageState extends State<InDetailPage>
       debugPrint('Product found: ${product.maktxUI}');
 
       if (!mounted) return;
-      // TUTUP DIALOG CAMERA SEBELUM menampilkan bottom sheet
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop(); // Tutup dialog camera
-      }
-
-      // Tunggu sebentar untuk memastikan dialog tertutup
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      if (!mounted) return;
 
       setState(() {
         // Reset values terlebih dahulu
@@ -1016,12 +1164,17 @@ class _InDetailPageState extends State<InDetailPage>
         checkingscan = true;
       });
 
-      // Tampilkan bottom sheet
+      // Tunggu sebentar untuk memastikan state sudah di-update
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      // Tampilkan bottom sheet TANPA menutup dialog apapun
       if (mounted) {
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
+          isDismissible: true,
+          enableDrag: true,
           builder: (context) =>
               InProductDetailBottomsheetWidget(product: product),
         );
@@ -1035,10 +1188,10 @@ class _InDetailPageState extends State<InDetailPage>
         toastLength: Toast.LENGTH_LONG,
       );
 
+      // Tunggu toast muncul dulu
+      await Future.delayed(const Duration(milliseconds: 500));
+
       if (!mounted) return;
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
 
       _showProductNotFoundDialog(trimmedBarcode);
     }
@@ -1047,24 +1200,157 @@ class _InDetailPageState extends State<InDetailPage>
   void _showProductNotFoundDialog(String barcode) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Product Tidak Ditemukan"),
-        content: Text(
-          "Product dengan barcode '$barcode' tidak ditemukan dalam daftar PO. Apakah Anda ingin menambahkannya secara manual?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Oke"),
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
           ),
-          // ElevatedButton(
-          //   onPressed: () {
-          //     Navigator.of(context).pop();
-          //     _addManualProduct(barcode);
-          //   },
-          //   child: const Text("Tambah Manual"),
-          // ),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon Header
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Colors.orange.shade400, Colors.orange.shade600],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.orange.shade200,
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.search_off_rounded,
+                  color: Colors.white,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Title
+              const Text(
+                'Product Tidak Ditemukan',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Barcode Info
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200, width: 1),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.qr_code_2_rounded,
+                      color: Colors.grey.shade600,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      barcode,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade700,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Description
+              Text(
+                'Product dengan barcode di atas tidak ditemukan dalam daftar PO.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Info Box
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.shade200, width: 1),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: Colors.blue.shade700,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Pastikan barcode sudah sesuai dengan daftar PO',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.blue.shade900,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Action Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: Colors.blue.shade600,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Mengerti',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1074,27 +1360,185 @@ class _InDetailPageState extends State<InDetailPage>
 
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Pilih Metode Scan"),
-        content: const Text(
-          "Pilih metode yang ingin digunakan untuk memindai barcode",
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon Header
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Colors.blue.shade400, Colors.blue.shade600],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.shade200,
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.qr_code_scanner_rounded,
+                  color: Colors.white,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Title
+              const Text(
+                'Pilih Metode Scan',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Description
+              Text(
+                'Pilih metode yang ingin digunakan untuk memindai barcode',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Options
+              _buildScanOption(
+                icon: Icons.keyboard_rounded,
+                title: 'Input Manual',
+                description: 'Ketik barcode secara manual',
+                gradient: [Colors.purple.shade400, Colors.purple.shade600],
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showManualBarcodeInput();
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildScanOption(
+                icon: Icons.camera_alt_rounded,
+                title: 'Kamera HP',
+                description: 'Scan menggunakan kamera',
+                gradient: [Colors.green.shade400, Colors.green.shade600],
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _startCameraScanImproved();
+                },
+              ),
+              const SizedBox(height: 20),
+
+              // Cancel Button
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+                child: Text(
+                  'Batal',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _showManualBarcodeInput();
-            },
-            child: const Text("Input Manual"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _startCameraScanImproved(); // Gunakan method yang diperbaiki
-            },
-            child: const Text("Kamera HP"),
-          ),
-        ],
+      ),
+    );
+  }
+
+  Widget _buildScanOption({
+    required IconData icon,
+    required String title,
+    required String description,
+    required List<Color> gradient,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200, width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: gradient,
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: gradient[0].withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Icon(icon, color: Colors.white, size: 28),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.grey.shade400,
+              size: 18,
+            ),
+          ],
+        ),
       ),
     );
   }

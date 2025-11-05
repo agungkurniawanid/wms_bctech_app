@@ -7,8 +7,8 @@ import 'package:get/get.dart';
 import 'package:wms_bctech/controllers/delivery_order/delivery_order_sequence_controller.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
 import 'package:logger/web.dart';
-import 'package:wms_bctech/models/delivery_order_serial_number/delivery_order_detail_model.dart';
-import 'package:wms_bctech/models/delivery_order_serial_number/delivery_order_model.dart';
+import 'package:wms_bctech/models/delivery_order/delivery_order_detail_model.dart';
+import 'package:wms_bctech/models/delivery_order/delivery_order_model.dart';
 
 class DeliveryOrderController extends GetxController {
   final Logger _logger = Logger();

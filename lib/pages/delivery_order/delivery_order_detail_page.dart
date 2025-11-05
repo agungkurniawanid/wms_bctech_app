@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/helpers/date_helper.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
-import 'package:wms_bctech/models/delivery_order_serial_number/delivery_order_detail_model.dart';
-import 'package:wms_bctech/models/delivery_order_serial_number/delivery_order_model.dart';
+import 'package:wms_bctech/models/delivery_order/delivery_order_detail_model.dart';
+import 'package:wms_bctech/models/delivery_order/delivery_order_model.dart';
 import 'package:logger/logger.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -204,7 +204,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
 
       // Query IN collection to find matching document
       final inQuery = await _firestore
-          .collection('in')
+          .collection('out')
           .where('documentno', isEqualTo: poNumber)
           .limit(1)
           .get();
@@ -987,23 +987,223 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
   Future<void> _deleteItem(Map<String, dynamic> item) async {
     final shouldDelete = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Hapus Item', style: TextStyle(/* ... */)),
-        content: Text(
-          'Apakah Anda yakin ingin menghapus item ${item['productName']}?',
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        contentPadding: EdgeInsets.zero,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header dengan icon
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Colors.red.shade400, Colors.red.shade600],
+                ),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.delete_outline_rounded,
+                      color: Colors.white,
+                      size: 36,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Hapus Item',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Text(
+                    'Apakah Anda yakin ingin menghapus item ini?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade700,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200, width: 1),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.inventory_2_outlined,
+                            color: Colors.blue.shade600,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Nama Produk',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                item['productName'] ?? '-',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.amber.shade200,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.amber.shade700,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Tindakan ini tidak dapat dibatalkan',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.amber.shade900,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Actions
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: BorderSide(
+                          color: Colors.grey.shade300,
+                          width: 1.5,
+                        ),
+                        foregroundColor: Colors.grey.shade700,
+                      ),
+                      child: const Text(
+                        'Batal',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        backgroundColor: Colors.red.shade600,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shadowColor: Colors.red.shade600.withOpacity(0.3),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.delete_rounded, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Hapus',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Hapus'),
-          ),
-        ],
       ),
     );
 
@@ -1030,7 +1230,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
 
         final itemToDelete = Map<String, dynamic>.from(details[originalIndex]);
 
-        // Cari serial number di berbagai possible keys
         final rawSerial =
             itemToDelete['sn'] ??
             itemToDelete['SN'] ??
@@ -1041,39 +1240,29 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
             : (rawSerial?.toString().trim() ?? '');
         final isSerializedItem = serialNumber.isNotEmpty;
 
-        // Remove locally
         details.removeAt(originalIndex);
 
-        // Update delivery_order dalam transaksi
         transaction.update(grinRef, {'details': details});
 
-        // Jika ada serial, hapus dokumennya juga (akan dilakukan dalam transaksi via get + delete)
         if (isSerializedItem) {
-          // METODE 1: asumsikan doc id = serialNumber
           final serialDocRef = _firestore
               .collection('serial_numbers')
               .doc(serialNumber);
           final serialSnap = await transaction.get(serialDocRef);
           if (serialSnap.exists) {
             final sdata = serialSnap.data();
-            if (sdata != null && sdata['gr_id'] == widget.grId) {
+            if (sdata != null && sdata['do_id'] == widget.grId) {
               transaction.delete(serialDocRef);
-              return; // selesai transaksi
+              return;
             }
           }
 
-          // METODE 2: query (transaksi tidak mendukung queries yang mengembalikan snapshot untuk di-update/delete secara langsung).
-          // Karena runTransaction tidak bisa men-delete berdasarkan query yang asinkron tanpa membaca di luar transaksi,
-          // fallback: lakukan query di luar transaksi (satu-satu) sebelum transaksi atau lakukan batched write
-          // Untuk kesederhanaan di sini kita melempar jika dokumen ID tidak cocok, dan setelah transaksi selesai
-          // kita lakukan delete query sebagai step kedua (lihat catatan di bawah).
           throw Exception(
-            'Serial doc with ID "$serialNumber" not found or gr_id mismatch inside transaction.',
+            'Serial doc with ID "$serialNumber" not found or do_id mismatch inside transaction.',
           );
         }
       });
 
-      // Jika sampai sini sukses:
       setState(() {
         _detailItems.removeWhere(
           (d) => d['originalIndex'] == item['originalIndex'],
@@ -1094,14 +1283,11 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
         );
       }
     } catch (e) {
-      // Jika transaksi gagal, coba fallback untuk hapus serial (non-transaksional) seperti implementasi Anda sebelumnya
       _logger.w(
         'Transaksi gagal atau serial tidak bisa dihapus dalam transaksi: $e — mencoba fallback non-transactional.',
       );
 
-      // Fallback: lakukan update details dulu, lalu jalankan _deleteSerialNumberBySn(serialNumber) (seperti implementasi awal)
       try {
-        // -- sama seperti implementasi awal: hapus details, update grinRef, lalu panggil _deleteSerialNumberBySn()
         final grinDoc = await grinRef.get();
         if (grinDoc.exists) {
           final data = grinDoc.data()!;
@@ -1129,7 +1315,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
           }
         }
 
-        // update UI
         setState(() {
           _detailItems.removeWhere(
             (d) => d['originalIndex'] == item['originalIndex'],
@@ -1180,7 +1365,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
 
       if (docSnapOriginal.exists) {
         final data = docSnapOriginal.data();
-        if (data != null && data['gr_id'] == widget.grId) {
+        if (data != null && data['do_id'] == widget.grId) {
           await docRefOriginal.delete();
           _logger.i(
             '✅ Berhasil hapus serial number (original ID match): $normalizedSn',
@@ -1195,7 +1380,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
 
       if (docSnapLower.exists) {
         final data = docSnapLower.data();
-        if (data != null && data['gr_id'] == widget.grId) {
+        if (data != null && data['do_id'] == widget.grId) {
           await docRefLower.delete();
           _logger.i(
             '✅ Berhasil hapus serial number (lowercase match): $lowerSn',
@@ -1210,7 +1395,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
 
       if (docSnapUpper.exists) {
         final data = docSnapUpper.data();
-        if (data != null && data['gr_id'] == widget.grId) {
+        if (data != null && data['do_id'] == widget.grId) {
           await docRefUpper.delete();
           _logger.i(
             '✅ Berhasil hapus serial number (uppercase match): $upperSn',
@@ -1220,10 +1405,10 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
       }
 
       // METODE 4: Fallback query (jaga-jaga jika doc ID tidak sama)
-      _logger.i('🧩 Fallback query by gr_id...');
+      _logger.i('🧩 Fallback query by do_id...');
       final querySnapshot = await _firestore
           .collection('serial_numbers')
-          .where('gr_id', isEqualTo: widget.grId)
+          .where('do_id', isEqualTo: widget.grId)
           .get();
 
       for (var doc in querySnapshot.docs) {
