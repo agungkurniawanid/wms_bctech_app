@@ -10,7 +10,6 @@ class RecentSR extends StatelessWidget {
   final double height;
   final NumberFormat currency = NumberFormat("#,###", "en_US");
 
-  // Data dummy untuk simulasi UI
   final List<Map<String, dynamic>> dummySRList = [
     {
       'documentNo': 'SR-001',
@@ -32,7 +31,6 @@ class RecentSR extends StatelessWidget {
     },
   ];
 
-  // Variabel global dummy
   final String dummyChoiceCategory = 'ALL';
 
   RecentSR({
@@ -45,10 +43,8 @@ class RecentSR extends StatelessWidget {
     this.height = 40,
   });
 
-  // Method untuk simulasi perhitungan CTN
   String _calculateCTN() {
     try {
-      // Data dummy - return nilai acak untuk simulasi
       return (10 + index).toString();
     } catch (e) {
       debugPrint('Error calculating CTN: $e');
@@ -56,10 +52,8 @@ class RecentSR extends StatelessWidget {
     }
   }
 
-  // Method untuk simulasi perhitungan PCS
   String _calculatePCS() {
     try {
-      // Data dummy - return nilai acak untuk simulasi
       return (25 + index * 5).toString();
     } catch (e) {
       debugPrint('Error calculating PCS: $e');
@@ -67,7 +61,6 @@ class RecentSR extends StatelessWidget {
     }
   }
 
-  // Method untuk simulasi total CTN
   String _calculateTotalCTN() {
     try {
       final calcuCTN = _calculateCTN();
@@ -78,7 +71,6 @@ class RecentSR extends StatelessWidget {
     }
   }
 
-  // Method untuk simulasi total PCS
   String _calculateTotalPCS() {
     try {
       final calcuPCS = _calculatePCS();
@@ -89,9 +81,7 @@ class RecentSR extends StatelessWidget {
     }
   }
 
-  // Widget untuk simulasi status AB
   InlineSpan _buildInlineSpanAB(int index) {
-    // Data dummy - simulasi kondisi berdasarkan index
     if (dummyChoiceCategory == "ALL") {
       if (index % 3 == 0) {
         return WidgetSpan(
@@ -117,9 +107,7 @@ class RecentSR extends StatelessWidget {
     return const TextSpan(text: '');
   }
 
-  // Widget untuk simulasi status CH
   InlineSpan _buildInlineSpanCH(int index) {
-    // Data dummy - simulasi kondisi berdasarkan index
     if (dummyChoiceCategory == "ALL") {
       if (index % 3 == 1) {
         return WidgetSpan(
@@ -145,9 +133,7 @@ class RecentSR extends StatelessWidget {
     return const TextSpan(text: '');
   }
 
-  // Widget untuk simulasi status FZ
   InlineSpan _buildInlineSpanFZ(int index) {
-    // Data dummy - simulasi kondisi berdasarkan index
     if (dummyChoiceCategory == "ALL") {
       if (index % 3 == 2) {
         return WidgetSpan(
@@ -174,7 +160,6 @@ class RecentSR extends StatelessWidget {
   }
 
   Color _getHeaderColor() {
-    // Data dummy - warna berdasarkan kategori
     switch (dummyChoiceCategory) {
       case "FZ":
         return Colors.blue;
@@ -190,10 +175,7 @@ class RecentSR extends StatelessWidget {
   String _formatDate(String dateString) {
     try {
       if (dateString.isEmpty) return '-';
-
-      // Format tanggal sederhana untuk simulasi
-      // Dalam implementasi nyata, gunakan DateFormat
-      return dateString.split(' ')[0]; // Ambil hanya bagian tanggal
+      return dateString.split(' ')[0];
     } catch (e) {
       debugPrint('Error formatting date: $e');
       return dateString;
@@ -206,7 +188,6 @@ class RecentSR extends StatelessWidget {
     final double fem = MediaQuery.of(context).size.width / baseWidth;
     final double ffem = fem * 0.97;
 
-    // Safety check untuk index
     if (index < 0 || index >= dummySRList.length) {
       return Container(
         width: 155 * fem,
@@ -229,9 +210,7 @@ class RecentSR extends StatelessWidget {
         ),
       );
     }
-
     final outModel = dummySRList[index];
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -252,7 +231,6 @@ class RecentSR extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
               Container(
                 width: double.infinity,
                 height: 31 * fem,
@@ -277,21 +255,18 @@ class RecentSR extends StatelessWidget {
                   ),
                 ),
               ),
-
               _buildInfoRow(
                 fem: fem,
                 ffem: ffem,
                 label: 'Request Date:',
                 value: _formatDate(outModel['deliveryDate'] ?? ''),
               ),
-
               _buildInfoRow(
                 fem: fem,
                 ffem: ffem,
                 label: 'Total Item:',
                 value: outModel['totalItem']?.toString() ?? '0',
               ),
-
               Container(
                 margin: EdgeInsets.fromLTRB(4 * fem, 0, 0, 0),
                 constraints: BoxConstraints(maxWidth: 150 * fem),
@@ -340,7 +315,6 @@ class RecentSR extends StatelessWidget {
                   ],
                 ),
               ),
-
               Container(
                 margin: EdgeInsets.fromLTRB(4 * fem, 0, 0, 0),
                 constraints: BoxConstraints(maxWidth: 150 * fem),
@@ -422,3 +396,5 @@ class RecentSR extends StatelessWidget {
     );
   }
 }
+
+// checked

@@ -93,3 +93,5 @@ class GoodReceiptEmptyWidget extends StatelessWidget {
     );
   }
 }
+
+// checked

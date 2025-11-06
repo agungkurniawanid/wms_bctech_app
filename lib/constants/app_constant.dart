@@ -3,3 +3,5 @@ class AppConstants {
   static const defaultBypass = 'immobile123';
   static const appVersion = '1.0.0';
 }
+
+// checked

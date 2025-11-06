@@ -10,9 +10,9 @@ import 'package:logger/logger.dart';
 import 'package:shimmer/shimmer.dart';
 
 class DeliveryOrderDetailPage extends StatefulWidget {
-  final String grId;
+  final String doId;
 
-  const DeliveryOrderDetailPage({super.key, required this.grId});
+  const DeliveryOrderDetailPage({super.key, required this.doId});
 
   @override
   State<DeliveryOrderDetailPage> createState() =>
@@ -28,38 +28,39 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
   final Color _successColor = const Color(0xFF10B981);
   final Color _warningColor = const Color(0xFFF59E0B);
   final Color _errorColor = const Color(0xFFEF4444);
-
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final Logger _logger = Logger();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
+  final Map<String, String> _productNames = {};
+  final List<String> _filterList = ['All Items', 'With SN', 'Without SN'];
+  final int _itemsPerPage = 20;
 
   bool _isLoading = true;
   bool _isSearching = false;
   bool isRefreshing = false;
-  String _selectedFilter = 'All Items';
-  final List<String> _filterList = ['All Items', 'With SN', 'Without SN'];
-
-  DeliveryOrderModel? _grinData;
-  List<Map<String, dynamic>> _detailItems = [];
-  List<Map<String, dynamic>> _filteredItems = [];
-  final Map<String, String> _productNames = {};
-  String _grinStatus = 'Belum Dikirim';
-  Map<String, dynamic>? _editingItem;
-  int _originalQuantity = 0;
-
   bool _isLoadingMore = false;
   bool _hasMoreData = true;
-  int _currentPage = 0;
-  final int _itemsPerPage = 20; // Jumlah item per halaman
+
+  List<Map<String, dynamic>> _detailItems = [];
+  List<Map<String, dynamic>> _filteredItems = [];
   List<Map<String, dynamic>> _displayedItems = [];
+
+  int _originalQuantity = 0;
+  int _currentPage = 0;
+
+  String _selectedFilter = 'All Items';
+  String _deliveryOrderStatus = 'Belum Dikirim';
+
+  DeliveryOrderModel? _deliveryOrderData;
+  Map<String, dynamic>? _editingItem;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    _loadGrinDetailData();
+    _loadDeliveryOrderDetailData();
   }
 
   @override
@@ -71,7 +72,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     super.dispose();
   }
 
-  // Handle scroll untuk pagination
   void _onScroll() {
     if (_scrollController.position.pixels ==
         _scrollController.position.maxScrollExtent) {
@@ -79,19 +79,14 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     }
   }
 
-  // Load more data untuk pagination
   Future<void> _loadMoreData() async {
     if (_isLoadingMore || !_hasMoreData || _isSearching) {
       return;
     }
-
     setState(() {
       _isLoadingMore = true;
     });
-
-    // Simulasi delay untuk loading
     await Future.delayed(const Duration(milliseconds: 500));
-
     final startIndex = _currentPage * _itemsPerPage;
     final endIndex = startIndex + _itemsPerPage;
 
@@ -111,7 +106,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     }
   }
 
-  // Reset pagination ketika filter/search berubah
   void _resetPagination() {
     setState(() {
       _currentPage = 0;
@@ -121,57 +115,54 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     });
   }
 
-  Future<void> _loadGrinDetailData() async {
+  Future<void> _loadDeliveryOrderDetailData() async {
     try {
       setState(() {
         _isLoading = true;
       });
 
-      final grinDoc = await _firestore
+      final deliveryOrderDoc = await _firestore
           .collection('delivery_order')
-          .doc(widget.grId)
+          .doc(widget.doId)
           .get();
 
-      if (grinDoc.exists) {
-        _grinData = DeliveryOrderModel.fromFirestore(grinDoc, null);
+      if (deliveryOrderDoc.exists) {
+        _deliveryOrderData = DeliveryOrderModel.fromFirestore(
+          deliveryOrderDoc,
+          null,
+        );
 
-        if (grinDoc.exists) {
-          _grinData = DeliveryOrderModel.fromFirestore(grinDoc, null);
+        if (deliveryOrderDoc.exists) {
+          _deliveryOrderData = DeliveryOrderModel.fromFirestore(
+            deliveryOrderDoc,
+            null,
+          );
+          final kafkaStatus = deliveryOrderDoc.data()?['status'];
 
-          // === TENTUKAN STATUS DARI lastSentToKafkaLogStatus ===
-          final kafkaStatus = grinDoc.data()?['status'];
           if (kafkaStatus == null) {
-            _grinStatus = 'Belum Dikirim';
+            _deliveryOrderStatus = 'Belum Dikirim';
           } else if (kafkaStatus == 'error') {
-            _grinStatus = 'Error';
+            _deliveryOrderStatus = 'Error';
           } else if (kafkaStatus == 'success') {
-            _grinStatus = 'Completed';
+            _deliveryOrderStatus = 'Completed';
           } else {
-            _grinStatus = 'Processing';
+            _deliveryOrderStatus = 'Processing';
           }
-
-          // Process detail items
-          _detailItems = _processDetailItems(_grinData!.details);
+          _detailItems = _processDetailItems(_deliveryOrderData!.details);
           _filteredItems = List.from(_detailItems);
-          _resetPagination(); // Initialize pagination
-
-          // Load product names
+          _resetPagination();
           await _loadProductNames();
         }
-        // Process detail items
-        _detailItems = _processDetailItems(_grinData!.details);
+        _detailItems = _processDetailItems(_deliveryOrderData!.details);
         _filteredItems = List.from(_detailItems);
-        _resetPagination(); // Initialize pagination
-
-        // Load product names from IN collection
+        _resetPagination();
         await _loadProductNames();
       }
-
       setState(() {
         _isLoading = false;
       });
     } catch (e) {
-      _logger.e('Error loading GRIN detail: $e');
+      _logger.e('Error loading Delivery Order detail: $e');
       setState(() {
         _isLoading = false;
       });
@@ -188,24 +179,19 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
         'qty': detail.qty,
         'productName': _productNames[detail.productid] ?? 'Loading...',
         'hasSN': detail.sn != null && detail.sn!.isNotEmpty,
-        'originalIndex': details.indexOf(
-          detail,
-        ), // Simpan index asli untuk update
+        'originalIndex': details.indexOf(detail),
       };
     }).toList();
   }
 
   Future<void> _loadProductNames() async {
     try {
-      if (_grinData == null) return;
+      if (_deliveryOrderData == null) return;
+      final soNumber = _deliveryOrderData!.soNumber;
 
-      // Get PO number from GR IN data
-      final poNumber = _grinData!.poNumber;
-
-      // Query IN collection to find matching document
       final inQuery = await _firestore
           .collection('out')
-          .where('documentno', isEqualTo: poNumber)
+          .where('documentno', isEqualTo: soNumber)
           .limit(1)
           .get();
 
@@ -222,19 +208,16 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
               _productNames[productId] = productName;
             }
           }
-
-          // Update product names in detail items
           for (final item in _detailItems) {
             final productId = item['productid'];
             if (_productNames.containsKey(productId)) {
               item['productName'] = _productNames[productId]!;
             }
           }
-
           if (mounted) {
             setState(() {
               _filteredItems = _applyFiltersAndSearch(_detailItems);
-              _resetPagination(); // Reset pagination ketika data berubah
+              _resetPagination();
             });
           }
         }
@@ -248,9 +231,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     setState(() {
       isRefreshing = true;
     });
-
-    await _loadGrinDetailData();
-
+    await _loadDeliveryOrderDetailData();
     setState(() {
       isRefreshing = false;
     });
@@ -267,14 +248,14 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
       _searchController.clear();
       _isSearching = false;
       _filteredItems = _applyFiltersAndSearch(_detailItems);
-      _resetPagination(); // Reset pagination ketika search di-clear
+      _resetPagination();
     });
   }
 
   void _updateSearchQuery(String newQuery) {
     setState(() {
       _filteredItems = _applyFiltersAndSearch(_detailItems);
-      _resetPagination(); // Reset pagination ketika search berubah
+      _resetPagination();
     });
   }
 
@@ -282,7 +263,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     setState(() {
       _selectedFilter = value ?? 'All Items';
       _filteredItems = _applyFiltersAndSearch(_detailItems);
-      _resetPagination(); // Reset pagination ketika filter berubah
+      _resetPagination();
     });
   }
 
@@ -291,7 +272,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
   ) {
     String searchQuery = _searchController.text.toLowerCase();
 
-    // Apply filter
     List<Map<String, dynamic>> filtered = items.where((item) {
       switch (_selectedFilter) {
         case 'With SN':
@@ -302,8 +282,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
           return true;
       }
     }).toList();
-
-    // Apply search
     if (searchQuery.isNotEmpty) {
       filtered = filtered.where((item) {
         final productName = item['productName']?.toString().toLowerCase() ?? '';
@@ -319,13 +297,11 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     return filtered;
   }
 
-  // Shimmer untuk load more
   Widget _buildLoadMoreShimmer() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16.0),
       child: Column(
         children: [
-          // Shimmer untuk 20 item loading
           Shimmer.fromColors(
             baseColor: Colors.grey.shade300,
             highlightColor: Colors.grey.shade100,
@@ -335,7 +311,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
             ),
           ),
           const SizedBox(height: 16),
-          // Loading indicator kecil di bawah
           const CircularProgressIndicator(
             strokeWidth: 2,
             valueColor: AlwaysStoppedAnimation<Color>(hijauGojek),
@@ -350,7 +325,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     );
   }
 
-  // Widget untuk satu item shimmer
   Widget _buildShimmerItem() {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
@@ -369,7 +343,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Left colored indicator
           Container(
             width: 6,
             height: 80,
@@ -379,12 +352,10 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
             ),
           ),
           const SizedBox(width: 16),
-          // Content
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Product name shimmer
                 Container(
                   width: double.infinity,
                   height: 20,
@@ -394,7 +365,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Product ID row
                 Row(
                   children: [
                     Container(
@@ -433,7 +403,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                // Serial number row
                 Row(
                   children: [
                     Container(
@@ -472,7 +441,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                // Quantity row
                 Row(
                   children: [
                     Container(
@@ -518,7 +486,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     );
   }
 
-  // Indicator untuk akhir list
   Widget _buildEndOfListIndicator() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -591,7 +558,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     );
   }
 
-  // Fungsi untuk menampilkan bottom sheet edit quantity
   void _showEditQuantityBottomSheet(Map<String, dynamic> item) {
     _editingItem = item;
     _originalQuantity = item['qty'] ?? 0;
@@ -615,7 +581,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Drag Handle
             Center(
               child: Container(
                 width: 48,
@@ -627,8 +592,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
               ),
             ),
             const SizedBox(height: 20),
-
-            // Header Section
             Row(
               children: [
                 Container(
@@ -677,8 +640,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
               ],
             ),
             const SizedBox(height: 24),
-
-            // Quantity Input Section
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -807,11 +768,8 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
               ),
             ),
             const SizedBox(height: 24),
-
-            // Action Buttons
             Row(
               children: [
-                // Cancel Button
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
@@ -849,8 +807,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                   ),
                 ),
                 const SizedBox(width: 12),
-
-                // Save Button
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
@@ -915,11 +871,10 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     );
   }
 
-  // Fungsi untuk menyimpan quantity yang diedit
   Future<void> _saveQuantity() async {
     if (_editingItem == null) return;
-
     final newQuantity = int.tryParse(_quantityController.text);
+
     if (newQuantity == null || newQuantity <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -933,25 +888,22 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     }
 
     try {
-      // Update di Firestore
-      final grinRef = _firestore.collection('delivery_order').doc(widget.grId);
-      final grinDoc = await grinRef.get();
+      final deliveryOrderRef = _firestore
+          .collection('delivery_order')
+          .doc(widget.doId);
+      final deliveryOrderDoc = await deliveryOrderRef.get();
 
-      if (grinDoc.exists) {
-        final data = grinDoc.data()!;
+      if (deliveryOrderDoc.exists) {
+        final data = deliveryOrderDoc.data()!;
         final details = List<Map<String, dynamic>>.from(data['details']);
-
-        // Update quantity pada item yang sesuai
         final originalIndex = _editingItem!['originalIndex'];
+
         if (originalIndex < details.length) {
           details[originalIndex]['qty'] = newQuantity;
+          await deliveryOrderRef.update({'details': details});
 
-          await grinRef.update({'details': details});
-
-          // Update state lokal
           setState(() {
             _editingItem!['qty'] = newQuantity;
-            // Refresh filtered items dan reset pagination
             _filteredItems = _applyFiltersAndSearch(_detailItems);
             _resetPagination();
           });
@@ -983,7 +935,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     }
   }
 
-  // Fungsi untuk menghapus item
   Future<void> _deleteItem(Map<String, dynamic> item) async {
     final shouldDelete = await showDialog<bool>(
       context: context,
@@ -995,7 +946,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header dengan icon
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -1038,8 +988,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                 ],
               ),
             ),
-
-            // Content
             Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -1140,8 +1088,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                 ],
               ),
             ),
-
-            // Actions
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
               child: Row(
@@ -1208,17 +1154,18 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     );
 
     if (shouldDelete != true) return;
-
-    final grinRef = _firestore.collection('delivery_order').doc(widget.grId);
+    final deliveryOrderRef = _firestore
+        .collection('delivery_order')
+        .doc(widget.doId);
 
     try {
       await _firestore.runTransaction((transaction) async {
-        final grinSnap = await transaction.get(grinRef);
-        if (!grinSnap.exists) {
-          throw Exception('GR tidak ditemukan: ${widget.grId}');
+        final deliveryOrderSnap = await transaction.get(deliveryOrderRef);
+        if (!deliveryOrderSnap.exists) {
+          throw Exception('Delivery Order tidak ditemukan: ${widget.doId}');
         }
 
-        final data = grinSnap.data()!;
+        final data = deliveryOrderSnap.data()!;
         final details = List<Map<String, dynamic>>.from(data['details'] ?? []);
         final originalIndex = item['originalIndex'] as int;
 
@@ -1242,7 +1189,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
 
         details.removeAt(originalIndex);
 
-        transaction.update(grinRef, {'details': details});
+        transaction.update(deliveryOrderRef, {'details': details});
 
         if (isSerializedItem) {
           final serialDocRef = _firestore
@@ -1251,7 +1198,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
           final serialSnap = await transaction.get(serialDocRef);
           if (serialSnap.exists) {
             final sdata = serialSnap.data();
-            if (sdata != null && sdata['do_id'] == widget.grId) {
+            if (sdata != null && sdata['do_id'] == widget.doId) {
               transaction.delete(serialDocRef);
               return;
             }
@@ -1288,9 +1235,9 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
       );
 
       try {
-        final grinDoc = await grinRef.get();
-        if (grinDoc.exists) {
-          final data = grinDoc.data()!;
+        final deliveryOrderDoc = await deliveryOrderRef.get();
+        if (deliveryOrderDoc.exists) {
+          final data = deliveryOrderDoc.data()!;
           final details = List<Map<String, dynamic>>.from(
             data['details'] ?? [],
           );
@@ -1307,7 +1254,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                 : (rawSerial?.toString().trim() ?? '');
 
             details.removeAt(originalIndex);
-            await grinRef.update({'details': details});
+            await deliveryOrderRef.update({'details': details});
 
             if (serialNumber.isNotEmpty) {
               await _deleteSerialNumberBySn(serialNumber);
@@ -1354,10 +1301,9 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
       final upperSn = normalizedSn.toUpperCase();
 
       _logger.i(
-        '🔍 Mencoba hapus serial number: $normalizedSn (lower: $lowerSn) dari GR: ${widget.grId}',
+        '🔍 Mencoba hapus serial number: $normalizedSn (lower: $lowerSn) dari GR: ${widget.doId}',
       );
 
-      // METODE 1: Coba doc ID sesuai case (original)
       final docRefOriginal = _firestore
           .collection('serial_numbers')
           .doc(normalizedSn);
@@ -1365,7 +1311,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
 
       if (docSnapOriginal.exists) {
         final data = docSnapOriginal.data();
-        if (data != null && data['do_id'] == widget.grId) {
+        if (data != null && data['do_id'] == widget.doId) {
           await docRefOriginal.delete();
           _logger.i(
             '✅ Berhasil hapus serial number (original ID match): $normalizedSn',
@@ -1374,13 +1320,12 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
         }
       }
 
-      // METODE 2: Coba versi lowercase
       final docRefLower = _firestore.collection('serial_numbers').doc(lowerSn);
       final docSnapLower = await docRefLower.get();
 
       if (docSnapLower.exists) {
         final data = docSnapLower.data();
-        if (data != null && data['do_id'] == widget.grId) {
+        if (data != null && data['do_id'] == widget.doId) {
           await docRefLower.delete();
           _logger.i(
             '✅ Berhasil hapus serial number (lowercase match): $lowerSn',
@@ -1389,13 +1334,12 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
         }
       }
 
-      // METODE 3: Coba versi uppercase
       final docRefUpper = _firestore.collection('serial_numbers').doc(upperSn);
       final docSnapUpper = await docRefUpper.get();
 
       if (docSnapUpper.exists) {
         final data = docSnapUpper.data();
-        if (data != null && data['do_id'] == widget.grId) {
+        if (data != null && data['do_id'] == widget.doId) {
           await docRefUpper.delete();
           _logger.i(
             '✅ Berhasil hapus serial number (uppercase match): $upperSn',
@@ -1404,11 +1348,10 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
         }
       }
 
-      // METODE 4: Fallback query (jaga-jaga jika doc ID tidak sama)
       _logger.i('🧩 Fallback query by do_id...');
       final querySnapshot = await _firestore
           .collection('serial_numbers')
-          .where('do_id', isEqualTo: widget.grId)
+          .where('do_id', isEqualTo: widget.doId)
           .get();
 
       for (var doc in querySnapshot.docs) {
@@ -1472,7 +1415,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
   }
 
   Widget _buildHeaderInfo() {
-    if (_grinData == null) return const SizedBox();
+    if (_deliveryOrderData == null) return const SizedBox();
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1490,7 +1433,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
       ),
       child: Column(
         children: [
-          // GR ID and Date
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1507,7 +1449,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                   ),
                 ),
                 child: Text(
-                  _grinData!.grId,
+                  _deliveryOrderData!.doId,
                   style: TextStyle(
                     fontFamily: 'MonaSans',
                     fontSize: 14,
@@ -1517,9 +1459,9 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                 ),
               ),
               Text(
-                _grinData!.createdAt != null
+                _deliveryOrderData!.createdAt != null
                     ? DateHelper.formatDate(
-                        _grinData!.createdAt!.toIso8601String(),
+                        _deliveryOrderData!.createdAt!.toIso8601String(),
                       )
                     : 'No Date',
                 style: TextStyle(
@@ -1532,27 +1474,27 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
             ],
           ),
           const SizedBox(height: 16),
-          // PO Number and Created By
           Row(
             children: [
               Expanded(
                 child: _buildInfoItem(
                   Icons.receipt_long,
-                  'PO Number',
-                  _grinData!.poNumber,
+                  'Delivery Order Number',
+                  _deliveryOrderData!.soNumber,
                 ),
               ),
               Expanded(
                 child: _buildInfoItem(
                   Icons.person,
                   'Created By',
-                  TextHelper.formatUserName(_grinData!.createdBy ?? 'Unknown'),
+                  TextHelper.formatUserName(
+                    _deliveryOrderData!.createdBy ?? 'Unknown',
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          // Total Items and Status
           Row(
             children: [
               Expanded(
@@ -1567,8 +1509,8 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                   child: _buildInfoItem(
                     Icons.sync,
                     'Status',
-                    _grinStatus,
-                    valueColor: _getStatusColor(_grinStatus),
+                    _deliveryOrderStatus,
+                    valueColor: _getStatusColor(_deliveryOrderStatus),
                   ),
                 ),
               ),
@@ -1716,7 +1658,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
       return _buildShimmerLoader();
     }
 
-    if (_grinData == null) {
+    if (_deliveryOrderData == null) {
       return _buildErrorState();
     }
 
@@ -1782,7 +1724,7 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              "Unable to load GRIN details",
+              "Unable to load Delivery Order details",
               style: TextStyle(
                 fontFamily: 'MonaSans',
                 fontSize: 14,
@@ -1880,19 +1822,14 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
               (_isLoadingMore ? 1 : 0) +
               (!_hasMoreData && _displayedItems.isNotEmpty ? 1 : 0),
           itemBuilder: (context, index) {
-            // Loading indicator untuk load more
             if (_isLoadingMore && index == _displayedItems.length) {
               return _buildLoadMoreShimmer();
             }
-
-            // End of list indicator
             if (!_hasMoreData &&
                 _displayedItems.isNotEmpty &&
                 index == _displayedItems.length) {
               return _buildEndOfListIndicator();
             }
-
-            // Item data
             return _buildDetailCard(_displayedItems[index], index);
           },
         ),
@@ -1949,7 +1886,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Product Name and SN Status
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -1995,17 +1931,14 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Product ID
                   _buildDetailRow(Icons.qr_code, 'Product ID', productId),
                   const SizedBox(height: 8),
-                  // Serial Number
                   _buildDetailRow(
                     Icons.confirmation_number,
                     'Serial Number',
                     sn,
                   ),
                   const SizedBox(height: 8),
-                  // Quantity
                   _buildDetailRow(
                     Icons.format_list_numbered,
                     'Quantity',
@@ -2013,8 +1946,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                   ),
                   const SizedBox(height: 8),
                   const Divider(height: 24, thickness: 1),
-                  // Action buttons
-                  // Action buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -2037,11 +1968,9 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                           ),
                         ],
                       ),
-                      // HANYA TAMPILKAN TOMBOL JIKA STATUS BUKAN COMPLETED
-                      if (_grinStatus != 'Completed')
+                      if (_deliveryOrderStatus != 'Completed')
                         Row(
                           children: [
-                            // Tombol Edit hanya untuk item tanpa SN
                             if (!hasSN)
                               Container(
                                 width: 32,
@@ -2062,7 +1991,6 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
                                 ),
                               ),
                             if (!hasSN) const SizedBox(width: 8),
-                            // Tombol Hapus
                             Container(
                               width: 32,
                               height: 32,
@@ -2191,12 +2119,9 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
               mainAxisSize: MainAxisSize.max,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Information
                 _buildHeaderInfo(),
-                // List Header with filter and count
                 _buildListHeader(),
                 const SizedBox(height: 16),
-                // Content
                 _buildContent(),
               ],
             ),

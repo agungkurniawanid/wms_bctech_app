@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:logger/logger.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
+import 'package:wms_bctech/models/stock/stock_take_model.dart';
 import 'package:wms_bctech/pages/stock_take/stock_take_header_page.dart';
+import 'package:wms_bctech/controllers/stock_take_controller.dart';
 
 class StockTakePage extends StatefulWidget {
   const StockTakePage({super.key});
@@ -13,6 +15,8 @@ class StockTakePage extends StatefulWidget {
 
 class _StockTakePageState extends State<StockTakePage> {
   final TextEditingController _searchController = TextEditingController();
+  final StockTakeController _stockTakeController =
+      Get.find<StockTakeController>();
 
   bool _isSearching = false;
   bool allowBack = true;
@@ -21,64 +25,40 @@ class _StockTakePageState extends State<StockTakePage> {
   final Color hijauGojekLight = const Color(0xFF4CAF50);
   final Color hijauGojekDark = const Color(0xFF008A0E);
 
-  // Data dummy untuk menggantikan data dari Firestore
-  final List<Map<String, dynamic>> _stockList = [
-    {
-      'lGORT': ['WH-A01', 'SHELF-01'],
-      'updated': '2024-01-15 14:30:25',
-      'items': 125,
-      'status': 'active',
-    },
-    {
-      'lGORT': ['WH-B02', 'SHELF-02'],
-      'updated': '2024-01-15 13:45:10',
-      'items': 89,
-      'status': 'active',
-    },
-    {
-      'lGORT': ['WH-C03', 'SHELF-03'],
-      'updated': '2024-01-15 12:20:35',
-      'items': 234,
-      'status': 'inactive',
-    },
-    {
-      'lGORT': ['WH-D04', 'SHELF-04'],
-      'updated': '2024-01-15 11:15:50',
-      'items': 156,
-      'status': 'active',
-    },
-    {
-      'lGORT': ['WH-E05', 'SHELF-05'],
-      'updated': '2024-01-15 10:05:15',
-      'items': 67,
-      'status': 'inactive',
-    },
-  ];
-
-  List<Map<String, dynamic>> _filteredStockList = [];
-
   @override
   void initState() {
     super.initState();
-    _filteredStockList = List.from(_stockList);
+
+    // Listen to real-time updates
+    _setupListeners();
+  }
+
+  void _setupListeners() {
+    // Listen untuk perubahan data real-time
+    ever(_stockTakeController.documentListUnique, (
+      List<StockTakeModel> documents,
+    ) {
+      if (mounted) {
+        setState(() {
+          // UI akan otomatis update ketika data berubah
+          Logger().d("UI Updated with ${documents.length} documents");
+        });
+      }
+    });
+
+    // Listen untuk loading state
+    ever(_stockTakeController.isLoading, (bool loading) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   void _updateSearchQuery(String newQuery) {
     setState(() {
       searchQuery = newQuery;
-      _filterStocks(newQuery);
+      _stockTakeController.searchValue.value = newQuery;
     });
-  }
-
-  void _filterStocks(String search) {
-    if (search.isEmpty) {
-      _filteredStockList = List.from(_stockList);
-    } else {
-      final query = search.toUpperCase();
-      _filteredStockList = _stockList
-          .where((element) => element['lGORT'].join(', ').contains(query))
-          .toList();
-    }
   }
 
   void _startSearch() {
@@ -92,7 +72,7 @@ class _StockTakePageState extends State<StockTakePage> {
       _isSearching = false;
       _searchController.clear();
       searchQuery = '';
-      _filteredStockList = List.from(_stockList);
+      _stockTakeController.searchValue.value = '';
     });
   }
 
@@ -160,12 +140,41 @@ class _StockTakePageState extends State<StockTakePage> {
         onPressed: _startSearch,
         tooltip: 'Search',
       ),
+      IconButton(
+        icon: const Icon(Icons.refresh_rounded, size: 24, color: Colors.white),
+        onPressed: _refreshData,
+        tooltip: 'Refresh',
+      ),
       const SizedBox(width: 4),
     ];
   }
 
-  Widget _buildStockItem(Map<String, dynamic> stock, int index) {
-    final isActive = stock['status'] == 'active';
+  void _refreshData() {
+    _stockTakeController.refreshData();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.refresh_rounded, color: Colors.white),
+            const SizedBox(width: 12),
+            Text(
+              'Refreshing data...',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        backgroundColor: hijauGojek,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Widget _buildStockItem(StockTakeModel stock, int index) {
+    final isActive =
+        stock.whValue.isNotEmpty; // Adjust based on your active logic
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -233,9 +242,9 @@ class _StockTakePageState extends State<StockTakePage> {
                         children: [
                           Expanded(
                             child: Text(
-                              stock['lGORT'].isNotEmpty
-                                  ? stock['lGORT'].join(', ')
-                                  : '-',
+                              stock.whName.isNotEmpty
+                                  ? stock.whName
+                                  : 'Unknown Warehouse',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -287,7 +296,7 @@ class _StockTakePageState extends State<StockTakePage> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${stock['items']} Items',
+                              '${stock.countDetail} Items',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -310,7 +319,7 @@ class _StockTakePageState extends State<StockTakePage> {
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              'Last: ${stock['updated']}',
+                              'Last Transaction: ${_stockTakeController.formatDate(stock.lastQuery)}',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey.shade600,
@@ -393,15 +402,25 @@ class _StockTakePageState extends State<StockTakePage> {
               height: 1.5,
             ),
           ),
+          const SizedBox(height: 20),
+          ElevatedButton.icon(
+            onPressed: _refreshData,
+            icon: Icon(Icons.refresh_rounded),
+            label: Text('Refresh Data'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: hijauGojek,
+              foregroundColor: Colors.white,
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildStatsBar() {
-    final totalItems = _filteredStockList.length;
-    final activeItems = _filteredStockList
-        .where((item) => item['status'] == 'active')
+    final totalItems = _stockTakeController.documentListUnique.length;
+    final activeItems = _stockTakeController.documentListUnique
+        .where((item) => item.whValue.isNotEmpty)
         .length;
 
     return Container(
@@ -491,9 +510,12 @@ class _StockTakePageState extends State<StockTakePage> {
     );
   }
 
-  void _onStockItemTap(Map<String, dynamic> stock) {
-    // Navigasi ke halaman detail dengan animasi
-    Logger().d('Selected stock: ${stock['lGORT']}');
+  void _onStockItemTap(StockTakeModel stock) {
+    Logger().d('Selected stock: ${stock.whName}');
+
+    // Set documentNo untuk detail streaming
+    _stockTakeController.documentNo.value = stock.documentid;
+    _stockTakeController.bindDocumentDetailsStream(stock.documentid);
 
     // Tampilkan snackbar modern
     ScaffoldMessenger.of(context).showSnackBar(
@@ -504,7 +526,7 @@ class _StockTakePageState extends State<StockTakePage> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Opening ${stock['lGORT'].join(', ')}...',
+                'Opening ${stock.whName}...',
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
@@ -521,7 +543,23 @@ class _StockTakePageState extends State<StockTakePage> {
       ),
     );
 
-    Get.to(() => StockTakeHeader()); // Uncomment when ready
+    Get.to(() => StockTakeHeader());
+  }
+
+  List<StockTakeModel> _getFilteredStocks() {
+    if (searchQuery.isEmpty) {
+      return _stockTakeController.documentListUnique;
+    }
+
+    final query = searchQuery.toLowerCase();
+    return _stockTakeController.documentListUnique
+        .where(
+          (stock) =>
+              stock.whName.toLowerCase().contains(query) ||
+              stock.locatorValue.toLowerCase().contains(query) ||
+              stock.whValue.toLowerCase().contains(query),
+        )
+        .toList();
   }
 
   @override
@@ -568,27 +606,45 @@ class _StockTakePageState extends State<StockTakePage> {
                 ),
           centerTitle: true,
         ),
-        body: Column(
-          children: [
-            // Stats Bar
-            _buildStatsBar(),
+        body: Obx(() {
+          final filteredStocks = _getFilteredStocks();
 
-            // List
-            Expanded(
-              child: _filteredStockList.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.only(bottom: 16),
-                      itemCount: _filteredStockList.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        final stock = _filteredStockList[index];
-                        return _buildStockItem(stock, index);
-                      },
-                    ),
-            ),
-          ],
-        ),
+          return Column(
+            children: [
+              // Stats Bar
+              _buildStatsBar(),
+
+              // Loading Indicator
+              if (_stockTakeController.isLoading.value)
+                LinearProgressIndicator(
+                  backgroundColor: Colors.grey.shade200,
+                  valueColor: AlwaysStoppedAnimation<Color>(hijauGojek),
+                ),
+
+              // List
+              Expanded(
+                child: filteredStocks.isEmpty
+                    ? _buildEmptyState()
+                    : RefreshIndicator(
+                        onRefresh: () async {
+                          await _stockTakeController.refreshData();
+                        },
+                        backgroundColor: Colors.white,
+                        color: hijauGojek,
+                        child: ListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.only(bottom: 16),
+                          itemCount: filteredStocks.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final stock = filteredStocks[index];
+                            return _buildStockItem(stock, index);
+                          },
+                        ),
+                      ),
+              ),
+            ],
+          );
+        }),
       ),
     );
   }
@@ -598,21 +654,4 @@ class _StockTakePageState extends State<StockTakePage> {
     _searchController.dispose();
     super.dispose();
   }
-}
-
-// Fungsi safeGoogleFont dummy untuk menghindari error
-TextStyle safeGoogleFont(
-  String fontFamily, {
-  double fontSize = 14,
-  FontWeight fontWeight = FontWeight.normal,
-  double height = 1.0,
-  Color color = Colors.black,
-}) {
-  return TextStyle(
-    fontFamily: fontFamily,
-    fontSize: fontSize,
-    fontWeight: fontWeight,
-    height: height,
-    color: color,
-  );
 }

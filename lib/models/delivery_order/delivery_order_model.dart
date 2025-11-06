@@ -2,16 +2,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:wms_bctech/models/delivery_order/delivery_order_detail_model.dart';
 
 class DeliveryOrderModel {
-  final String grId;
-  final String poNumber;
+  final String doId;
+  final String soNumber;
   final String? createdBy;
   final DateTime? createdAt;
   final String? status;
   final List<DeliveryOrderDetailModel> details;
 
   DeliveryOrderModel({
-    required this.grId,
-    required this.poNumber,
+    required this.doId,
+    required this.soNumber,
     required this.details,
     this.createdBy,
     this.createdAt,
@@ -25,8 +25,8 @@ class DeliveryOrderModel {
     final data = snapshot.data()!;
 
     return DeliveryOrderModel(
-      grId: data['grid'] ?? '',
-      poNumber: data['ponumber'] ?? '',
+      doId: data['doid'] ?? '',
+      soNumber: data['sonumber'] ?? '',
       createdBy: data['createdby'] ?? '',
       createdAt: (data['createdat'] as Timestamp?)?.toDate(),
       details: _parseDetails(data['details']),
@@ -52,8 +52,8 @@ class DeliveryOrderModel {
   // Method untuk convert ke Map (jika diperlukan untuk write operations)
   Map<String, dynamic> toFirestore() {
     return {
-      'grid': grId,
-      'ponumber': poNumber,
+      'doid': doId,
+      'sonumber': soNumber,
       'createdby': createdBy,
       'createdat': createdAt,
       'status': status,
@@ -63,6 +63,6 @@ class DeliveryOrderModel {
 
   @override
   String toString() {
-    return 'DeliveryOrderModel(grid: $grId, ponumber: $poNumber, details: $details)';
+    return 'DeliveryOrderModel(doId: $doId, sonumber: $soNumber, details: $details)';
   }
 }

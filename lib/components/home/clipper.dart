@@ -21,3 +21,5 @@ class CurveClipper extends CustomClipper<Path> {
   @override
   bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
+
+// checked

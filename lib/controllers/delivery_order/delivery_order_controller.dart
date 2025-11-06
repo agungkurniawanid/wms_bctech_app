@@ -12,9 +12,10 @@ import 'package:wms_bctech/models/delivery_order/delivery_order_model.dart';
 
 class DeliveryOrderController extends GetxController {
   final Logger _logger = Logger();
-  // Variabel GetX (State) - Nama variabel sisi Klien (seperti grinList) tetap
-  final RxList<DeliveryOrderModel> grinList = <DeliveryOrderModel>[].obs;
-  final RxList<DeliveryOrderModel> grinListBackup = <DeliveryOrderModel>[].obs;
+  final RxList<DeliveryOrderModel> deliveryOrderList =
+      <DeliveryOrderModel>[].obs;
+  final RxList<DeliveryOrderModel> deliveryOrderListBackup =
+      <DeliveryOrderModel>[].obs;
   final RxBool isLoading = true.obs;
   final RxBool isSearching = false.obs;
   final RxString searchQuery = ''.obs;
@@ -22,14 +23,10 @@ class DeliveryOrderController extends GetxController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final DeliveryOrderSequenceController _sequenceService =
       DeliveryOrderSequenceController();
-
-  // Debouncer untuk Search
   final Rx<String> _currentSearchQuery = ''.obs;
   Timer? _searchDebounceTimer;
   bool _isSearchOperationRunning = false;
   String _lastCompletedSearchQuery = '';
-
-  // Variabel Pagination
   final int _pageSize = 20;
   DocumentSnapshot? _lastDocument;
   final RxBool _hasMoreData = true.obs;
@@ -40,7 +37,7 @@ class DeliveryOrderController extends GetxController {
   void onReady() {
     _logger.d('🎯 DeliveryOrderController onReady dipanggil');
     super.onReady();
-    loadInitialGrinData();
+    loadInitialDeliveryOrderData();
   }
 
   @override
@@ -52,21 +49,20 @@ class DeliveryOrderController extends GetxController {
     });
   }
 
-  // Method untuk load data awal
-  Future<void> loadInitialGrinData() async {
-    _logger.d('📥 loadInitialGrinData dipanggil');
+  Future<void> loadInitialDeliveryOrderData() async {
+    _logger.d('📥 loadInitialDeliveryOrderData dipanggil');
     try {
       isLoading.value = true;
       _hasMoreData.value = true;
       _lastDocument = null;
       _totalLoaded.value = 0;
-      grinList.clear();
-      grinListBackup.clear();
+      deliveryOrderList.clear();
+      deliveryOrderListBackup.clear();
 
-      await _loadMoreGrinData(isInitial: true);
+      await _loadMoreDeliveryOrderData(isInitial: true);
 
       _logger.d(
-        '✅ Data Delivery Order awal berhasil diload: ${grinList.length} items',
+        '✅ Data Delivery Order awal berhasil diload: ${deliveryOrderList.length} items',
       );
     } catch (e, stackTrace) {
       _logger.e('❌ Error loading initial DO data: $e');
@@ -76,15 +72,14 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  // Method untuk load lebih banyak data (pagination)
-  Future<void> loadMoreGrinData() async {
+  Future<void> loadMoreDeliveryOrderData() async {
     if (isLoadingMore.value || !_hasMoreData.value || isSearching.value) {
       return;
     }
 
     try {
       isLoadingMore.value = true;
-      await _loadMoreGrinData(isInitial: false);
+      await _loadMoreDeliveryOrderData(isInitial: false);
     } catch (e, stackTrace) {
       _logger.e('❌ Error loading more DO data: $e');
       _logger.e('📋 Stack trace: $stackTrace');
@@ -93,19 +88,15 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  // Core method untuk load data dengan pagination
-  Future<void> _loadMoreGrinData({required bool isInitial}) async {
+  Future<void> _loadMoreDeliveryOrderData({required bool isInitial}) async {
     _logger.d(
-      '📥 _loadMoreGrinData - isInitial: $isInitial, lastDocument: $_lastDocument',
+      '📥 _loadMoreDeliveryOrderData - isInitial: $isInitial, lastDocument: $_lastDocument',
     );
 
     try {
       Query query = _firestore
           .collection('delivery_order')
-          .orderBy(
-            'createdat',
-            descending: true,
-          ) // Sesuai struktur: 'createdat'
+          .orderBy('createdat', descending: true)
           .limit(_pageSize);
 
       if (!isInitial && _lastDocument != null) {
@@ -120,17 +111,15 @@ class DeliveryOrderController extends GetxController {
         return;
       }
 
-      final List<DeliveryOrderModel> newGrList = [];
+      final List<DeliveryOrderModel> newDeliveryOrderList = [];
 
       for (final doc in snapshot.docs) {
         try {
-          // Model 'DeliveryOrderModel' diasumsikan menangani mapping
-          // (misal: fromFirestore mengambil 'doid' dan 'soid')
-          final grModel = DeliveryOrderModel.fromFirestore(
+          final deliveryOrderModel = DeliveryOrderModel.fromFirestore(
             doc as DocumentSnapshot<Map<String, dynamic>>,
             null,
           );
-          newGrList.add(grModel);
+          newDeliveryOrderList.add(deliveryOrderModel);
         } catch (e) {
           _logger.e('❌ Error parsing DO document ${doc.id}: $e');
         }
@@ -139,42 +128,40 @@ class DeliveryOrderController extends GetxController {
       _lastDocument = snapshot.docs.last;
 
       if (isInitial) {
-        grinList.assignAll(newGrList);
-        grinListBackup.assignAll(newGrList);
+        deliveryOrderList.assignAll(newDeliveryOrderList);
+        deliveryOrderListBackup.assignAll(newDeliveryOrderList);
       } else {
-        grinList.addAll(newGrList);
-        grinListBackup.addAll(newGrList);
+        deliveryOrderList.addAll(newDeliveryOrderList);
+        deliveryOrderListBackup.addAll(newDeliveryOrderList);
       }
 
-      _totalLoaded.value = grinList.length;
+      _totalLoaded.value = deliveryOrderList.length;
       _hasMoreData.value = snapshot.docs.length == _pageSize;
 
       _logger.d(
-        '✅ Loaded ${newGrList.length} DO documents, total: ${grinList.length}',
+        '✅ Loaded ${newDeliveryOrderList.length} DO documents, total: ${deliveryOrderList.length}',
       );
       _logger.d('📊 Has more data: ${_hasMoreData.value}');
     } catch (e, stackTrace) {
-      _logger.e('❌ Error in _loadMoreGrinData: $e');
+      _logger.e('❌ Error in _loadMoreDeliveryOrderData: $e');
       _logger.e('📋 Stack trace: $stackTrace');
       rethrow;
     }
   }
 
-  // Refresh data (pull to refresh)
   Future<void> refreshData() async {
     _logger.d('🔄 refreshData dipanggil');
     try {
       if (isSearching.value) {
         clearSearch();
       }
-      await loadInitialGrinData();
+      await loadInitialDeliveryOrderData();
     } catch (e, stackTrace) {
       _logger.e('❌ Error refreshing data: $e');
       _logger.e('📋 Stack trace: $stackTrace');
     }
   }
 
-  // --- Logika Search (Sistem A) ---
   void _handleSearchQueryChange(String query) {
     _logger.d('🔄 Search query changed: "$query"');
     _searchDebounceTimer?.cancel();
@@ -194,9 +181,9 @@ class DeliveryOrderController extends GetxController {
     _isSearchOperationRunning = false;
     isSearching.value = false;
     searchQuery.value = '';
-    if (grinListBackup.isNotEmpty) {
-      grinList.assignAll(grinListBackup);
-      _logger.d('✅ Data restored: ${grinList.length} items');
+    if (deliveryOrderListBackup.isNotEmpty) {
+      deliveryOrderList.assignAll(deliveryOrderListBackup);
+      _logger.d('✅ Data restored: ${deliveryOrderList.length} items');
     }
   }
 
@@ -220,8 +207,8 @@ class DeliveryOrderController extends GetxController {
     } catch (e, stackTrace) {
       _logger.e('❌ Search operation failed: $e');
       _logger.e('📋 Stack trace: $stackTrace');
-      if (grinListBackup.isNotEmpty) {
-        grinList.assignAll(grinListBackup);
+      if (deliveryOrderListBackup.isNotEmpty) {
+        deliveryOrderList.assignAll(deliveryOrderListBackup);
       }
     } finally {
       _isSearchOperationRunning = false;
@@ -230,39 +217,37 @@ class DeliveryOrderController extends GetxController {
 
   Future<void> _performSearchOperation(String query) async {
     _logger.d(
-      '📊 Starting search operation, backup data: ${grinListBackup.length} items',
+      '📊 Starting search operation, backup data: ${deliveryOrderListBackup.length} items',
     );
-    if (grinListBackup.isEmpty) {
+    if (deliveryOrderListBackup.isEmpty) {
       _logger.w('⚠️ No backup data available for search');
       return;
     }
 
-    final listToFilter = List<DeliveryOrderModel>.from(grinListBackup);
+    final listToFilter = List<DeliveryOrderModel>.from(deliveryOrderListBackup);
     final searchKey = query.toLowerCase().trim();
     _logger.d('🔍 Filtering ${listToFilter.length} items for: "$searchKey"');
 
     try {
       final filteredList = await Isolate.run(() {
         try {
-          return listToFilter.where((gr) {
+          return listToFilter.where((deliverOrder) {
             try {
-              // Asumsi model.grId memegang 'doid' dan model.poNumber memegang 'soid'
-              final grId = gr.grId.toLowerCase();
-              final poNumber = gr.poNumber.toLowerCase(); // Ini adalah 'soid'
+              final doId = deliverOrder.doId.toLowerCase();
+              final soNumber = deliverOrder.soNumber.toLowerCase();
               final createdBy = TextHelper.formatUserName(
-                // Asumsi model.createdBy memegang 'createdby'
-                gr.createdBy ?? 'Unknown',
+                deliverOrder.createdBy ?? 'Unknown',
               ).toLowerCase();
 
-              final hasMatchingDetail = gr.details.any((detail) {
-                final sn = detail.sn?.toLowerCase() ?? ''; // Asumsi model.sn
+              final hasMatchingDetail = deliverOrder.details.any((detail) {
+                final sn = detail.sn?.toLowerCase() ?? '';
                 return sn.contains(searchKey);
               });
 
-              return grId.contains(searchKey) || // Search by DO ID
-                  poNumber.contains(searchKey) || // Search by SO ID
-                  createdBy.contains(searchKey) || // Search by User
-                  hasMatchingDetail; // Search by SN
+              return doId.contains(searchKey) ||
+                  soNumber.contains(searchKey) ||
+                  createdBy.contains(searchKey) ||
+                  hasMatchingDetail;
             } catch (e) {
               return false;
             }
@@ -275,7 +260,7 @@ class DeliveryOrderController extends GetxController {
       _logger.d('🏁 Isolate completed, found: ${filteredList.length} items');
 
       if (_currentSearchQuery.value == query) {
-        grinList.assignAll(filteredList);
+        deliveryOrderList.assignAll(filteredList);
         _logger.d('✅ Search results updated with ${filteredList.length} items');
       } else {
         _logger.d('⏭️ Query changed during search, ignoring results');
@@ -313,28 +298,29 @@ class DeliveryOrderController extends GetxController {
     setSearchMode(false);
   }
 
-  // --- Logika Search (Sistem B) ---
-  void updateSearchQueryGrinPage(String newQuery) {
-    _logger.d('🔄 updateSearchQueryGrinPage: "$newQuery"');
+  void updateSearchQueryDeliveryOrderPage(String newQuery) {
+    _logger.d('🔄 updateSearchQueryDeliveryOrderPage: "$newQuery"');
     if (newQuery.isEmpty) {
       setSearchMode(false);
     } else {
       setSearchMode(true);
-      searchGrin(newQuery);
+      searchDeliveryOrder(newQuery);
     }
   }
 
-  void searchGrin(String query) async {
-    _logger.d('🔍 searchGrin dipanggil dengan query: "$query"');
+  void searchDeliveryOrder(String query) async {
+    _logger.d('🔍 searchDeliveryOrder dipanggil dengan query: "$query"');
     try {
       await _updateSearchState(query, true);
-      _logger.d('📊 Data sebelum search: ${grinListBackup.length} items');
+      _logger.d(
+        '📊 Data sebelum search: ${deliveryOrderListBackup.length} items',
+      );
 
       if (query.isEmpty) {
         _logger.d('🔄 Query kosong, restore data dari backup');
-        if (grinListBackup.isNotEmpty) {
-          grinList.assignAll(grinListBackup);
-          _logger.d('✅ Data restored: ${grinList.length} items');
+        if (deliveryOrderListBackup.isNotEmpty) {
+          deliveryOrderList.assignAll(deliveryOrderListBackup);
+          _logger.d('✅ Data restored: ${deliveryOrderList.length} items');
         } else {
           _logger.w('⚠️ Backup data kosong, tidak ada data untuk direstore');
         }
@@ -342,15 +328,16 @@ class DeliveryOrderController extends GetxController {
         return;
       }
 
-      final listToFilter = List<DeliveryOrderModel>.from(grinListBackup);
+      final listToFilter = List<DeliveryOrderModel>.from(
+        deliveryOrderListBackup,
+      );
       final searchKey = query.toLowerCase().trim();
       _logger.d('🚀 Memulai filter di Isolate untuk keyword: "$searchKey"');
 
       final filteredList = await Isolate.run(() {
         return listToFilter.where((gr) {
-          // Asumsi model.grId memegang 'doid' dan model.poNumber memegang 'soid'
-          final grId = gr.grId.toLowerCase();
-          final poNumber = gr.poNumber.toLowerCase(); // Ini adalah 'soid'
+          final doId = gr.doId.toLowerCase();
+          final soNumber = gr.soNumber.toLowerCase();
           final createdBy = TextHelper.formatUserName(
             gr.createdBy ?? 'Unknown',
           ).toLowerCase();
@@ -360,9 +347,9 @@ class DeliveryOrderController extends GetxController {
             return sn.contains(searchKey);
           });
 
-          return grId.contains(searchKey) || // Search by DO ID
-              poNumber.contains(searchKey) || // Search by SO ID
-              createdBy.contains(searchKey) || // Search by User
+          return doId.contains(searchKey) ||
+              soNumber.contains(searchKey) ||
+              createdBy.contains(searchKey) ||
               hasMatchingDetail;
         }).toList();
       });
@@ -370,7 +357,7 @@ class DeliveryOrderController extends GetxController {
       _logger.d('🏁 Isolate selesai, hasil: ${filteredList.length} items');
 
       if (searchQuery.value == query) {
-        grinList.assignAll(filteredList);
+        deliveryOrderList.assignAll(filteredList);
         await _updateSearchState(query, false);
         _logger.d(
           '✅ Search completed, data diupdate dengan ${filteredList.length} items',
@@ -379,7 +366,7 @@ class DeliveryOrderController extends GetxController {
         _logger.d('⏭️ Query berubah, abaikan hasil Isolate lama');
       }
     } catch (e, stackTrace) {
-      _logger.e('❌ Error di searchGrin: $e');
+      _logger.e('❌ Error di searchDeliveryOrder: $e');
       _logger.e('📋 Stack trace: $stackTrace');
       await _updateSearchState('', false);
     }
@@ -392,12 +379,11 @@ class DeliveryOrderController extends GetxController {
     });
   }
 
-  // --- Logika Loading (Sistem B) ---
-  Future<void> loadGrinData() async {
-    _logger.d('📥 loadGrinData dipanggil');
+  Future<void> loadDeliveryOrderData() async {
+    _logger.d('📥 loadDeliveryOrderData dipanggil');
     try {
       isLoading.value = true;
-      await getGrinStream().first;
+      await getDeliveryOrderStream().first;
       _logger.d('✅ Data DO berhasil diload');
       isLoading.value = false;
     } catch (e, stackTrace) {
@@ -407,8 +393,8 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  Stream<List<DeliveryOrderModel>> getGrinStream() {
-    _logger.d('📡 getGrinStream dipanggil');
+  Stream<List<DeliveryOrderModel>> getDeliveryOrderStream() {
+    _logger.d('📡 getDeliveryOrderStream dipanggil');
     final oneMonthAgo = DateTime.now().subtract(const Duration(days: 30));
     final startOfDay = DateTime(
       oneMonthAgo.year,
@@ -419,10 +405,10 @@ class DeliveryOrderController extends GetxController {
     return _firestore
         .collection('delivery_order')
         .where(
-          'createdat', // Sesuai struktur: 'createdat'
+          'createdat',
           isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
         )
-        .orderBy('createdat', descending: true) // Sesuai struktur: 'createdat'
+        .orderBy('createdat', descending: true)
         .snapshots()
         .asyncMap((snapshot) async {
           _logger.d(
@@ -431,16 +417,17 @@ class DeliveryOrderController extends GetxController {
           final List<DeliveryOrderModel> grList = [];
           for (final doc in snapshot.docs) {
             try {
-              // Asumsi Model menangani mapping
-              final grModel = DeliveryOrderModel.fromFirestore(doc, null);
-              grList.add(grModel);
+              final deliveryOrderModel = DeliveryOrderModel.fromFirestore(
+                doc,
+                null,
+              );
+              grList.add(deliveryOrderModel);
             } catch (e) {
               _logger.e('❌ Error parsing DO document ${doc.id}: $e');
             }
           }
 
           grList.sort((a, b) {
-            // Asumsi Model.createdAt adalah DateTime
             final dateA = a.createdAt;
             final dateB = b.createdAt;
             if (dateA == null && dateB == null) return 0;
@@ -449,19 +436,18 @@ class DeliveryOrderController extends GetxController {
             return dateB.compareTo(dateA);
           });
 
-          grinListBackup.value = List.from(grList);
-          grinList.value = List.from(grList);
+          deliveryOrderListBackup.value = List.from(grList);
+          deliveryOrderList.value = List.from(grList);
           _logger.d('✅ Backup data diupdate: ${grList.length} items');
           _logger.d('✅ Loaded ${grList.length} DO documents dari last 30 days');
           return grList;
         })
         .handleError((error) {
-          _logger.e('❌ Stream error in getGrinStream: $error');
+          _logger.e('❌ Stream error in getDeliveryOrderStream: $error');
           return <DeliveryOrderModel>[];
         });
   }
 
-  // --- Logika Validasi SN ---
   Future<bool> isSerialNumberUniqueGlobal(String serialNumber) async {
     try {
       final trimmedSerial = serialNumber.trim().toLowerCase();
@@ -476,14 +462,13 @@ class DeliveryOrderController extends GetxController {
         final details = data['details'] as List<dynamic>?;
         if (details != null) {
           for (final detail in details) {
-            // Asumsi field SN di 'details' adalah 'SN' (uppercase)
             final detailSn = detail['SN'] as String?;
             if (detailSn != null && detailSn.trim().isNotEmpty) {
               final existingSn = detailSn.trim().toLowerCase();
               if (existingSn == trimmedSerial) {
                 _logger.w('❌ Serial number duplikat ditemukan:');
                 _logger.w('  Serial: $trimmedSerial');
-                _logger.w('  DO ID: ${doc.id}'); // doc.id adalah 'doid'
+                _logger.w('  DO ID: ${doc.id}');
                 _logger.w('  Product: ${detail['productid']}');
                 return false;
               }
@@ -499,30 +484,27 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  void sortGroupedGrin(String sortBy) {
+  void sortGroupedDeliveryOrder(String sortBy) {
     selectedSort.value = sortBy;
-    final List<DeliveryOrderModel> sortedList = List.from(grinList);
+    final List<DeliveryOrderModel> sortedList = List.from(deliveryOrderList);
 
     switch (sortBy) {
-      case 'GR ID': // Teks UI, bisa tetap 'GR ID'
-        // Asumsi model.grId memegang 'doid'
-        sortedList.sort((a, b) => a.grId.compareTo(b.grId));
+      case 'DO ID':
+        sortedList.sort((a, b) => a.doId.compareTo(b.doId));
         break;
-      case 'PO Number': // Teks UI, bisa tetap 'PO Number'
-        // Asumsi model.poNumber memegang 'soid'
-        sortedList.sort((a, b) => a.poNumber.compareTo(b.poNumber));
+      case 'SO Number':
+        sortedList.sort((a, b) => a.soNumber.compareTo(b.soNumber));
         break;
       case 'Created Date':
       default:
         sortedList.sort((a, b) {
-          // Asumsi model.createdAt adalah DateTime
           final aDate = a.createdAt ?? DateTime(0);
           final bDate = b.createdAt ?? DateTime(0);
           return bDate.compareTo(aDate);
         });
         break;
     }
-    grinList.assignAll(sortedList);
+    deliveryOrderList.assignAll(sortedList);
   }
 
   Future<bool> isSerialNumberUniqueOptimized(String serialNumber) async {
@@ -530,8 +512,6 @@ class DeliveryOrderController extends GetxController {
       final trimmedSerial = serialNumber.trim();
       if (trimmedSerial.isEmpty) return true;
 
-      // Query ini mungkin tidak berfungsi seperti yang diharapkan di Firestore
-      // jika 'details' berisi map yang kompleks.
       final querySnapshot = await _firestore
           .collection('delivery_order')
           .where(
@@ -554,7 +534,6 @@ class DeliveryOrderController extends GetxController {
       return isUnique;
     } catch (e) {
       _logger.e('❌ Error optimized serial number check: $e');
-      // Fallback ke metode global yang lebih lambat
       return await isSerialNumberUniqueGlobal(serialNumber);
     }
   }
@@ -569,7 +548,7 @@ class DeliveryOrderController extends GetxController {
         final details = data['details'] as List<dynamic>?;
         if (details != null) {
           for (final detail in details) {
-            final sn = detail['SN'] as String?; // Asumsi field 'SN'
+            final sn = detail['SN'] as String?;
             if (sn != null && sn.trim().isNotEmpty) {
               existingSerials.add(sn.trim().toLowerCase());
             }
@@ -584,7 +563,6 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  // Ini adalah metode validasi yang paling direkomendasikan
   Future<bool> isSerialNumberUnique(String serialNumber) async {
     try {
       final trimmed = serialNumber.trim().toLowerCase();
@@ -596,11 +574,9 @@ class DeliveryOrderController extends GetxController {
           .get();
 
       if (doc.exists) {
-        // PERBAIKAN: Logika Anda sudah benar menggunakan 'do_id'
         _logger.w('❌ SN $trimmed sudah ada di DO: ${doc['do_id']}');
         return false;
       }
-
       _logger.d('✅ SN $trimmed unik secara global');
       return true;
     } catch (e) {
@@ -635,13 +611,12 @@ class DeliveryOrderController extends GetxController {
   }
 
   Future<Map<String, dynamic>> validateAndAddGrDetails({
-    required String grId, // Ini adalah 'doid'
+    required String doId,
     required List<DeliveryOrderDetailModel> newDetails,
   }) async {
     try {
       final List<String> serialNumbers = [];
       for (final detail in newDetails) {
-        // Asumsi model.sn
         if (detail.sn != null && detail.sn!.isNotEmpty) {
           serialNumbers.add(detail.sn!);
         }
@@ -655,8 +630,6 @@ class DeliveryOrderController extends GetxController {
               'Terdapat duplikat serial number dalam data yang akan disimpan',
         };
       }
-
-      // Menggunakan metode validasi terbaik
       for (final serialNumber in serialNumbers) {
         final isUnique = await isSerialNumberUnique(serialNumber);
         if (!isUnique) {
@@ -667,14 +640,14 @@ class DeliveryOrderController extends GetxController {
         }
       }
 
-      return await updateGrDetails(grId: grId, details: newDetails);
+      return await updateGrDetails(doId: doId, details: newDetails);
     } catch (e) {
       return {'success': false, 'error': 'Validasi gagal: $e'};
     }
   }
 
   Future<Map<String, dynamic>> updateGrDetailsWithValidation({
-    required String grId, // Ini adalah 'doid'
+    required String doId,
     required List<DeliveryOrderDetailModel> newDetails,
   }) async {
     try {
@@ -686,7 +659,6 @@ class DeliveryOrderController extends GetxController {
       _logger.d('🔍 Validasi ${serialNumbersToValidate.length} serial numbers');
 
       for (final serial in serialNumbersToValidate) {
-        // Menggunakan metode validasi yang lebih lambat
         final isUnique = await isSerialNumberUniqueOptimized(serial);
         if (!isUnique) {
           return {
@@ -698,7 +670,7 @@ class DeliveryOrderController extends GetxController {
       }
 
       _logger.d('✅ Semua serial numbers valid, melanjutkan penyimpanan...');
-      return await updateGrDetails(grId: grId, details: newDetails);
+      return await updateGrDetails(doId: doId, details: newDetails);
     } catch (e) {
       _logger.e('❌ Error update DO details dengan validasi: $e');
       return {'success': false, 'error': 'Validasi gagal: $e'};
@@ -706,17 +678,17 @@ class DeliveryOrderController extends GetxController {
   }
 
   Future<Map<String, dynamic>> updateGrDetails({
-    required String grId, // Ini adalah 'doid'
+    required String doId,
     required List<DeliveryOrderDetailModel> details,
   }) async {
     try {
-      final docRef = _firestore.collection('delivery_order').doc(grId);
+      final docRef = _firestore.collection('delivery_order').doc(doId);
 
       await _firestore.runTransaction((transaction) async {
         final docSnapshot = await transaction.get(docRef);
 
         if (!docSnapshot.exists) {
-          throw Exception('DO document dengan ID $grId tidak ditemukan');
+          throw Exception('DO document dengan ID $doId tidak ditemukan');
         }
 
         transaction.update(docRef, {
@@ -725,7 +697,7 @@ class DeliveryOrderController extends GetxController {
         });
       });
 
-      _logger.d('✅ DO details updated: $grId dengan ${details.length} items');
+      _logger.d('✅ DO details updated: $doId dengan ${details.length} items');
       return {
         'success': true,
         'message': 'Details berhasil diupdate dengan ${details.length} items',
@@ -736,26 +708,25 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  Future<String> generateGrId() async {
+  Future<String> generatedoId() async {
     final currentYear = DateTime.now().year.toString();
 
     try {
       final sequenceToUse = await _sequenceService.getNextAvailableSequence();
       final sequenceString = sequenceToUse.toString().padLeft(7, '0');
-      // PENYESUAIAN: 'GR' menjadi 'DO'
-      final generatedGrId = 'DO$currentYear$sequenceString';
+      final generateddoId = 'DO$currentYear$sequenceString';
 
       _logger.d(
-        '🎯 Generated DO ID: $generatedGrId (sequence: $sequenceToUse)',
+        '🎯 Generated DO ID: $generateddoId (sequence: $sequenceToUse)',
       );
 
-      return generatedGrId;
+      return generateddoId;
     } catch (e) {
       _logger.e('❌ CRITICAL: Failed to generate DO ID after retries: $e');
 
       Get.snackbar(
         'Error',
-        'Gagal generate DO ID. Silakan coba lagi.', // 'GR' -> 'DO'
+        'Gagal generate DO ID. Silakan coba lagi.',
         snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red,
         colorText: Colors.white,
@@ -765,17 +736,16 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  Future<void> cancelGrCreation(String grId) async {
+  Future<void> cancelGrCreation(String doId) async {
     try {
-      // PENYESUAIAN: 'GR' menjadi 'DO'
-      final sequenceMatch = RegExp(r'DO\d{4}(\d{7})$').firstMatch(grId);
+      final sequenceMatch = RegExp(r'DO\d{4}(\d{7})$').firstMatch(doId);
       if (sequenceMatch != null) {
         final sequence = int.tryParse(sequenceMatch.group(1)!);
         if (sequence != null) {
           await _sequenceService.cancelReservation(sequence);
-          await _markGrAsCancelled(grId);
+          await _markGrAsCancelled(doId);
 
-          _logger.d('✅ DO creation CANCELLED: $grId (sequence: $sequence)');
+          _logger.d('✅ DO creation CANCELLED: $doId (sequence: $sequence)');
         }
       }
     } catch (e) {
@@ -783,17 +753,17 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  Future<void> _markGrAsCancelled(String grId) async {
+  Future<void> _markGrAsCancelled(String doId) async {
     try {
-      final docRef = _firestore.collection('delivery_order').doc(grId);
+      final docRef = _firestore.collection('delivery_order').doc(doId);
       final doc = await docRef.get();
 
       if (doc.exists) {
         await docRef.update({
           'status': 'cancelled',
-          'cancelledat': Timestamp.fromDate(DateTime.now()), // Sesuai struktur
+          'cancelledat': Timestamp.fromDate(DateTime.now()),
         });
-        _logger.d('✅ Marked DO as cancelled: $grId');
+        _logger.d('✅ Marked DO as cancelled: $doId');
       }
     } catch (e) {
       _logger.e('Error marking DO as cancelled: $e');
@@ -802,7 +772,7 @@ class DeliveryOrderController extends GetxController {
 
   Future<void> saveSerialNumberGlobal({
     required String serialNumber,
-    required String grId, // Ini adalah 'doid'
+    required String doId,
     required String productId,
   }) async {
     try {
@@ -813,9 +783,9 @@ class DeliveryOrderController extends GetxController {
           .collection('serial_numbers')
           .doc(trimmed)
           .set({
-            'do_id': grId, // Nama field 'do_id' sudah benar
+            'do_id': doId,
             'productid': productId,
-            'createdat': FieldValue.serverTimestamp(), // Sesuai struktur
+            'createdat': FieldValue.serverTimestamp(),
           });
 
       _logger.d(
@@ -826,19 +796,16 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  // Ini duplikat dari `sortGroupedGrin`
-  void sortGrin(String sortBy) {
+  void sortDeliveryOrder(String sortBy) {
     selectedSort.value = sortBy;
-    final List<DeliveryOrderModel> sortedList = List.from(grinList);
+    final List<DeliveryOrderModel> sortedList = List.from(deliveryOrderList);
 
     switch (sortBy) {
-      case 'GR ID':
-        // Asumsi model.grId memegang 'doid'
-        sortedList.sort((a, b) => a.grId.compareTo(b.grId));
+      case 'DO ID':
+        sortedList.sort((a, b) => a.doId.compareTo(b.doId));
         break;
-      case 'PO Number':
-        // Asumsi model.poNumber memegang 'soid'
-        sortedList.sort((a, b) => a.poNumber.compareTo(b.poNumber));
+      case 'SO Number':
+        sortedList.sort((a, b) => a.soNumber.compareTo(b.soNumber));
         break;
       case 'Created Date':
       default:
@@ -849,29 +816,29 @@ class DeliveryOrderController extends GetxController {
         });
         break;
     }
-    grinList.assignAll(sortedList);
+    deliveryOrderList.assignAll(sortedList);
   }
 
-  Future<bool> addNewGrin({
-    required String grId, // Ini adalah 'doid'
-    required String poNumber, // Ini adalah 'soid'
+  Future<bool> addNewDeliveryOrder({
+    required String doId,
+    required String soNumber,
     required List<DeliveryOrderDetailModel> details,
   }) async {
     try {
       final now = DateTime.now();
-      final username = 'current_user'; // Placeholder
+      final username = 'current_user';
 
       final grinData = {
-        'doid': grId, // Sesuai struktur
-        'soid': poNumber, // Sesuai struktur
-        'createdby': username, // Sesuai struktur
-        'createdat': Timestamp.fromDate(now), // Sesuai struktur
-        'status': 'pending', // Asumsi field ini ada
+        'doid': doId,
+        'soid': soNumber,
+        'createdby': username,
+        'createdat': Timestamp.fromDate(now),
+        'status': 'pending',
         'details': details.map((d) => d.toMap()).toList(),
       };
 
-      await _firestore.collection('delivery_order').doc(grId).set(grinData);
-      _logger.i('✅ DO $grId berhasil ditambahkan');
+      await _firestore.collection('delivery_order').doc(doId).set(grinData);
+      _logger.i('✅ DO $doId berhasil ditambahkan');
       return true;
     } catch (e) {
       _logger.e('Error adding new DO: $e');
@@ -879,16 +846,14 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  Future<DeliveryOrderModel?> getGrinById(String grId) async {
-    // Ini adalah 'doid'
+  Future<DeliveryOrderModel?> getDeliveryOrderById(String doId) async {
     try {
       final doc = await FirebaseFirestore.instance
           .collection('delivery_order')
-          .doc(grId)
+          .doc(doId)
           .get();
 
       if (doc.exists) {
-        // Asumsi Model.fromFirestore menangani mapping
         return DeliveryOrderModel.fromFirestore(doc, null);
       }
       return null;
@@ -898,16 +863,15 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  Future<void> confirmGrCreation(String grId) async {
+  Future<void> confirmGrCreation(String doId) async {
     try {
-      // PENYESUAIAN: 'GR' menjadi 'DO'
-      final sequenceMatch = RegExp(r'DO\d{4}(\d{7})$').firstMatch(grId);
+      final sequenceMatch = RegExp(r'DO\d{4}(\d{7})$').firstMatch(doId);
       if (sequenceMatch != null) {
         final sequence = int.tryParse(sequenceMatch.group(1)!);
         if (sequence != null) {
           await _sequenceService.completeReservation(sequence);
-          await _markGrAsCompleted(grId);
-          _logger.d('✅ DO creation CONFIRMED: $grId');
+          await _markGrAsCompleted(doId);
+          _logger.d('✅ DO creation CONFIRMED: $doId');
         }
       }
     } catch (e) {
@@ -915,24 +879,23 @@ class DeliveryOrderController extends GetxController {
     }
   }
 
-  Future<void> _markGrAsCompleted(String grId) async {
+  Future<void> _markGrAsCompleted(String doId) async {
     try {
-      await _firestore.collection('delivery_order').doc(grId).update({
+      await _firestore.collection('delivery_order').doc(doId).update({
         'status': 'completed',
-        'completedat': Timestamp.fromDate(DateTime.now()), // Sesuai struktur
+        'completedat': Timestamp.fromDate(DateTime.now()),
       });
-      _logger.d('✅ Marked DO as completed: $grId');
+      _logger.d('✅ Marked DO as completed: $doId');
     } catch (e) {
       _logger.e('Error marking DO as completed: $e');
     }
   }
 
-  Future<String> generateGrIdAtSave() async {
+  Future<String> generatedoIdAtSave() async {
     final currentYear = DateTime.now().year.toString();
     try {
-      final generatedGrId = await FirebaseFirestore.instance
+      final generateddoId = await FirebaseFirestore.instance
           .runTransaction<String>((transaction) async {
-            // PENYESUAIAN: Kueri ke field 'doid' dan prefix 'DO'
             final lastGrQuery = await _firestore
                 .collection('delivery_order')
                 .where('doid', isGreaterThanOrEqualTo: 'DO$currentYear')
@@ -944,22 +907,20 @@ class DeliveryOrderController extends GetxController {
             int nextSequence = 1;
 
             if (lastGrQuery.docs.isNotEmpty) {
-              final lastGrId = lastGrQuery.docs.first.id;
-              // PENYESUAIAN: 'GR' menjadi 'DO'
+              final lastdoId = lastGrQuery.docs.first.id;
               final sequenceMatch = RegExp(
                 r'DO\d{4}(\d{7})$',
-              ).firstMatch(lastGrId);
+              ).firstMatch(lastdoId);
               if (sequenceMatch != null) {
                 final lastSequence = int.tryParse(sequenceMatch.group(1)!) ?? 0;
                 nextSequence = lastSequence + 1;
               }
             }
             final sequenceString = nextSequence.toString().padLeft(7, '0');
-            // PENYESUAIAN: 'GR' menjadi 'DO'
-            final newGrId = 'DO$currentYear$sequenceString';
+            final newdoId = 'DO$currentYear$sequenceString';
             final existingDoc = await _firestore
                 .collection('delivery_order')
-                .doc(newGrId)
+                .doc(newdoId)
                 .get();
             if (existingDoc.exists) {
               nextSequence++;
@@ -967,23 +928,22 @@ class DeliveryOrderController extends GetxController {
                 7,
                 '0',
               );
-              // PENYESUAIAN: 'GR' menjadi 'DO'
-              final retryGrId = 'DO$currentYear$retrySequenceString';
+              final retrydoId = 'DO$currentYear$retrySequenceString';
               final retryExistingDoc = await _firestore
                   .collection('delivery_order')
-                  .doc(retryGrId)
+                  .doc(retrydoId)
                   .get();
               if (retryExistingDoc.exists) {
                 throw Exception('DO ID sudah digunakan, silakan coba lagi');
               }
-              return retryGrId;
+              return retrydoId;
             }
 
-            return newGrId;
+            return newdoId;
           }, timeout: const Duration(seconds: 10));
 
-      _logger.d('✅ Generated DO ID: $generatedGrId');
-      return generatedGrId;
+      _logger.d('✅ Generated DO ID: $generateddoId');
+      return generateddoId;
     } catch (e) {
       _logger.e('❌ Error generating DO ID: $e');
       throw Exception('Gagal generate DO ID: $e');
@@ -991,7 +951,7 @@ class DeliveryOrderController extends GetxController {
   }
 
   Future<Map<String, dynamic>> saveGrWithGeneratedId({
-    required String poNumber, // Ini adalah 'soid'
+    required String soNumber,
     required List<DeliveryOrderDetailModel> details,
     required String currentUser,
   }) async {
@@ -1000,37 +960,35 @@ class DeliveryOrderController extends GetxController {
 
     while (retryCount < maxRetries) {
       try {
-        final grId = await generateGrIdAtSave(); // Ini menghasilkan 'doid'
+        final doId = await generatedoIdAtSave();
 
-        if (grId.isEmpty) {
+        if (doId.isEmpty) {
           throw Exception('Gagal generate DO ID');
         }
         final newGr = DeliveryOrderModel(
-          grId: grId, // Properti model (diasumsikan 'grId' akan map ke 'doid')
-          poNumber:
-              poNumber, // Properti model (diasumsikan 'poNumber' akan map ke 'soid')
-          createdBy: currentUser, // Properti model (map ke 'createdby')
-          createdAt: DateTime.now(), // Properti model (map ke 'createdat')
+          doId: doId,
+          soNumber: soNumber,
+          createdBy: currentUser,
+          createdAt: DateTime.now(),
           status: 'drafted',
           details: details,
         );
 
         await _firestore.runTransaction((transaction) async {
-          final docRef = _firestore.collection('delivery_order').doc(grId);
+          final docRef = _firestore.collection('delivery_order').doc(doId);
           final docSnapshot = await transaction.get(docRef);
 
           if (docSnapshot.exists) {
-            throw Exception('DO ID $grId sudah digunakan oleh pengguna lain');
+            throw Exception('DO ID $doId sudah digunakan oleh pengguna lain');
           }
-          // Asumsi newGr.toFirestore() akan map ke field 'doid', 'soid', dll.
           transaction.set(docRef, newGr.toFirestore());
         });
 
-        _logger.d('✅ DO berhasil disimpan dengan ID: $grId');
+        _logger.d('✅ DO berhasil disimpan dengan ID: $doId');
 
         return {
           'success': true,
-          'grId': grId, // Mengembalikan 'doid'
+          'doId': doId,
           'message': 'DO berhasil disimpan',
         };
       } catch (e) {
@@ -1055,7 +1013,6 @@ class DeliveryOrderController extends GetxController {
     await refreshData();
   }
 
-  // Getter untuk access dari UI
   bool get hasMoreData => _hasMoreData.value;
   bool get isLoadingMoreData => isLoadingMore.value;
   int get totalLoaded => _totalLoaded.value;

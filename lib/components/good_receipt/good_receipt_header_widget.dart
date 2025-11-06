@@ -115,3 +115,5 @@ class GoodReceiptHeaderWidget extends StatelessWidget {
     );
   }
 }
+
+// checked

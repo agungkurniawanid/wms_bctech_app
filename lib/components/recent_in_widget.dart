@@ -52,7 +52,6 @@ class RecentIn extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Section
               Container(
                 width: double.infinity,
                 height: 31 * fem,
@@ -78,7 +77,6 @@ class RecentIn extends StatelessWidget {
                   ),
                 ),
               ),
-
               Container(
                 margin: EdgeInsets.fromLTRB(4 * fem, 0, 0, 4 * fem),
                 child: RichText(
@@ -105,7 +103,6 @@ class RecentIn extends StatelessWidget {
                   ),
                 ),
               ),
-
               Container(
                 margin: EdgeInsets.fromLTRB(4 * fem, 0, 0, 0),
                 constraints: BoxConstraints(maxWidth: 130 * fem),
@@ -167,3 +164,5 @@ class RecentIn extends StatelessWidget {
     }
   }
 }
+
+// checked

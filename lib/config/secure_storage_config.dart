@@ -1,4 +1,3 @@
-// todo:✅ Clean Code checked
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStorage {
@@ -16,3 +15,5 @@ class SecureStorage {
     await _secureStorage.delete(key: key);
   }
 }
+
+// checked

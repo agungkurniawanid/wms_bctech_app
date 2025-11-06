@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Modern Loading Overlay untuk proses Kirim CPERP
 class InModernLoadingOverlayWidget extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -34,11 +33,9 @@ class InModernLoadingOverlayWidget extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Animated Loading Circle
             Stack(
               alignment: Alignment.center,
               children: [
-                // Outer rotating circle
                 SizedBox(
                   width: 80,
                   height: 80,
@@ -49,7 +46,6 @@ class InModernLoadingOverlayWidget extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Inner rotating circle
                 SizedBox(
                   width: 60,
                   height: 60,
@@ -58,7 +54,6 @@ class InModernLoadingOverlayWidget extends StatelessWidget {
                     valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
                   ),
                 ),
-                // Icon in center
                 Container(
                   width: 40,
                   height: 40,
@@ -74,10 +69,7 @@ class InModernLoadingOverlayWidget extends StatelessWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 24),
-
-            // Title
             Text(
               title,
               style: const TextStyle(
@@ -89,10 +81,7 @@ class InModernLoadingOverlayWidget extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-
             const SizedBox(height: 8),
-
-            // Subtitle
             Text(
               subtitle,
               style: TextStyle(
@@ -104,10 +93,7 @@ class InModernLoadingOverlayWidget extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-
             const SizedBox(height: 20),
-
-            // Progress steps indicator
             _buildProgressSteps(primaryColor),
           ],
         ),
@@ -243,7 +229,6 @@ class CompactLoadingOverlay extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Glowing circle animation
             Container(
               width: 70,
               height: 70,
@@ -282,10 +267,7 @@ class CompactLoadingOverlay extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // Message
             Text(
               message,
               style: const TextStyle(
@@ -296,10 +278,7 @@ class CompactLoadingOverlay extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-
             const SizedBox(height: 8),
-
-            // Animated dots
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(3, (index) {
@@ -372,3 +351,5 @@ class _AnimatedDotState extends State<_AnimatedDot>
     );
   }
 }
+
+// checked

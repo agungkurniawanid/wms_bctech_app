@@ -39,23 +39,19 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
   final TextEditingController _searchController = TextEditingController();
   final Logger _logger = Logger();
   final _inController = Get.find<InVM>();
-
   final Color _primaryColor = hijauGojek;
   final Color _textPrimaryColor = const Color(0xFF2D2D2D);
   final Color _textSecondaryColor = const Color(0xFF6B7280);
-
-  Timer? _searchDebounce;
   late final StreamSubscription<bool> _searchStateSubscription;
   late final StreamSubscription<String> _searchQuerySubscription;
+
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
     _logger.d('🎯 DeliveryOrderPage initState');
-
-    // Setup scroll controller untuk pagination
     _scrollController.addListener(_onScroll);
-
     _searchStateSubscription = _deliveryOrderController.isSearching.listen((
       searching,
     ) {
@@ -64,7 +60,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
         setState(() {});
       }
     });
-
     _searchQuerySubscription = _deliveryOrderController.searchQuery.listen((
       query,
     ) {
@@ -75,7 +70,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     });
   }
 
-  // Handle scroll untuk pagination
   void _onScroll() {
     if (_scrollController.position.pixels ==
         _scrollController.position.maxScrollExtent) {
@@ -84,12 +78,11 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
   }
 
   Future<void> _loadMoreData() async {
-    // Jangan load more jika sedang search mode
     if (_deliveryOrderController.isSearching.value) {
       return;
     }
 
-    await _deliveryOrderController.loadMoreGrinData();
+    await _deliveryOrderController.loadMoreDeliveryOrderData();
   }
 
   @override
@@ -110,15 +103,12 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     if (_searchDebounce?.isActive ?? false) {
       _searchDebounce!.cancel();
     }
-
     _searchDebounce = Timer(const Duration(milliseconds: 300), () {
       if (!mounted) return;
 
       try {
         final trimmedQuery = query.trim();
         _logger.d('🎯 Executing search for: "$trimmedQuery"');
-
-        // Delegate to controller
         _deliveryOrderController.updateSearchQuery(trimmedQuery);
       } catch (e, stackTrace) {
         _logger.e('❌ Search error: $e\n$stackTrace');
@@ -150,21 +140,18 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     return Obx(() {
       final isSearching = _deliveryOrderController.isSearching.value;
       final searchQuery = _deliveryOrderController.searchQuery.value;
-      final hasSearchResults = _deliveryOrderController.grinList.isNotEmpty;
+      final hasSearchResults =
+          _deliveryOrderController.deliveryOrderList.isNotEmpty;
       final isLoading = _deliveryOrderController.isLoading.value;
-      // final isLoadingMore = _deliveryOrderController.isLoadingMoreData; // <-- Dihapus
-      // final hasMoreData = _deliveryOrderController.hasMoreData; // <-- Dihapus
 
       _logger.d(
         '📊 _buildContent - isSearching: $isSearching, searchQuery: "$searchQuery", hasResults: $hasSearchResults',
       );
 
-      // Jika sedang loading awal
-      if (isLoading && _deliveryOrderController.grinList.isEmpty) {
+      if (isLoading && _deliveryOrderController.deliveryOrderList.isEmpty) {
         return const DeliveryOrderShimmerWidget();
       }
 
-      // Jika sedang search mode dan ada query
       if (isSearching && searchQuery.isNotEmpty) {
         if (!hasSearchResults) {
           return _buildEmptySearchState();
@@ -172,16 +159,12 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
         return _buildSearchResults();
       }
 
-      // Jika tidak ada data sama sekali
-      if (_deliveryOrderController.grinList.isEmpty) {
+      if (_deliveryOrderController.deliveryOrderList.isEmpty) {
         return DeliveryOrderEmptyWidget(
           onRefresh: _deliveryOrderController.refreshData,
         );
       }
-
-      // ✅ FIX: Hapus Column dan kembalikan _buildGroupedGrinList secara langsung
-      // Logika indikator sekarang ada di dalam _buildGroupedGrinList
-      return _buildGroupedGrinList();
+      return _buildGroupeddeliveryOrderList();
     });
   }
 
@@ -237,7 +220,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     );
   }
 
-  // Indicator untuk akhir list
   Widget _buildEndOfListIndicator() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -310,13 +292,12 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     );
   }
 
-  // Update juga method search results untuk handle scroll
   Widget _buildSearchResults() {
     return Obx(() {
       final searchQuery = _deliveryOrderController.searchQuery.value
           .trim()
           .toLowerCase();
-      final grinList = _deliveryOrderController.grinList;
+      final deliveryOrderList = _deliveryOrderController.deliveryOrderList;
 
       if (searchQuery.isEmpty) {
         return const Center(child: Text('Start typing to search...'));
@@ -324,16 +305,15 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
 
       return ListView.builder(
         controller: _scrollController,
-        itemCount: grinList.length,
+        itemCount: deliveryOrderList.length,
         itemBuilder: (context, index) {
-          final grin = grinList[index];
-          return _buildSearchResultCard(grin);
+          final deliveryOrder = deliveryOrderList[index];
+          return _buildSearchResultCard(deliveryOrder);
         },
       );
     });
   }
 
-  // Empty state dengan ilustrasi modern
   Widget _buildEmptySearchState() {
     return Center(
       child: Padding(
@@ -341,7 +321,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Animated search icon
             Container(
               width: 120,
               height: 120,
@@ -365,7 +344,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
               ),
             ),
             const SizedBox(height: 24),
-
             Text(
               'No Results Found',
               style: TextStyle(
@@ -377,7 +355,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
               ),
             ),
             const SizedBox(height: 12),
-
             Text(
               'We couldn\'t find any matches for your search.\nTry adjusting your search terms.',
               textAlign: TextAlign.center,
@@ -390,8 +367,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
               ),
             ),
             const SizedBox(height: 32),
-
-            // Optional: Add clear search button
             OutlinedButton.icon(
               onPressed: () {
                 _clearSearchQuery();
@@ -416,7 +391,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     );
   }
 
-  Widget _buildSearchResultCard(DeliveryOrderModel grin) {
+  Widget _buildSearchResultCard(DeliveryOrderModel deliveryOrder) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
       decoration: BoxDecoration(
@@ -441,7 +416,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
         child: InkWell(
           onTap: () {
             Get.to(
-              () => DeliveryOrderDetailPage(grId: grin.grId),
+              () => DeliveryOrderDetailPage(doId: deliveryOrder.doId),
               transition: Transition.rightToLeft,
             );
           },
@@ -457,7 +432,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header: GR ID dan Date
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -479,7 +453,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                         ),
                       ),
                       child: Text(
-                        grin.grId,
+                        deliveryOrder.doId,
                         style: TextStyle(
                           fontFamily: 'MonaSans',
                           fontSize: 14,
@@ -497,9 +471,9 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          grin.createdAt != null
+                          deliveryOrder.createdAt != null
                               ? DateHelper.formatDate(
-                                  grin.createdAt!.toIso8601String(),
+                                  deliveryOrder.createdAt!.toIso8601String(),
                                 )
                               : 'No Date',
                           style: TextStyle(
@@ -514,8 +488,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // PO Number
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -559,7 +531,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            grin.poNumber,
+                            deliveryOrder.soNumber,
                             style: TextStyle(
                               fontFamily: 'MonaSans',
                               fontSize: 15,
@@ -574,8 +546,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // Created By
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -620,7 +590,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                           const SizedBox(height: 3),
                           Text(
                             TextHelper.formatUserName(
-                              grin.createdBy ?? 'Unknown',
+                              deliveryOrder.createdBy ?? 'Unknown',
                             ),
                             style: TextStyle(
                               fontFamily: 'MonaSans',
@@ -636,8 +606,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // Total Items dan Kafka Button
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -686,7 +654,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                                 ),
                                 const SizedBox(height: 3),
                                 Text(
-                                  '${grin.details.length} items',
+                                  '${deliveryOrder.details.length} items',
                                   style: TextStyle(
                                     fontFamily: 'MonaSans',
                                     fontSize: 15,
@@ -703,11 +671,12 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    _buildStatusAndKafkaButton(grin.grId, grin),
+                    _buildStatusAndKafkaButton(
+                      deliveryOrder.doId,
+                      deliveryOrder,
+                    ),
                   ],
                 ),
-
-                // Divider dan Arrow indicator
                 const SizedBox(height: 16),
                 Container(
                   height: 1,
@@ -722,8 +691,6 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // View Details Indicator
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -753,15 +720,18 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     );
   }
 
-  Widget _buildStatusAndKafkaButton(String grId, DeliveryOrderModel grinData) {
+  Widget _buildStatusAndKafkaButton(
+    String doId,
+    DeliveryOrderModel deliveryOrderData,
+  ) {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance
           .collection('delivery_order')
-          .doc(grId)
+          .doc(doId)
           .get(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || !snapshot.data!.exists) {
-          return _buildAddButton(grinData);
+          return _buildAddButton(deliveryOrderData);
         }
 
         final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
@@ -778,11 +748,11 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
         } else if (kafkaStatus == 'error') {
           badgeColor = Colors.red;
           statusLabel = 'Error';
-          actionButton = _buildResendButton(grId);
+          actionButton = _buildResendButton(doId);
         } else {
           badgeColor = Colors.orange;
           statusLabel = 'Belum Submit';
-          actionButton = _buildAddButton(grinData);
+          actionButton = _buildAddButton(deliveryOrderData);
         }
 
         return Row(
@@ -797,9 +767,9 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     );
   }
 
-  Widget _buildAddButton(DeliveryOrderModel grinData) {
+  Widget _buildAddButton(DeliveryOrderModel deliveryOrderData) {
     return InkWell(
-      onTap: () => _handleAddDataToGrin(grinData),
+      onTap: () => _handleAddDataTodeliveryOrder(deliveryOrderData),
       borderRadius: BorderRadius.circular(8),
       child: Container(
         width: 40,
@@ -821,9 +791,9 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     );
   }
 
-  Widget _buildResendButton(String grId) {
+  Widget _buildResendButton(String doId) {
     return InkWell(
-      onTap: () => _inController.sendToKafkaForGR(grId),
+      onTap: () => _inController.sendToKafkaForGR(doId),
       borderRadius: BorderRadius.circular(8),
       child: Container(
         width: 40,
@@ -870,7 +840,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     );
   }
 
-  void _handleAddGrin() {
+  void _handleAddDeliveryOrder() {
     _logger.d('🔄 Navigate to InPage without generating GR ID');
     Get.to(
       () => OutPage(),
@@ -879,33 +849,34 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     );
   }
 
-  Map<String, List<DeliveryOrderModel>> _groupGrinByPoNumber(
-    List<DeliveryOrderModel> grinList,
+  Map<String, List<DeliveryOrderModel>> _groupdeliveryOrderBysoNumber(
+    List<DeliveryOrderModel> deliveryOrderList,
   ) {
     final Map<String, List<DeliveryOrderModel>> groupedData = {};
 
-    for (final grin in grinList) {
-      final poNumber = grin.poNumber;
-      if (!groupedData.containsKey(poNumber)) {
-        groupedData[poNumber] = [];
+    for (final deliveryOrder in deliveryOrderList) {
+      final soNumber = deliveryOrder.soNumber;
+      if (!groupedData.containsKey(soNumber)) {
+        groupedData[soNumber] = [];
       }
-      groupedData[poNumber]!.add(grin);
+      groupedData[soNumber]!.add(deliveryOrder);
     }
 
     return groupedData;
   }
 
-  Widget _buildGroupedGrinList() {
+  Widget _buildGroupeddeliveryOrderList() {
     return Obx(() {
-      final groupedData = _groupGrinByPoNumber(
-        _deliveryOrderController.grinList,
+      final groupedData = _groupdeliveryOrderBysoNumber(
+        _deliveryOrderController.deliveryOrderList,
       );
       final groupedDataCount = groupedData.length;
 
       // Ambil status dari controller
       final isLoadingMore = _deliveryOrderController.isLoadingMoreData;
       final hasMoreData = _deliveryOrderController.hasMoreData;
-      final isListNotEmpty = _deliveryOrderController.grinList.isNotEmpty;
+      final isListNotEmpty =
+          _deliveryOrderController.deliveryOrderList.isNotEmpty;
 
       // ✅ FIX: Tentukan itemCount
       int itemCount = groupedDataCount;
@@ -934,18 +905,18 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
           }
 
           // Ini adalah item data normal
-          final poNumber = groupedData.keys.elementAt(index);
-          final grinList = groupedData[poNumber]!;
+          final soNumber = groupedData.keys.elementAt(index);
+          final deliveryOrderList = groupedData[soNumber]!;
 
-          return _buildPoGroupContainer(poNumber, grinList);
+          return _buildPoGroupContainer(soNumber, deliveryOrderList);
         },
       );
     });
   }
 
   Widget _buildPoGroupContainer(
-    String poNumber,
-    List<DeliveryOrderModel> grinList,
+    String soNumber,
+    List<DeliveryOrderModel> deliveryOrderList,
   ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1031,7 +1002,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            poNumber,
+                            soNumber,
                             style: TextStyle(
                               fontFamily: 'MonaSans',
                               fontSize: 16,
@@ -1060,7 +1031,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                         ),
                       ),
                       child: Text(
-                        '${grinList.length} GR',
+                        '${deliveryOrderList.length} GR',
                         style: TextStyle(
                           fontFamily: 'MonaSans',
                           fontSize: 12,
@@ -1072,10 +1043,10 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                   ],
                 ),
               ),
-              ...grinList.asMap().entries.map((entry) {
+              ...deliveryOrderList.asMap().entries.map((entry) {
                 final index = entry.key;
-                final grinData = entry.value;
-                final isLast = index == grinList.length - 1;
+                final deliveryOrderData = entry.value;
+                final isLast = index == deliveryOrderList.length - 1;
 
                 return Container(
                   decoration: !isLast
@@ -1089,7 +1060,10 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                           ),
                         )
                       : null,
-                  child: _buildGrinCardInGroup(grinData, index),
+                  child: _builddeliveryOrderCardInGroup(
+                    deliveryOrderData,
+                    index,
+                  ),
                 );
               }),
             ],
@@ -1099,7 +1073,10 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     );
   }
 
-  Widget _buildGrinCardInGroup(DeliveryOrderModel grinData, int index) {
+  Widget _builddeliveryOrderCardInGroup(
+    DeliveryOrderModel deliveryOrderData,
+    int index,
+  ) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
       child: Material(
@@ -1107,7 +1084,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
         child: InkWell(
           onTap: () {
             Get.to(
-              () => DeliveryOrderDetailPage(grId: grinData.grId),
+              () => DeliveryOrderDetailPage(doId: deliveryOrderData.doId),
               transition: Transition.rightToLeft,
             );
           },
@@ -1147,7 +1124,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                         ),
                       ),
                       child: Text(
-                        grinData.grId,
+                        deliveryOrderData.doId,
                         style: TextStyle(
                           fontFamily: 'MonaSans',
                           fontSize: 14,
@@ -1157,9 +1134,9 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                       ),
                     ),
                     Text(
-                      grinData.createdAt != null
+                      deliveryOrderData.createdAt != null
                           ? DateHelper.formatDate(
-                              grinData.createdAt!.toIso8601String(),
+                              deliveryOrderData.createdAt!.toIso8601String(),
                             )
                           : 'No Date',
                       style: TextStyle(
@@ -1207,7 +1184,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                           const SizedBox(height: 2),
                           Text(
                             TextHelper.formatUserName(
-                              grinData.createdBy ?? 'Unknown',
+                              deliveryOrderData.createdBy ?? 'Unknown',
                             ),
                             style: TextStyle(
                               fontFamily: 'MonaSans',
@@ -1256,7 +1233,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '${grinData.details.length} items',
+                            '${deliveryOrderData.details.length} items',
                             style: TextStyle(
                               fontFamily: 'MonaSans',
                               fontSize: 14,
@@ -1267,7 +1244,10 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                         ],
                       ),
                     ),
-                    _buildStatusAndKafkaButton(grinData.grId, grinData),
+                    _buildStatusAndKafkaButton(
+                      deliveryOrderData.doId,
+                      deliveryOrderData,
+                    ),
                   ],
                 ),
               ],
@@ -1278,10 +1258,10 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
     );
   }
 
-  // Widget _buildGrinCard(
-  //   DeliveryOrderModel grinData,
+  // Widget _builddeliveryOrderCard(
+  //   DeliveryOrderModel deliveryOrderData,
   //   int index, {
-  //   required bool showPoNumber,
+  //   required bool showsoNumber,
   //   bool isSearchResult = false,
   // }) {
   //   return Container(
@@ -1310,7 +1290,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
   //           child: InkWell(
   //             onTap: () {
   //               Get.to(
-  //                 () => DeliveryOrderDetailPage(grId: grinData.grId),
+  //                 () => DeliveryOrderDetailPage(doId: deliveryOrderData.doId),
   //                 transition: Transition.rightToLeft,
   //               );
   //             },
@@ -1345,7 +1325,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
   //                           ),
   //                         ),
   //                         child: Text(
-  //                           grinData.grId,
+  //                           deliveryOrderData.doId,
   //                           style: TextStyle(
   //                             fontFamily: 'MonaSans',
   //                             fontSize: 14,
@@ -1355,9 +1335,9 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
   //                         ),
   //                       ),
   //                       Text(
-  //                         grinData.createdAt != null
+  //                         deliveryOrderData.createdAt != null
   //                             ? DateHelper.formatDate(
-  //                                 grinData.createdAt!.toIso8601String(),
+  //                                 deliveryOrderData.createdAt!.toIso8601String(),
   //                               )
   //                             : 'No Date',
   //                         style: TextStyle(
@@ -1370,11 +1350,11 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
   //                     ],
   //                   ),
   //                   const SizedBox(height: 16),
-  //                   if (showPoNumber) ...[
+  //                   if (showsoNumber) ...[
   //                     _buildInfoRow(
   //                       Icons.receipt_long,
   //                       'PO Number',
-  //                       grinData.poNumber,
+  //                       deliveryOrderData.soNumber,
   //                     ),
   //                     const SizedBox(height: 12),
   //                   ],
@@ -1382,7 +1362,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
   //                     Icons.person,
   //                     'Created By',
   //                     TextHelper.formatUserName(
-  //                       grinData.createdBy ?? 'Unknown',
+  //                       deliveryOrderData.createdBy ?? 'Unknown',
   //                     ),
   //                   ),
   //                   const SizedBox(height: 12),
@@ -1393,13 +1373,13 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
   //                         child: _buildInfoRow(
   //                           Icons.inventory_2,
   //                           'Total Items',
-  //                           '${grinData.details.length} items',
+  //                           '${deliveryOrderData.details.length} items',
   //                         ),
   //                       ),
   //                       if (isSearchResult)
-  //                         _buildStatusAndKafkaButton(grinData.grId, grinData)
+  //                         _buildStatusAndKafkaButton(deliveryOrderData.doId, deliveryOrderData)
   //                       else
-  //                         _buildAddButton(grinData),
+  //                         _buildAddButton(deliveryOrderData),
   //                     ],
   //                   ),
   //                 ],
@@ -1412,9 +1392,11 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
   //   );
   // }
 
-  Future<void> _handleAddDataToGrin(DeliveryOrderModel grinData) async {
-    _logger.d('➕ Adding data to GR ID: ${grinData.grId}');
-    _logger.d('📦 PO Number: ${grinData.poNumber}');
+  Future<void> _handleAddDataTodeliveryOrder(
+    DeliveryOrderModel deliveryOrderData,
+  ) async {
+    _logger.d('➕ Adding data to GR ID: ${deliveryOrderData.doId}');
+    _logger.d('📦 PO Number: ${deliveryOrderData.soNumber}');
 
     Get.dialog(
       Center(
@@ -1441,7 +1423,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
       final inVM = Get.find<OutController>();
 
       OutModel? poData = inVM.tolistSalesOrder.firstWhereOrNull(
-        (po) => po.documentno == grinData.poNumber,
+        (po) => po.documentno == deliveryOrderData.soNumber,
       );
 
       if (poData == null) {
@@ -1449,7 +1431,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
 
         final snapshot = await FirebaseFirestore.instance
             .collection('purchase_orders')
-            .where('documentno', isEqualTo: grinData.poNumber)
+            .where('documentno', isEqualTo: deliveryOrderData.soNumber)
             .limit(1)
             .get();
 
@@ -1476,16 +1458,17 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => OutDetailPage(0, 'sync', poData!, grinData.grId),
+              builder: (_) =>
+                  OutDetailPage(0, 'sync', poData!, deliveryOrderData.doId),
             ),
           );
         }
       } else {
-        _logger.e('❌ PO data not found for: ${grinData.poNumber}');
+        _logger.e('❌ PO data not found for: ${deliveryOrderData.soNumber}');
 
         Get.snackbar(
           'Error',
-          'PO data tidak ditemukan untuk PO Number: ${grinData.poNumber}',
+          'PO data tidak ditemukan untuk PO Number: ${deliveryOrderData.soNumber}',
           backgroundColor: Colors.red,
           colorText: Colors.white,
           snackPosition: SnackPosition.BOTTOM,
@@ -1577,7 +1560,7 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
         setState(() {
           DeliveryOrderConstant.defaultSort = value;
         });
-        _deliveryOrderController.sortGrin(value);
+        _deliveryOrderController.sortDeliveryOrder(value);
         _logger.d('✅ Sorting diubah ke: $value');
       }
     } catch (e, stackTrace) {
@@ -1627,10 +1610,12 @@ class _DeliveryOrderPageState extends State<DeliveryOrderPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (!isInSearchMode)
-                    DeliveryOrderAddButtonWidget(onPressed: _handleAddGrin),
+                    DeliveryOrderAddButtonWidget(
+                      onPressed: _handleAddDeliveryOrder,
+                    ),
                   if (!isInSearchMode)
                     DeliveryOrderHeaderWidget.fromReactiveList(
-                      reactiveList: _deliveryOrderController.grinList,
+                      reactiveList: _deliveryOrderController.deliveryOrderList,
                       selectedSort: DeliveryOrderConstant.defaultSort,
                       sortList: DeliveryOrderConstant.sortOptions,
                       onSortChanged: _handleSortChange,

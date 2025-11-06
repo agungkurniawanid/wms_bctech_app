@@ -1,4 +1,3 @@
-// todo:✅ Clean Code checked
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logger/web.dart';
@@ -96,3 +95,5 @@ class Config {
     return _urlAbsn;
   }
 }
+
+// checked

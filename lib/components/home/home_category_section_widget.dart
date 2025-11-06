@@ -90,3 +90,5 @@ class _HomeCategorySectionWidgetState extends State<HomeCategorySectionWidget> {
     );
   }
 }
+
+// checked

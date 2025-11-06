@@ -10,6 +10,7 @@ import 'package:wms_bctech/controllers/in/in_controller.dart';
 import 'package:wms_bctech/controllers/out/out_controller.dart';
 import 'package:wms_bctech/controllers/role_controller.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
+import 'package:wms_bctech/controllers/stock_take_controller.dart';
 import 'package:wms_bctech/helpers/config_helper.dart';
 import 'package:wms_bctech/helpers/network_helper.dart';
 import 'package:wms_bctech/pages/splash_screen_page.dart';
@@ -21,7 +22,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  // Initialize Firebase
   try {
     await Firebase.initializeApp();
     Logger().i('Firebase initialized successfully');
@@ -29,11 +29,9 @@ void main() async {
     Logger().e('Firebase initialization error: $e');
   }
 
-  // Fungsi untuk memantau koneksi internet
   final networkListener = NetworkHelper();
   networkListener.startListening();
 
-  // Initialize GetX Controller
   Get.put(GlobalVM());
   Get.put(Rolevm());
   Get.put(NewAuthController());
@@ -43,14 +41,12 @@ void main() async {
   Get.put(GoodReceiptSequenceController());
   Get.put(DeliveryOrderController());
   Get.put(DeliveryOrderSequenceController());
+  Get.put(StockTakeController());
 
-  // Generate collection auth jika belum ada
   final authController = Get.find<NewAuthController>();
   await authController.generateAuthCollectionIfNotExists();
 
   runApp(const MyApp());
-
-  // Konfigurasi EasyLoading
   ConfigHelper.configLoading();
 }
 
@@ -60,7 +56,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'IM Mobile',
+      title: 'WMS Bina Cipta Teknologi',
       debugShowCheckedModeBanner: false,
       home: const SplashScreenPage(),
       builder: EasyLoading.init(),

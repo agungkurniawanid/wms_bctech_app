@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:wms_bctech/components/improved_camera_scanner_dialog_widget.dart';
 import 'package:wms_bctech/config/global_variable_config.dart';
 import 'package:wms_bctech/constants/good_receipt/good_receipt_constant.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
@@ -845,7 +846,7 @@ class _InDetailPageState extends State<InDetailPage>
       await showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => ImprovedCameraScannerDialog(
+        builder: (context) => ImprovedCameraScannerDialogWidget(
           onBarcodeDetected: (barcode) {
             // Process barcode dan dialog akan otomatis tertutup di _processBarcodeResult
             _processBarcodeResult(barcode);
@@ -4949,30 +4950,6 @@ class _InDetailPageState extends State<InDetailPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Status realtime
-                        Row(
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: isReadOnlyMode
-                                    ? Colors.grey
-                                    : Colors.blueAccent,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              isReadOnlyMode ? "View Only" : "Realtime",
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
                         Text(
                           widget.from == "sync"
                               ? "${widget.flag?.documentno}"

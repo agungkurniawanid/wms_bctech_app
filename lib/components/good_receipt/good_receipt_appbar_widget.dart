@@ -179,3 +179,5 @@ class _GoodReceiptAppbarWidgetState extends State<GoodReceiptAppbarWidget> {
     ];
   }
 }
+
+// checked

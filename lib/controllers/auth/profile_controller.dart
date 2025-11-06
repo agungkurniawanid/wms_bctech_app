@@ -82,3 +82,6 @@ class ProfileController extends GetxController {
     return currentUserId.isNotEmpty ? currentUserId[0].toUpperCase() : 'U';
   }
 }
+
+
+// checked

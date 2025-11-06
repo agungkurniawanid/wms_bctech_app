@@ -145,7 +145,6 @@ class TextWidget extends StatelessWidget {
        overflow = TextOverflow.ellipsis,
        textStyle = null;
 
-  // Specialized constructors
   const TextWidget.error({
     super.key,
     required this.text,
@@ -255,3 +254,5 @@ class SimpleTextWidget extends StatelessWidget {
     );
   }
 }
+
+// checked

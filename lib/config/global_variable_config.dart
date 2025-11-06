@@ -1,4 +1,3 @@
-// todo:✅ Clean Code checked
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter/services.dart';
@@ -121,3 +120,5 @@ class GlobalVar {
     widgetdiscountOther.dispose();
   }
 }
+
+// checked

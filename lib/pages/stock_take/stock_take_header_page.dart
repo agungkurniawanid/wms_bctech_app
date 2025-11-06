@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
-import 'package:wms_bctech/models/stock_take_model.dart';
+import 'package:wms_bctech/models/stock/stock_take_model.dart';
 import 'package:wms_bctech/pages/stock_take/stock_take_detail_page.dart';
 
 class StockTakeHeader extends StatefulWidget {
@@ -921,15 +921,20 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
   void _navigateToDetail(Map<String, dynamic> document, int index) {
     // Buat StockTakeModel dummy dari data document
     final stockTakeModel = StockTakeModel(
-      documentno: document['documentno'],
-      createdby: document['createdby'],
+      documentid: document['documentno'],
+      createdBy: document['createdby'],
       created: document['created'],
-      isapprove: document['isapprove'],
-      lGORT: document['lGORT'],
+      isApprove: document['isapprove'],
+      lGort: document['lGORT'],
       detail: [],
       updated: '',
       updatedby: '',
       doctype: '',
+      lastQuery: '',
+      countDetail: 0,
+      whName: '',
+      whValue: '',
+      locatorValue: '',
     );
 
     Navigator.of(context).push(
@@ -981,8 +986,8 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
           title: _isSearching
               ? _buildSearchField()
               : Text(
-                  widget.stocktake?.lGORT.isNotEmpty ?? false
-                      ? widget.stocktake?.lGORT.first ?? "Stock Take"
+                  (widget.stocktake?.lGort.isNotEmpty ?? false)
+                      ? widget.stocktake!.lGort.join(', ')
                       : "Stock Take Documents",
                   style: const TextStyle(
                     fontSize: 20,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/models/in/in_detail_model.dart';
 import 'package:intl/intl.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
 class InProductDetailBottomsheetWidget extends StatelessWidget {
   final InDetail product;
@@ -57,7 +56,6 @@ class InProductDetailBottomsheetWidget extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Drag Handle
           Container(
             margin: EdgeInsets.only(top: 12),
             width: 40,
@@ -67,8 +65,6 @@ class InProductDetailBottomsheetWidget extends StatelessWidget {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-
-          // Header with gradient
           Container(
             margin: EdgeInsets.all(16),
             padding: EdgeInsets.all(20),
@@ -189,13 +185,11 @@ class InProductDetailBottomsheetWidget extends StatelessWidget {
               ],
             ),
           ),
-
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: [
-                  // Product Info Card
                   Container(
                     padding: EdgeInsets.all(18),
                     decoration: BoxDecoration(
@@ -255,10 +249,7 @@ class InProductDetailBottomsheetWidget extends StatelessWidget {
                       ],
                     ),
                   ),
-
                   SizedBox(height: 16),
-
-                  // Progress Card
                   Container(
                     padding: EdgeInsets.all(18),
                     decoration: BoxDecoration(
@@ -417,10 +408,7 @@ class InProductDetailBottomsheetWidget extends StatelessWidget {
                       ],
                     ),
                   ),
-
                   SizedBox(height: 16),
-
-                  // Pricing Card
                   Container(
                     padding: EdgeInsets.all(18),
                     decoration: BoxDecoration(
@@ -475,8 +463,6 @@ class InProductDetailBottomsheetWidget extends StatelessWidget {
                       ],
                     ),
                   ),
-
-                  // Serial Numbers (if applicable)
                   if (isSNInput &&
                       product.sN != null &&
                       product.sN!.isNotEmpty) ...[
@@ -600,7 +586,6 @@ class InProductDetailBottomsheetWidget extends StatelessWidget {
                       ),
                     ),
                   ],
-
                   SizedBox(height: 100),
                 ],
               ),
@@ -768,230 +753,4 @@ class InProductDetailBottomsheetWidget extends StatelessWidget {
   }
 }
 
-class ImprovedCameraScannerDialog extends StatefulWidget {
-  final Function(String) onBarcodeDetected;
-  final Function() onCancel;
-
-  const ImprovedCameraScannerDialog({
-    required this.onBarcodeDetected,
-    required this.onCancel,
-    super.key,
-  });
-
-  @override
-  State<ImprovedCameraScannerDialog> createState() =>
-      _ImprovedCameraScannerDialogState();
-}
-
-class _ImprovedCameraScannerDialogState
-    extends State<ImprovedCameraScannerDialog> {
-  late MobileScannerController cameraController;
-  bool _isTorchOn = false;
-  bool _isProcessing = false;
-  Barcode? _detectedBarcode;
-
-  @override
-  void initState() {
-    super.initState();
-
-    cameraController = MobileScannerController(
-      facing: CameraFacing.back,
-      torchEnabled: false,
-      detectionSpeed: DetectionSpeed.noDuplicates,
-      returnImage: true,
-      formats: [
-        BarcodeFormat.qrCode,
-        BarcodeFormat.code128,
-        BarcodeFormat.code39,
-        BarcodeFormat.ean13,
-        BarcodeFormat.ean8,
-        BarcodeFormat.upcA,
-        BarcodeFormat.upcE,
-        BarcodeFormat.pdf417,
-        BarcodeFormat.dataMatrix,
-        BarcodeFormat.aztec,
-        BarcodeFormat.itf,
-      ],
-    );
-  }
-
-  @override
-  void dispose() {
-    cameraController.dispose();
-    super.dispose();
-  }
-
-  void _handleBarcodeDetected(BarcodeCapture capture) async {
-    if (_isProcessing) return;
-
-    final barcodes = capture.barcodes;
-    if (barcodes.isNotEmpty) {
-      final Barcode barcode = barcodes.first;
-      final String? code = barcode.rawValue;
-
-      if (code != null && code.isNotEmpty) {
-        setState(() => _detectedBarcode = barcode);
-
-        _isProcessing = true;
-        await cameraController.stop();
-
-        await Future.delayed(const Duration(milliseconds: 300));
-        widget.onBarcodeDetected(code);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      titlePadding: const EdgeInsets.only(
-        left: 20,
-        right: 8,
-        top: 20,
-        bottom: 0,
-      ),
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            "Scan Barcode",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () {
-              widget.onCancel();
-              Navigator.of(context).pop();
-            },
-          ),
-        ],
-      ),
-      contentPadding: const EdgeInsets.all(16),
-      content: SizedBox(
-        width: double.maxFinite,
-        height: 450,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // CAMERA VIEW
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: MobileScanner(
-                controller: cameraController,
-                fit: BoxFit.cover,
-                onDetect: _handleBarcodeDetected,
-                errorBuilder: (context, error) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: Colors.red,
-                          size: 48,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Error: ${error.errorDetails?.message ?? 'Unknown error'}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // DYNAMIC GREEN FRAME (AUTO ADAPT)
-            if (_detectedBarcode?.corners != null)
-              CustomPaint(
-                painter: BarcodeOverlayPainter(_detectedBarcode!),
-                size: const Size(double.infinity, double.infinity),
-              ),
-
-            // TORCH BUTTON
-            Positioned(
-              bottom: 16,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton.filled(
-                    onPressed: () async {
-                      try {
-                        await cameraController.toggleTorch();
-                        setState(() => _isTorchOn = !_isTorchOn);
-                      } catch (e) {
-                        debugPrint("Torch error: $e");
-                      }
-                    },
-                    icon: Icon(
-                      _isTorchOn ? Icons.flash_on : Icons.flash_off,
-                      color: Colors.white,
-                    ),
-                    style: IconButton.styleFrom(
-                      backgroundColor: _isTorchOn
-                          ? Colors.amber
-                          : Colors.grey.shade700,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  IconButton.filled(
-                    icon: const Icon(Icons.cameraswitch, color: Colors.white),
-                    onPressed: () async {
-                      try {
-                        await cameraController.switchCamera();
-                      } catch (e) {
-                        debugPrint("Switch camera error: $e");
-                      }
-                    },
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class BarcodeOverlayPainter extends CustomPainter {
-  final Barcode barcode;
-
-  BarcodeOverlayPainter(this.barcode);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final corners = barcode.corners;
-    if (corners.isEmpty || corners.isEmpty) return;
-
-    final paint = Paint()
-      ..color = Colors.greenAccent
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
-
-    final path = Path();
-    path.moveTo(corners.first.dx, corners.first.dy);
-    for (final point in corners.skip(1)) {
-      path.lineTo(point.dx, point.dy);
-    }
-    path.close();
-
-    canvas.drawPath(path, paint);
-
-    // Add glowing edges
-    final glow = Paint()
-      ..color = Colors.greenAccent.withValues(alpha: 0.4)
-      ..strokeWidth = 8
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    canvas.drawPath(path, glow);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
+// checked

@@ -65,11 +65,9 @@ class _TextFieldWidgetState extends State<TextFieldWidget> {
       child: Theme(
         data: Theme.of(context).copyWith(
           textSelectionTheme: TextSelectionThemeData(
-            cursorColor: hijauGojek, // Warna garis cursor
-            selectionColor: hijauGojek.withValues(
-              alpha: 0.3,
-            ), // Warna highlight saat blok teks
-            selectionHandleColor: hijauGojek, // Warna tanda geser cursor 💚
+            cursorColor: hijauGojek,
+            selectionColor: hijauGojek.withValues(alpha: 0.3),
+            selectionHandleColor: hijauGojek,
           ),
         ),
         child: TextFormField(
@@ -82,7 +80,7 @@ class _TextFieldWidgetState extends State<TextFieldWidget> {
           maxLength: widget.maxLength,
           maxLines: widget.maxLines,
           textInputAction: widget.textInputAction,
-          cursorColor: hijauGojek, // tetap dipertahankan
+          cursorColor: hijauGojek,
           decoration: InputDecoration(
             labelText: widget.labelText,
             hintText: widget.hintText,
@@ -128,3 +126,5 @@ class _TextFieldWidgetState extends State<TextFieldWidget> {
     );
   }
 }
+
+// checked

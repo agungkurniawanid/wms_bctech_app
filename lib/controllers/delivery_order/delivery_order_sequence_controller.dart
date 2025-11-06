@@ -6,9 +6,9 @@ class DeliveryOrderSequenceController extends GetxService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final Logger _logger = Logger();
 
-  static const String sequenceCollection = 'gr_sequences';
-  static const String reservationCollection = 'gr_reservations';
-  static const String grinCollection = 'good_receipt';
+  static const String sequenceCollection = 'delivery_order_sequences';
+  static const String reservationCollection = 'delivery_order_reservations';
+  static const String deliveryOrderCollection = 'delivery_order';
   static const int maxRetries = 5;
   static const int reservationTimeoutMinutes = 5;
 
@@ -219,10 +219,10 @@ class DeliveryOrderSequenceController extends GetxService {
         }
       }
       try {
-        final grinCancelled = await _firestore
-            .collection(grinCollection)
-            .where('grid', isGreaterThanOrEqualTo: 'GR$currentYear')
-            .where('grid', isLessThan: 'GR${currentYear + 1}')
+        final deliveryOrderCancelled = await _firestore
+            .collection(deliveryOrderCollection)
+            .where('doid', isGreaterThanOrEqualTo: 'DO$currentYear')
+            .where('doid', isLessThan: 'GR${currentYear + 1}')
             .where('status', isEqualTo: 'cancelled')
             .where(
               'cancelledAt',
@@ -231,7 +231,7 @@ class DeliveryOrderSequenceController extends GetxService {
             .where('cancelledAt', isLessThan: Timestamp.fromDate(endOfDay))
             .get();
 
-        for (final doc in grinCancelled.docs) {
+        for (final doc in deliveryOrderCancelled.docs) {
           final grId = doc.id;
           final sequence = _extractSequenceFromGrId(grId);
           if (sequence != null) {
@@ -239,7 +239,7 @@ class DeliveryOrderSequenceController extends GetxService {
           }
         }
       } catch (e) {
-        _logger.w('Could not query good_receipt for cancelled sequences: $e');
+        _logger.w('Could not query delivery_order for cancelled sequences: $e');
       }
       final sortedList = cancelledSequences.toList()..sort();
 
@@ -283,11 +283,11 @@ class DeliveryOrderSequenceController extends GetxService {
       }
       try {
         final lastGrQuery = await _firestore
-            .collection(grinCollection)
-            .where('grid', isGreaterThanOrEqualTo: 'GR$currentYear')
-            .where('grid', isLessThan: 'GR${currentYear + 1}')
+            .collection(deliveryOrderCollection)
+            .where('doid', isGreaterThanOrEqualTo: 'DO$currentYear')
+            .where('doid', isLessThan: 'GR${currentYear + 1}')
             .where('status', isEqualTo: 'completed')
-            .orderBy('grid', descending: true)
+            .orderBy('doid', descending: true)
             .limit(1)
             .get();
 
@@ -295,12 +295,14 @@ class DeliveryOrderSequenceController extends GetxService {
           final lastGrId = lastGrQuery.docs.first.id;
           final sequence = _extractSequenceFromGrId(lastGrId);
           if (sequence != null) {
-            _logger.d('Last successful sequence from good_receipt: $sequence');
+            _logger.d(
+              'Last successful sequence from delivery_order: $sequence',
+            );
             return sequence;
           }
         }
       } catch (e) {
-        _logger.w('Could not query good_receipt for last sequence: $e');
+        _logger.w('Could not query delivery_order for last sequence: $e');
       }
       _logger.d('No successful sequence found, starting from 0');
       return 0;
@@ -416,3 +418,5 @@ class DeliveryOrderSequenceController extends GetxService {
     }
   }
 }
+
+// checked

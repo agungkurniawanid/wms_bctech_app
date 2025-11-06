@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:wms_bctech/components/improved_camera_scanner_dialog_widget.dart';
 import 'package:wms_bctech/components/out/out_product_detail_bottomsheet_widget.dart';
 import 'package:wms_bctech/config/global_variable_config.dart';
 import 'package:wms_bctech/constants/delivery_order/delivery_order_constant.dart';
@@ -22,7 +23,6 @@ import 'package:wms_bctech/models/out/out_model.dart';
 import 'package:wms_bctech/pages/delivery_order/delivery_order_page.dart';
 import 'package:wms_bctech/pages/my_dialog_page.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
-import 'package:wms_bctech/components/in/in_product_detail_bottomsheet_widget.dart';
 import 'package:wms_bctech/components/scanner_dialog_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -36,14 +36,14 @@ class OutDetailPage extends StatefulWidget {
   final int index;
   final String from;
   final OutModel? flag;
-  final String? grId;
+  final String? doId;
   final bool isReadOnlyMode;
 
   const OutDetailPage(
     this.index,
     this.from,
     this.flag,
-    this.grId, {
+    this.doId, {
 
     super.key,
     this.isReadOnlyMode = false,
@@ -87,9 +87,9 @@ class _OutDetailPageState extends State<OutDetailPage>
   late bool isReadOnlyMode;
 
   // ✅ VARIABLE PENAMPUNG GR ID DAN STATUS
-  String? _currentGrId; // Menyimpan grId yang pertama kali digenerate
-  bool _isGrIdSavedToFirestore =
-      false; // Status apakah grId sudah disimpan ke Firestore
+  String? _currentdoId; // Menyimpan doId yang pertama kali digenerate
+  bool _isdoIdSavedToFirestore =
+      false; // Status apakah doId sudah disimpan ke Firestore
   final List<DeliveryOrderDetailModel> _pendingGrDetails =
       []; // Menampung detail sementara
 
@@ -184,8 +184,8 @@ class _OutDetailPageState extends State<OutDetailPage>
     _serialNumberController.addListener(_onSerialNumberChanged);
     _qtyController.text = "1";
 
-    _currentGrId = widget.grId;
-    _isGrIdSavedToFirestore = widget.grId != null;
+    _currentdoId = widget.doId;
+    _isdoIdSavedToFirestore = widget.doId != null;
 
     isReadOnlyMode = widget.isReadOnlyMode;
     _scrollController.addListener(_onScroll);
@@ -842,7 +842,7 @@ class _OutDetailPageState extends State<OutDetailPage>
       await showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => ImprovedCameraScannerDialog(
+        builder: (context) => ImprovedCameraScannerDialogWidget(
           onBarcodeDetected: (barcode) {
             // Process barcode dan dialog akan otomatis tertutup di _processBarcodeResult
             _processBarcodeResult(barcode);
@@ -1633,7 +1633,7 @@ class _OutDetailPageState extends State<OutDetailPage>
       umrez: 10,
       qtctn: 1,
       qtuom: 10.0,
-      qtyordered: 100.0,
+      qtydelivered: 100.0,
       vfdat: "20241231",
       descr: "Scanned product",
     );
@@ -2989,9 +2989,9 @@ class _OutDetailPageState extends State<OutDetailPage>
 
   Widget _buildModernProductCard(OutDetailModel outDetailModel, int index) {
     final qtyEntered = outDetailModel.qtyEntered?.toInt() ?? 0;
-    final qtyOrdered = outDetailModel.qtyordered?.toInt() ?? 0;
-    final remainingQty = qtyOrdered - qtyEntered;
-    final progress = qtyOrdered > 0 ? (qtyEntered / qtyOrdered) : 0.0;
+    final qtydelivered = outDetailModel.qtydelivered?.toInt() ?? 0;
+    final remainingQty = qtyEntered - qtydelivered;
+    final progress = qtyEntered > 0 ? (qtydelivered / qtyEntered) : 0.0;
 
     final isSNInput = outDetailModel.isSN;
 
@@ -3163,12 +3163,12 @@ class _OutDetailPageState extends State<OutDetailPage>
                         children: [
                           _buildQuantityChipWithLabel(
                             "Total Pesanan",
-                            "$qtyOrdered",
+                            "$qtyEntered",
                             Icons.shopping_cart,
                           ),
                           _buildQuantityChipWithLabel(
                             "Sudah Dikirim",
-                            "$qtyEntered",
+                            "$qtydelivered",
                             Icons.check_circle,
                           ),
                           _buildQuantityChipWithLabel(
@@ -3314,10 +3314,10 @@ class _OutDetailPageState extends State<OutDetailPage>
   // Progress Bar menggunakan progress_bar_chart
   // Widget _buildProgressBarChart(
   //   int qtyEntered,
-  //   int qtyOrdered,
+  //   int qtydelivered,
   //   int progressPercentage,
   // ) {
-  //   final remainingQty = qtyOrdered - qtyEntered;
+  //   final remainingQty = qtydelivered - qtyEntered;
   //   final remainingPercentage = 100 - progressPercentage;
 
   //   final List<StatisticsItem> progressStats = [
@@ -4162,47 +4162,47 @@ class _OutDetailPageState extends State<OutDetailPage>
     }
   }
 
-  Future<String?> _generateAndStoreGrId() async {
+  Future<String?> _generateAndStoredoId() async {
     // ✅ JIKA SUDAH ADA GR ID DARI PARAMETER, GUNAKAN ITU
-    if (_currentGrId != null && _currentGrId!.isNotEmpty) {
-      debugPrint('✅ Menggunakan GR ID dari parameter: $_currentGrId');
-      return _currentGrId;
+    if (_currentdoId != null && _currentdoId!.isNotEmpty) {
+      debugPrint('✅ Menggunakan GR ID dari parameter: $_currentdoId');
+      return _currentdoId;
     }
 
     // ✅ JIKA SUDAH ADA GR ID YANG SUDAH DIGENERATE SEBELUMNYA
-    if (_currentGrId != null && _isGrIdSavedToFirestore) {
-      return _currentGrId;
+    if (_currentdoId != null && _isdoIdSavedToFirestore) {
+      return _currentdoId;
     }
 
     try {
-      final String poNumber = widget.from == "sync"
+      final String soNumber = widget.from == "sync"
           ? widget.flag?.documentno ?? ""
           : _getCurrentOutModel().documentno ?? "";
 
       final String currentUser = globalVM.username.value;
 
-      if (poNumber.isEmpty) {
+      if (soNumber.isEmpty) {
         throw Exception("PO Number tidak ditemukan");
       }
 
-      final grinController = Get.find<DeliveryOrderController>();
+      final deliveryOrderController = Get.find<DeliveryOrderController>();
 
-      final result = await grinController.saveGrWithGeneratedId(
-        poNumber: poNumber,
+      final result = await deliveryOrderController.saveGrWithGeneratedId(
+        soNumber: soNumber,
         details: [],
         currentUser: currentUser,
       );
 
-      if (result['success'] == true && result['grId'] != null) {
-        final newGrId = result['grId'] as String;
+      if (result['success'] == true && result['doId'] != null) {
+        final newdoId = result['doId'] as String;
 
         _safeSetState(() {
-          _currentGrId = newGrId;
-          _isGrIdSavedToFirestore = true;
+          _currentdoId = newdoId;
+          _isdoIdSavedToFirestore = true;
         });
 
-        debugPrint('✅ GR ID baru dibuat dan disimpan: $newGrId');
-        return newGrId;
+        debugPrint('✅ GR ID baru dibuat dan disimpan: $newdoId');
+        return newdoId;
       } else {
         throw Exception(result['error'] ?? 'Gagal generate GR ID');
       }
@@ -4282,9 +4282,11 @@ class _OutDetailPageState extends State<OutDetailPage>
         return false;
       }
 
-      // --- START FIX: USE GRINCONTROLLER'S GLOBAL CHECK ---
-      final grinController = Get.find<DeliveryOrderController>();
-      final isUnique = await grinController.isSerialNumberUnique(trimmedSerial);
+      // --- START FIX: USE deliveryOrderCONTROLLER'S GLOBAL CHECK ---
+      final deliveryOrderController = Get.find<DeliveryOrderController>();
+      final isUnique = await deliveryOrderController.isSerialNumberUnique(
+        trimmedSerial,
+      );
 
       if (!isUnique) {
         debugPrint('❌ SERIAL NUMBER DUPLIKAT DITEMUKAN: $trimmedSerial');
@@ -4357,7 +4359,7 @@ class _OutDetailPageState extends State<OutDetailPage>
         _logger.d('✅ : $trimmedSerial');
       }
 
-      final grinController = Get.find<DeliveryOrderController>();
+      final deliveryOrderController = Get.find<DeliveryOrderController>();
 
       // ✅ BUAT DETAIL DATA
       final newDetail = DeliveryOrderDetailModel(
@@ -4385,19 +4387,18 @@ class _OutDetailPageState extends State<OutDetailPage>
         ),
       );
 
-      // ✅ STEP 1: GENERATE GR ID JIKA BELUM ADA
-      String? grIdToUse = _currentGrId;
-      if (grIdToUse == null) {
-        grIdToUse = await _generateAndStoreGrId();
-        if (grIdToUse == null) {
+      String? doIdToUse = _currentdoId;
+      if (doIdToUse == null) {
+        doIdToUse = await _generateAndStoredoId();
+        if (doIdToUse == null) {
           throw Exception('Gagal generate GR ID');
         }
       }
 
-      // ✅ STEP 2: TAMBAH DETAIL KE GR YANG SUDAH ADA DENGAN VALIDASI
-      final existingGr = await grinController.getGrinById(grIdToUse);
+      final existingGr = await deliveryOrderController.getDeliveryOrderById(
+        doIdToUse,
+      );
       if (existingGr != null) {
-        // ✅ VALIDASI TAMBAHAN: CEK DUPLIKAT SERIAL NUMBER DALAM GR YANG SAMA
         if (hasSerialNumber) {
           final isDuplicateInSameGr = existingGr.details.any(
             (detail) =>
@@ -4407,7 +4408,7 @@ class _OutDetailPageState extends State<OutDetailPage>
 
           if (isDuplicateInSameGr) {
             throw Exception(
-              "Serial number '$trimmedSerial' sudah digunakan dalam GR ini ($grIdToUse). "
+              "Serial number '$trimmedSerial' sudah digunakan dalam GR ini ($doIdToUse). "
               "Serial number harus unik.",
             );
           }
@@ -4420,10 +4421,11 @@ class _OutDetailPageState extends State<OutDetailPage>
         );
 
         // Update GR dengan detail yang baru (setelah merge) menggunakan method dengan validasi
-        final updateResult = await grinController.updateGrDetailsWithValidation(
-          grId: grIdToUse,
-          newDetails: updatedDetails,
-        );
+        final updateResult = await deliveryOrderController
+            .updateGrDetailsWithValidation(
+              doId: doIdToUse,
+              newDetails: updatedDetails,
+            );
 
         if (mounted) {
           if (Navigator.of(context).canPop()) {
@@ -4436,18 +4438,18 @@ class _OutDetailPageState extends State<OutDetailPage>
           _safeSetState(() {
             _pendingGrDetails.clear();
             _pendingGrDetails.addAll(updatedDetails);
-            _isGrIdSavedToFirestore = true;
+            _isdoIdSavedToFirestore = true;
           });
 
-          _logger.d('✅ Detail berhasil diproses ke GR: $grIdToUse');
+          _logger.d('✅ Detail berhasil diproses ke GR: $doIdToUse');
           if (hasSerialNumber) {
             _logger.d('✅ Serial number berhasil disimpan: $trimmedSerial');
           }
 
           if (hasSerialNumber) {
-            await grinController.saveSerialNumberGlobal(
+            await deliveryOrderController.saveSerialNumberGlobal(
               serialNumber: trimmedSerial,
-              grId: grIdToUse,
+              doId: doIdToUse,
               productId: productId,
             );
           }
@@ -4461,7 +4463,7 @@ class _OutDetailPageState extends State<OutDetailPage>
           // ✅ MODIFIKASI: KONTROL NAVIGASI BERDASARKAN PARAMETER
           if (shouldNavigate) {
             _showSuccessDialog(
-              grIdToUse,
+              doIdToUse,
               _pendingGrDetails.length,
               hasSerialNumber ? trimmedSerial : null,
             );
@@ -4524,7 +4526,7 @@ class _OutDetailPageState extends State<OutDetailPage>
 
   // ✅ DIALOG SUKSES DENGAN GR ID
   // ✅ DIALOG SUKSES DENGAN INFORMASI SERIAL NUMBER
-  void _showSuccessDialog(String grId, int totalItems, String? serialNumber) {
+  void _showSuccessDialog(String doId, int totalItems, String? serialNumber) {
     // Hitung total quantity untuk ditampilkan
     final totalQuantity = _pendingGrDetails.fold<int>(
       0,
@@ -4562,7 +4564,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      "GR ID: $grId",
+                      "GR ID: $doId",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.green.shade800,
@@ -4668,24 +4670,24 @@ class _OutDetailPageState extends State<OutDetailPage>
             child: Text("Tambah Lagi"),
           ),
 
-          // OPSI SEKUNDER: LIHAT GRIN (HANYA JIKA DIPERLUKAN)
+          // OPSI SEKUNDER: LIHAT DeliveryOrder (HANYA JIKA DIPERLUKAN)
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _navigateToGrinPage();
+              _navigateToDeliveryOrderPage();
             },
-            child: Text("Lihat GRIN"),
+            child: Text("Lihat DeliveryOrder"),
           ),
         ],
       ),
     );
   }
 
-  void _navigateToGrinPage() {
+  void _navigateToDeliveryOrderPage() {
     // ✅ KOSONGKAN VARIABLE PENAMPUNG SEBELUM NAVIGASI
     _resetGrData();
 
-    _logger.d('✅ Navigate to GrinPage with GR ID: $_currentGrId');
+    _logger.d('✅ Navigate to DeliveryOrderPage with GR ID: $_currentdoId');
     Get.offAll(() => DeliveryOrderPage());
   }
 
@@ -4699,8 +4701,8 @@ class _OutDetailPageState extends State<OutDetailPage>
   // ✅ PERBAIKI _resetGrData DENGAN SAFE SETSTATE
   void _resetGrData() {
     _safeSetState(() {
-      _currentGrId = null;
-      _isGrIdSavedToFirestore = false;
+      _currentdoId = null;
+      _isdoIdSavedToFirestore = false;
       _pendingGrDetails.clear();
     });
     debugPrint('🔄 GR data reset - variables cleared');
@@ -4953,30 +4955,6 @@ class _OutDetailPageState extends State<OutDetailPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Status realtime
-                        Row(
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: isReadOnlyMode
-                                    ? Colors.grey
-                                    : Colors.blueAccent,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              isReadOnlyMode ? "View Only" : "Realtime",
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
                         Text(
                           widget.from == "sync"
                               ? "${widget.flag?.documentno}"
@@ -4990,8 +4968,8 @@ class _OutDetailPageState extends State<OutDetailPage>
                         const SizedBox(height: 2),
                         Text(
                           isReadOnlyMode
-                              ? "Purchase Order (View Only)"
-                              : "Purchase Order",
+                              ? "Sales Order (View Only)"
+                              : "Sales Order",
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
@@ -5205,8 +5183,10 @@ class _OutDetailPageState extends State<OutDetailPage>
         return true; // No serial number is allowed
       }
 
-      final grinController = Get.find<DeliveryOrderController>();
-      final isUnique = await grinController.isSerialNumberUnique(serialNumber);
+      final deliveryOrderController = Get.find<DeliveryOrderController>();
+      final isUnique = await deliveryOrderController.isSerialNumberUnique(
+        serialNumber,
+      );
 
       if (!isUnique) {
         _showSerialNumberErrorDialog(serialNumber);
@@ -5487,12 +5467,12 @@ class _OutDetailPageState extends State<OutDetailPage>
   }
 
   // Future<void> _sendToCperpWithLoading() async {
-  //   if (_currentGrId == null) return;
+  //   if (_currentdoId == null) return;
 
   //   try {
   //     _isSendingToKafka.value = true;
 
-  //     await _inController.sendToKafkaForGR(_currentGrId!);
+  //     await _inController.sendToKafkaForGR(_currentdoId!);
 
   //     // Tunggu sebentar untuk memastikan status terupdate
   //     await Future.delayed(Duration(seconds: 2));
@@ -5513,8 +5493,8 @@ class _OutDetailPageState extends State<OutDetailPage>
   //   }
   // }
 
-  Future<void> _updateGrInStatusToSuccess() async {
-    if (_currentGrId == null) return;
+  Future<void> _updateDeliveryOrderStatusToSuccess() async {
+    if (_currentdoId == null) return;
 
     try {
       _isSendingToKafka.value = true;
@@ -5522,7 +5502,7 @@ class _OutDetailPageState extends State<OutDetailPage>
       // Update atau buat field status di Firestore menjadi "success"
       await FirebaseFirestore.instance
           .collection('delivery_order')
-          .doc(_currentGrId!)
+          .doc(_currentdoId!)
           .set(
             {'status': 'completed'},
             SetOptions(merge: true),
@@ -5560,7 +5540,7 @@ class _OutDetailPageState extends State<OutDetailPage>
           : detailsList;
 
       final totalItems = displayList.length;
-      final totalQty = _calculateTotalQtyOrdered();
+      final totalQty = _calculateTotalqtydelivered();
 
       final int totalInputItems = _pendingGrDetails.length;
       final int withSerialCount = _pendingGrDetails
@@ -5638,17 +5618,17 @@ class _OutDetailPageState extends State<OutDetailPage>
           mainAxisSize: MainAxisSize.min,
           children: [
             // ✅ TAMPILKAN INFO GR JIKA SUDAH ADA
-            if (_currentGrId != null || totalInputItems > 0)
+            if (_currentdoId != null || totalInputItems > 0)
               Container(
                 padding: EdgeInsets.all(12),
                 margin: EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: _isGrIdSavedToFirestore
+                  color: _isdoIdSavedToFirestore
                       ? Colors.green.shade50
                       : Colors.blue.shade50,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: _isGrIdSavedToFirestore
+                    color: _isdoIdSavedToFirestore
                         ? Colors.green.shade200
                         : Colors.blue.shade200,
                   ),
@@ -5657,14 +5637,14 @@ class _OutDetailPageState extends State<OutDetailPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // GR ID Info
-                    if (_currentGrId != null)
+                    if (_currentdoId != null)
                       Row(
                         children: [
                           Icon(
-                            _isGrIdSavedToFirestore
+                            _isdoIdSavedToFirestore
                                 ? Icons.check_circle
                                 : Icons.pending,
-                            color: _isGrIdSavedToFirestore
+                            color: _isdoIdSavedToFirestore
                                 ? Colors.green
                                 : Colors.blue,
                             size: 20,
@@ -5672,10 +5652,10 @@ class _OutDetailPageState extends State<OutDetailPage>
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              "GR ID: $_currentGrId",
+                              "GR ID: $_currentdoId",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: _isGrIdSavedToFirestore
+                                color: _isdoIdSavedToFirestore
                                     ? Colors.green.shade800
                                     : Colors.blue.shade800,
                               ),
@@ -5686,7 +5666,7 @@ class _OutDetailPageState extends State<OutDetailPage>
 
                     // Data Input Summary
                     if (totalInputItems > 0) ...[
-                      if (_currentGrId != null) SizedBox(height: 8),
+                      if (_currentdoId != null) SizedBox(height: 8),
                       Container(
                         padding: EdgeInsets.all(8),
                         decoration: BoxDecoration(
@@ -5753,20 +5733,22 @@ class _OutDetailPageState extends State<OutDetailPage>
             if (widget.from != "history")
               Row(
                 children: [
-                  // Tombol Cancel / Kembali ke GRIN
+                  // Tombol Cancel / Kembali ke DeliveryOrder
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: _handleCancelPress,
                       icon: Icon(
                         Icons.cancel,
-                        color: _isGrIdSavedToFirestore
+                        color: _isdoIdSavedToFirestore
                             ? hijauGojek
                             : Colors.grey,
                       ),
                       label: Text(
-                        _isGrIdSavedToFirestore ? "Kembali ke GRIN" : "Cancel",
+                        _isdoIdSavedToFirestore
+                            ? "Kembali ke DeliveryOrder"
+                            : "Cancel",
                         style: TextStyle(
-                          color: _isGrIdSavedToFirestore
+                          color: _isdoIdSavedToFirestore
                               ? hijauGojek
                               : Colors.grey,
                         ),
@@ -5774,20 +5756,20 @@ class _OutDetailPageState extends State<OutDetailPage>
                       style: OutlinedButton.styleFrom(
                         padding: EdgeInsets.symmetric(vertical: 12),
                         side: BorderSide(
-                          color: _isGrIdSavedToFirestore
+                          color: _isdoIdSavedToFirestore
                               ? hijauGojek
                               : Colors.grey,
                         ),
                       ),
                     ),
                   ),
-                  if (_currentGrId != null && _isGrIdSavedToFirestore) ...[
+                  if (_currentdoId != null && _isdoIdSavedToFirestore) ...[
                     SizedBox(width: 12),
                     Expanded(
                       child: FutureBuilder<DocumentSnapshot>(
                         future: FirebaseFirestore.instance
                             .collection('delivery_order')
-                            .doc(_currentGrId)
+                            .doc(_currentdoId)
                             .get(),
                         builder: (context, snapshot) {
                           if (!snapshot.hasData || !snapshot.data!.exists) {
@@ -5841,7 +5823,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                             return ElevatedButton.icon(
                               onPressed: isSent
                                   ? null
-                                  : _updateGrInStatusToSuccess,
+                                  : _updateDeliveryOrderStatusToSuccess,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: isSent
                                     ? Colors.grey
@@ -7715,15 +7697,15 @@ class _OutDetailPageState extends State<OutDetailPage>
     );
   }
 
-  String _calculateTotalQtyOrdered() {
+  String _calculateTotalqtydelivered() {
     final displayList = _realtimeDetailsList.isNotEmpty
         ? _realtimeDetailsList
         : detailsList;
 
     final total = displayList.fold<double>(0, (currentSum, item) {
       final qtyEntered = item.qtyEntered ?? 0.0;
-      final qtyOrdered = item.qtyordered ?? 0.0;
-      final remainingQty = qtyOrdered - qtyEntered;
+      final qtydelivered = item.qtydelivered ?? 0.0;
+      final remainingQty = qtydelivered - qtyEntered;
       return currentSum + (remainingQty > 0 ? remainingQty : 0);
     });
     return total.toStringAsFixed(2);
@@ -7928,8 +7910,8 @@ class _OutDetailPageState extends State<OutDetailPage>
       return;
     }
 
-    // ✅ CEK APAKAH HALAMAN INI DIBUKA DARI GRIN PAGE
-    final bool isFromGrinPage = widget.grId != null;
+    // ✅ CEK APAKAH HALAMAN INI DIBUKA DARI DeliveryOrder PAGE
+    final bool isFromDeliveryOrderPage = widget.doId != null;
 
     // ✅ CEK APAKAH ADA DATA YANG SUDAH DIINPUT
     final bool hasAnyData = _hasAnyDataInput();
@@ -7937,18 +7919,20 @@ class _OutDetailPageState extends State<OutDetailPage>
     final bool hasNonSerialData = _hasNonSerialNumberData();
 
     debugPrint('🔍 Status data sebelum back:');
-    debugPrint('   - From GRIN Page: $isFromGrinPage');
+    debugPrint('   - From DeliveryOrder Page: $isFromDeliveryOrderPage');
     debugPrint('   - Total items: ${_pendingGrDetails.length}');
     debugPrint('   - Dengan serial number: $hasSerialData');
     debugPrint('   - Tanpa serial number: $hasNonSerialData');
-    debugPrint('   - GR ID saved: $_isGrIdSavedToFirestore');
+    debugPrint('   - GR ID saved: $_isdoIdSavedToFirestore');
 
-    // ✅ JIKA DIBUKA DARI GRIN PAGE → LANGSUNG KEMBALI KE GRIN PAGE
-    if (isFromGrinPage) {
-      _logger.d('🔙 Opened from GRIN Page, navigating back to GRIN Page');
+    // ✅ JIKA DIBUKA DARI DeliveryOrder PAGE → LANGSUNG KEMBALI KE DeliveryOrder PAGE
+    if (isFromDeliveryOrderPage) {
+      _logger.d(
+        '🔙 Opened from DeliveryOrder Page, navigating back to DeliveryOrder Page',
+      );
 
       if (hasAnyData) {
-        _showSuccessToast("Data berhasil ditambahkan ke GR ID: $_currentGrId");
+        _showSuccessToast("Data berhasil ditambahkan ke GR ID: $_currentdoId");
       }
 
       _resetGrData();
@@ -7957,17 +7941,19 @@ class _OutDetailPageState extends State<OutDetailPage>
     }
 
     // ✅ LOGIKA UNTUK HALAMAN YANG DIBUKA DARI IN PAGE
-    if (hasAnyData && _isGrIdSavedToFirestore && _currentGrId != null) {
-      // ✅ ADA DATA YANG SUDAH DIINPUT → TAWARKAN NAVIGASI KE GRIN PAGE
-      _logger.d('📦 Data sudah diinput, tawarkan navigasi ke GrinPage');
+    if (hasAnyData && _isdoIdSavedToFirestore && _currentdoId != null) {
+      // ✅ ADA DATA YANG SUDAH DIINPUT → TAWARKAN NAVIGASI KE DeliveryOrder PAGE
+      _logger.d(
+        '📦 Data sudah diinput, tawarkan navigasi ke DeliveryOrderPage',
+      );
 
-      final shouldNavigateToGrin = await _showDataSavedDialog(
+      final shouldNavigateToDeliveryOrder = await _showDataSavedDialog(
         hasSerialData: hasSerialData,
         hasNonSerialData: hasNonSerialData,
       );
 
-      if (shouldNavigateToGrin) {
-        _navigateToGrinPage();
+      if (shouldNavigateToDeliveryOrder) {
+        _navigateToDeliveryOrderPage();
       } else {
         _logger.d('👤 User memilih untuk lanjutkan input data');
       }
@@ -7979,7 +7965,7 @@ class _OutDetailPageState extends State<OutDetailPage>
       Get.back();
     }
     // ✅ EDGE CASE: Ada data tapi belum disimpan
-    else if (hasAnyData && !_isGrIdSavedToFirestore) {
+    else if (hasAnyData && !_isdoIdSavedToFirestore) {
       _logger.w(
         '⚠️ Ada data yang belum disimpan: ${_pendingGrDetails.length} items',
       );
@@ -8084,7 +8070,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                             backgroundColor: Color(0xFFE8F5E8),
                             borderColor: Color(0xFFC8E6C9),
                             child: Text(
-                              "GR ID: $_currentGrId",
+                              "GR ID: $_currentdoId",
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 color: Color(0xFF2E7D32),
@@ -8142,7 +8128,7 @@ class _OutDetailPageState extends State<OutDetailPage>
 
                           // Description Text
                           Text(
-                            "Data telah berhasil disimpan. Apakah Anda ingin melihat daftar GRIN?",
+                            "Data telah berhasil disimpan. Apakah Anda ingin melihat daftar DeliveryOrder?",
                             style: TextStyle(
                               fontSize: isSmallDevice ? 14 : 15,
                               color: Colors.grey[700],
@@ -8192,7 +8178,7 @@ class _OutDetailPageState extends State<OutDetailPage>
 
                           SizedBox(width: 12),
 
-                          // Lihat GRIN Button
+                          // Lihat DeliveryOrder Button
                           Expanded(
                             child: ElevatedButton(
                               onPressed: () => Navigator.of(context).pop(true),
@@ -8219,7 +8205,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                                   ),
                                   SizedBox(width: 6),
                                   Text(
-                                    "Lihat GRIN",
+                                    "Lihat DeliveryOrder",
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w700,
@@ -8456,8 +8442,8 @@ class _OutDetailPageState extends State<OutDetailPage>
   }
 
   void _handleCancelPress() {
-    if (_isGrIdSavedToFirestore && _currentGrId != null) {
-      // Jika sudah disimpan, tampilkan konfirmasi ke GrinPage
+    if (_isdoIdSavedToFirestore && _currentdoId != null) {
+      // Jika sudah disimpan, tampilkan konfirmasi ke DeliveryOrderPage
       _handleBackPress();
     } else {
       // Jika belum disimpan, kembali ke InPage
@@ -8469,9 +8455,9 @@ class _OutDetailPageState extends State<OutDetailPage>
   //   showDialog(
   //     context: context,
   //     builder: (context) => AlertDialog(
-  //       title: Text("Lihat GRIN?"),
+  //       title: Text("Lihat DeliveryOrder?"),
   //       content: Text(
-  //         "Data GR sudah disimpan. Apakah Anda ingin melihat halaman GRIN?",
+  //         "Data GR sudah disimpan. Apakah Anda ingin melihat halaman DeliveryOrder?",
   //       ),
   //       actions: [
   //         TextButton(
@@ -8481,9 +8467,9 @@ class _OutDetailPageState extends State<OutDetailPage>
   //         ElevatedButton(
   //           onPressed: () {
   //             Navigator.of(context).pop();
-  //             _navigateToGrinPage();
+  //             _navigateToDeliveryOrderPage();
   //           },
-  //           child: Text("Lihat GRIN"),
+  //           child: Text("Lihat DeliveryOrder"),
   //         ),
   //       ],
   //     ),
@@ -8714,10 +8700,10 @@ class _OutDetailPageState extends State<OutDetailPage>
     VoidCallback? onAfterSave,
   }) {
     final hasSerialNumber = serialNumber != null && serialNumber.isNotEmpty;
-    final currentGrId = _currentGrId ?? "Akan digenerate";
+    final currentdoId = _currentdoId ?? "Akan digenerate";
     final productName =
         product.maktxUI ?? product.mProductId ?? "Unknown Product";
-    final poNumber = widget.from == "sync"
+    final soNumber = widget.from == "sync"
         ? widget.flag?.documentno ?? ""
         : _getCurrentOutModel().documentno ?? "";
 
@@ -8812,7 +8798,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                       iconColor: Colors.indigo,
                       backgroundColor: Colors.indigo.shade50,
                       title: "GR ID",
-                      value: currentGrId,
+                      value: currentdoId,
                       gradient: LinearGradient(
                         colors: [
                           Colors.indigo.shade50,
@@ -8828,7 +8814,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                       iconColor: Colors.blue,
                       backgroundColor: Colors.blue.shade50,
                       title: "Purchase Order",
-                      value: poNumber,
+                      value: soNumber,
                       subtitle: productName,
                       gradient: LinearGradient(
                         colors: [

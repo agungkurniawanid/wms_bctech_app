@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import 'package:wms_bctech/controllers/history_controller.dart';
 import 'package:wms_bctech/controllers/pid_controller.dart';
+import 'package:wms_bctech/controllers/stock_take_controller.dart';
 import 'package:wms_bctech/models/out/out_model.dart';
 import 'category_controller.dart';
 import 'weborder_controller.dart';
@@ -8,7 +9,6 @@ import 'in/in_controller.dart';
 import 'stock_check_controlller.dart';
 import 'global_controller.dart';
 import 'reports_controller.dart';
-import 'stock_tick_controller.dart';
 import 'role_controller.dart';
 
 class HomeBinding implements Bindings {
@@ -23,7 +23,7 @@ class HomeBinding implements Bindings {
     Get.lazyPut<ReportsVM>(() => ReportsVM(), fenix: true);
     Get.lazyPut<GlobalVM>(() => GlobalVM(), fenix: true);
     Get.lazyPut<PidViewModel>(() => PidViewModel(), fenix: true);
-    Get.lazyPut<StockTickVM>(() => StockTickVM(), fenix: true);
+    Get.lazyPut<StockTakeController>(() => StockTakeController(), fenix: true);
     Get.lazyPut<Rolevm>(() => Rolevm(), fenix: true);
   }
 }

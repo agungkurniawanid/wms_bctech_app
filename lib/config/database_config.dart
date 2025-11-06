@@ -1,4 +1,3 @@
-// todo:✅ Clean Code checked
 import 'package:wms_bctech/models/user/account_model.dart';
 import 'package:wms_bctech/models/category_model.dart';
 import 'package:wms_bctech/models/out/out_model.dart';
@@ -259,3 +258,5 @@ class DatabaseHelper {
     }
   }
 }
+
+// checked

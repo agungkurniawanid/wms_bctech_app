@@ -12,7 +12,6 @@ class OutCard extends StatelessWidget {
   final String? choice;
   final String? category;
 
-  // Data dummy untuk simulasi UI
   final Map<String, dynamic> dummyWOData = {
     'location': 'Warehouse A',
     'deliveryDate': '2023-12-01',
@@ -36,35 +35,28 @@ class OutCard extends StatelessWidget {
     this.category,
   });
 
-  // Method untuk simulasi perhitungan CTN
   String _calcuCTN() {
     try {
-      // Data dummy - dalam implementasi nyata ini akan diisi dari controller
-      return '10'; // Contoh nilai dummy
+      return '10';
     } catch (e) {
       debugPrint('Error in _calcuCTN: $e');
       return '0';
     }
   }
 
-  // Method untuk simulasi perhitungan warna
   int calcuforcolour() {
-    // Data dummy - return nilai acak untuk simulasi
-    return 2; // Contoh nilai dummy
+    return 2;
   }
 
-  // Method untuk simulasi perhitungan PCS
   String _calcuPCS() {
     try {
-      // Data dummy - dalam implementasi nyata ini akan diisi dari controller
-      return '25'; // Contoh nilai dummy
+      return '25';
     } catch (e) {
       debugPrint('Error in _calcuPCS: $e');
       return '0';
     }
   }
 
-  // Method untuk simulasi total CTN
   String _calculTotal() {
     try {
       final calcuCTN = _calcuCTN();
@@ -75,7 +67,6 @@ class OutCard extends StatelessWidget {
     }
   }
 
-  // Method untuk simulasi total PCS
   String _calcutotalpcs() {
     try {
       final calcuPCS = _calcuPCS();
@@ -86,25 +77,19 @@ class OutCard extends StatelessWidget {
     }
   }
 
-  // Widget untuk simulasi status AB
   InlineSpan getInlineSpan(int index) {
-    // Data dummy - dalam implementasi nyata ini akan berdasarkan kondisi tertentu
     return const WidgetSpan(
       child: CircleAvatar(backgroundColor: Colors.red, radius: 5.5),
     );
   }
 
-  // Widget untuk simulasi status CH
   InlineSpan getInlineSpanCH(int index) {
-    // Data dummy - dalam implementasi nyata ini akan berdasarkan kondisi tertentu
     return const WidgetSpan(
       child: CircleAvatar(backgroundColor: Colors.green, radius: 5.5),
     );
   }
 
-  // Widget untuk simulasi status FZ
   InlineSpan getInlineSpanFZ(int index) {
-    // Data dummy - dalam implementasi nyata ini akan berdasarkan kondisi tertentu
     return const WidgetSpan(
       child: CircleAvatar(backgroundColor: Colors.blue, radius: 5.5),
     );
@@ -136,7 +121,6 @@ class OutCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Section
           Container(
             width: double.infinity,
             height: 31 * fem,
@@ -157,8 +141,6 @@ class OutCard extends StatelessWidget {
               ),
             ),
           ),
-
-          // Date Section
           Container(
             margin: EdgeInsets.fromLTRB(4 * fem, 8 * fem, 0, 4 * fem),
             child: RichText(
@@ -176,8 +158,6 @@ class OutCard extends StatelessWidget {
               ),
             ),
           ),
-
-          // Quantity Section
           Container(
             margin: EdgeInsets.fromLTRB(4 * fem, 0, 0, 0),
             constraints: BoxConstraints(maxWidth: 150 * fem),
@@ -239,7 +219,6 @@ class OutCard extends StatelessWidget {
   Color _getHeaderColor() {
     if (category == "FZ") return Colors.blue;
     if (category == "CH") return Colors.green;
-    // Simulasi kondisi choiceout.value == "ALL"
     return Colors.orange;
   }
 
@@ -275,11 +254,9 @@ class OutCard extends StatelessWidget {
     }
   }
 
-  // Helper method untuk format tanggal sederhana
   String _formatDate(String dateString) {
     try {
-      // Format tanggal sederhana untuk simulasi
-      return dateString.split(' ')[0]; // Ambil hanya bagian tanggal
+      return dateString.split(' ')[0];
     } catch (e) {
       return dateString;
     }
@@ -301,3 +278,5 @@ TextStyle safeGoogleFont(
     color: color,
   );
 }
+
+//checked

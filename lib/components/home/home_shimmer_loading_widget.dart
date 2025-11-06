@@ -1,4 +1,3 @@
-// todo:✅ Clean Code checked
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -37,3 +36,5 @@ class _HomeShimmerLoadingWidgetState extends State<HomeShimmerLoadingWidget> {
     );
   }
 }
+
+// checked

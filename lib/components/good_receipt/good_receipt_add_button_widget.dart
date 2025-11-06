@@ -58,3 +58,5 @@ class GoodReceiptAddButtonWidget extends StatelessWidget {
     );
   }
 }
+
+// checked

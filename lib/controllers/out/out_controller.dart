@@ -556,8 +556,8 @@ class OutController extends GetxController {
               OutDetailModel detail,
             ) {
               final qtyEntered = detail.qtyEntered ?? 0.0;
-              final qtyOrdered = detail.qtyordered ?? 0.0;
-              return qtyEntered < qtyOrdered;
+              final qtydelivered = detail.qtydelivered ?? 0.0;
+              return qtyEntered < qtydelivered;
             }).toList();
 
             _logger.i(

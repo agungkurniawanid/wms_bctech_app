@@ -1,4 +1,3 @@
-// todo:✅ Clean Code checked
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:wms_bctech/controllers/in/in_controller.dart';
@@ -30,7 +29,7 @@ class _HomeRecentOrderCarouselWidgetState
   void _navigateToDetail(Map<String, dynamic> item) {
     try {
       final String documentNo = item['documentNo'] ?? '';
-      final String type = widget.contextType; // ✅ Bisa 'PO' atau 'SO'
+      final String type = widget.contextType;
 
       if (documentNo.isEmpty) {
         _showErrorSnackbar('Document number not found');
@@ -38,7 +37,6 @@ class _HomeRecentOrderCarouselWidgetState
       }
 
       if (type == 'PO') {
-        // ✅ Ambil data dari controller PO
         final poList = inController.tolistPORecent;
         final matchingPO = poList.firstWhere(
           (po) => po.documentno == documentNo,
@@ -47,7 +45,6 @@ class _HomeRecentOrderCarouselWidgetState
           },
         );
 
-        // ✅ Navigasi ke halaman IN DETAIL (PO)
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -56,12 +53,11 @@ class _HomeRecentOrderCarouselWidgetState
               "recent",
               matchingPO,
               null,
-              isReadOnlyMode: false, // ✅ Mode read-only
+              isReadOnlyMode: false,
             ),
           ),
         );
       } else if (type == 'SO') {
-        // ✅ Ambil data dari controller SO
         final soList = outController.tolistSalesOrderRecent;
         final matchingSO = soList.firstWhere(
           (so) => so.documentno == documentNo,
@@ -70,7 +66,6 @@ class _HomeRecentOrderCarouselWidgetState
           },
         );
 
-        // ✅ Navigasi ke halaman OUT DETAIL (SO)
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -79,7 +74,7 @@ class _HomeRecentOrderCarouselWidgetState
               "recent",
               matchingSO,
               null,
-              isReadOnlyMode: false, // ✅ Mode read-only
+              isReadOnlyMode: false,
             ),
           ),
         );
@@ -116,7 +111,7 @@ class _HomeRecentOrderCarouselWidgetState
                 padding: const EdgeInsets.only(right: 16),
                 child: HomeRecentOrderCardWidget(
                   documentNo: item['documentNo'] ?? '-',
-                  partnerName: item['supplier'] ?? '-', // ✅ Nama Vendor
+                  partnerName: item['supplier'] ?? '-',
                   title1: 'Document No',
                   value1: item['documentNo'] ?? '-',
                   title2: 'PO Date',
@@ -134,7 +129,7 @@ class _HomeRecentOrderCarouselWidgetState
                 padding: const EdgeInsets.only(right: 16),
                 child: HomeRecentOrderCardWidget(
                   documentNo: item['documentNo'] ?? '-',
-                  partnerName: item['customer'] ?? '-', // ✅ Nama Customer
+                  partnerName: item['customer'] ?? '-', //
                   title1: 'Document No',
                   value1: item['documentNo'] ?? '-',
                   title2: 'SO Date',
@@ -151,3 +146,5 @@ class _HomeRecentOrderCarouselWidgetState
     );
   }
 }
+
+// checked

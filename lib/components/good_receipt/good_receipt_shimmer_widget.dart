@@ -46,3 +46,5 @@ class GoodReceiptShimmerWidget extends StatelessWidget {
     );
   }
 }
+
+// checked

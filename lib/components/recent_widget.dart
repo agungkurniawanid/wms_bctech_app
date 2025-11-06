@@ -8,10 +8,8 @@ class RecentWidget extends StatelessWidget {
   final double iconSize;
   final double fontSize;
   final double height;
-
   final NumberFormat currency = NumberFormat("#,###", "en_US");
 
-  // Data dummy untuk simulasi UI
   final List<Map<String, dynamic>> dummyWOList = [
     {
       'inventoryGroup': 'FZ',
@@ -33,7 +31,6 @@ class RecentWidget extends StatelessWidget {
     },
   ];
 
-  // Variabel dummy untuk simulasi pilihan
   final String dummyChoiceWO = 'ALL';
 
   RecentWidget({
@@ -47,7 +44,6 @@ class RecentWidget extends StatelessWidget {
   });
 
   Color _getHeaderColor() {
-    // Data dummy - warna berdasarkan inventory group
     final currentItem = dummyWOList[index % dummyWOList.length];
     final group = currentItem['inventoryGroup'];
 
@@ -61,12 +57,10 @@ class RecentWidget extends StatelessWidget {
     }
   }
 
-  // Helper method untuk format tanggal sederhana
   String _formatDate(String dateString) {
     try {
       if (dateString.isEmpty) return '-';
-      // Format tanggal sederhana untuk simulasi
-      return dateString.split(' ')[0]; // Ambil hanya bagian tanggal
+      return dateString.split(' ')[0];
     } catch (e) {
       return dateString;
     }
@@ -78,7 +72,6 @@ class RecentWidget extends StatelessWidget {
     final double fem = MediaQuery.of(context).size.width / baseWidth;
     final double ffem = fem * 0.97;
 
-    // Safety check untuk index
     if (index < 0 || index >= dummyWOList.length) {
       return _buildEmptyCard(fem, ffem);
     }
@@ -93,9 +86,7 @@ class RecentWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(8 * fem),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(
-              alpha: 0.25,
-            ), // Diubah dari withValues
+            color: Colors.black.withValues(alpha: 0.25),
             offset: Offset(0 * fem, 4 * fem),
             blurRadius: 5 * fem,
           ),
@@ -104,7 +95,6 @@ class RecentWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Section
           Container(
             width: double.infinity,
             height: 31 * fem,
@@ -123,8 +113,6 @@ class RecentWidget extends StatelessWidget {
               ),
             ),
           ),
-
-          // Delivery Date Section
           Container(
             margin: EdgeInsets.fromLTRB(4 * fem, 4 * fem, 0, 2 * fem),
             child: RichText(
@@ -140,8 +128,6 @@ class RecentWidget extends StatelessWidget {
               ),
             ),
           ),
-
-          // Total Item Section
           Container(
             margin: EdgeInsets.fromLTRB(4 * fem, 0, 0, 2 * fem),
             child: RichText(
@@ -157,8 +143,6 @@ class RecentWidget extends StatelessWidget {
               ),
             ),
           ),
-
-          // Total Quantity Section
           Container(
             margin: EdgeInsets.fromLTRB(4 * fem, 0, 0, 4 * fem),
             constraints: BoxConstraints(maxWidth: 130 * fem),
@@ -180,7 +164,6 @@ class RecentWidget extends StatelessWidget {
     );
   }
 
-  // Widget untuk menampilkan card kosong jika index tidak valid
   Widget _buildEmptyCard(double fem, double ffem) {
     return Container(
       width: 155 * fem,
@@ -225,3 +208,5 @@ class RecentWidget extends StatelessWidget {
     );
   }
 }
+
+// checked

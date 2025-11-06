@@ -26,11 +26,9 @@ class NewAuthController extends GetxController {
 
   var isLoading = false.obs;
   var userId = ''.obs;
-
-  // Reactive variables
   var userData = Rxn<NewUserModel>();
   var userName = RxnString();
-  var userEmail = RxnString(); // Tambahan untuk menyimpan email
+  var userEmail = RxnString();
 
   Future<void> loadUserId() async {
     final prefs = await SharedPreferences.getInstance();
@@ -104,7 +102,6 @@ class NewAuthController extends GetxController {
 
   Future<bool> checkUserInFirestore(String email) async {
     try {
-      // Cari user berdasarkan email di collection role
       final querySnapshot = await _firestore
           .collection('role')
           .where('email', isEqualTo: email)
@@ -118,12 +115,10 @@ class NewAuthController extends GetxController {
       final roleDoc = querySnapshot.docs.first;
       final roleData = roleDoc.data();
 
-      // Check jika user aktif
       if (roleData['active']?.toString().toUpperCase() != 'Y') {
         return false;
       }
 
-      // Simpan user data untuk penggunaan selanjutnya
       userData.value = NewUserModel.fromMap(roleData);
       userName.value = roleData['username']?.toString() ?? '';
       userEmail.value = email;
@@ -171,8 +166,6 @@ class NewAuthController extends GetxController {
     EasyLoading.show(status: 'Authenticating...');
     try {
       final tokenValue = _firebaseController.token ?? '';
-
-      // Authenticate dengan LDAP
       final ldapResult = await authenticateWithLdap(email, password);
 
       if (ldapResult == null) {
@@ -194,7 +187,6 @@ class NewAuthController extends GetxController {
         "LDAP response - Status: $status, Message: $message, Email: $ldapEmail",
       );
 
-      // Handle empty response (user tidak ditemukan di LDAP)
       if (status == -1 && message == 'Empty response') {
         if (!context.mounted) return;
         AwesomeSnackbarWidget.show(
@@ -206,9 +198,7 @@ class NewAuthController extends GetxController {
         return;
       }
 
-      // Handle case 1: Login failed di LDAP tapi user ada
       if (status == 1 && message.contains('FAILED')) {
-        // Check jika user ada di Firestore berdasarkan email
         final userExists = await checkUserInFirestore(ldapEmail);
 
         if (!userExists) {
@@ -222,7 +212,6 @@ class NewAuthController extends GetxController {
           return;
         }
 
-        // Verify bypass password
         final isBypassValid = await verifyBypassPassword(password);
 
         if (!context.mounted) return;
@@ -244,12 +233,10 @@ class NewAuthController extends GetxController {
         return;
       }
 
-      // Handle case 2: Login success di LDAP
       if (status == 0 && message.contains('SUCCESS')) {
-        // Check jika user ada di Firestore berdasarkan email
         final userExists = await checkUserInFirestore(ldapEmail);
-
         if (!context.mounted) return;
+
         if (!userExists) {
           AwesomeSnackbarWidget.show(
             context: context,
@@ -268,10 +255,8 @@ class NewAuthController extends GetxController {
         );
         return;
       }
-
       if (!context.mounted) return;
 
-      // Handle other cases
       AwesomeSnackbarWidget.show(
         context: context,
         msg: 'Terjadi kesalahan: $message',
@@ -352,7 +337,6 @@ class NewAuthController extends GetxController {
       final roleData = qs.docs.first.data();
       final model = NewUserModel.fromMap(roleData);
 
-      // SIMPAN ke variabel reactive
       userData.value = model;
       userName.value = roleData['username']?.toString() ?? '';
       userEmail.value = roleData['email']?.toString() ?? '';
@@ -392,3 +376,5 @@ class NewAuthController extends GetxController {
     }
   }
 }
+
+// checked

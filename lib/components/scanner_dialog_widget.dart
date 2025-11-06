@@ -5,12 +5,12 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 class QRScannerDialog extends StatefulWidget {
   final Function(String) onQRCodeDetected;
   final Function() onClose;
-  final VoidCallback openManualInput; // Wajib, tidak nullable
+  final VoidCallback openManualInput;
 
   const QRScannerDialog({
     required this.onQRCodeDetected,
     required this.onClose,
-    required this.openManualInput, // Diperlukan
+    required this.openManualInput,
     super.key,
   });
 
@@ -40,10 +40,8 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
   }
 
   void _handleManualInput() {
-    // Tutup dialog scanner terlebih dahulu
     widget.onClose();
 
-    // Tunggu sebentar lalu buka bottom sheet manual
     Future.delayed(const Duration(milliseconds: 300), () {
       widget.openManualInput();
     });
@@ -79,7 +77,6 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Modern Header
             Container(
               padding: EdgeInsets.all(isSmallDevice ? 12 : 16),
               decoration: BoxDecoration(
@@ -126,15 +123,12 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
                 ],
               ),
             ),
-
-            // Content
             Flexible(
               child: Padding(
                 padding: EdgeInsets.all(isSmallDevice ? 12 : 16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Scanner Preview
                     Flexible(
                       child: AspectRatio(
                         aspectRatio: 3 / 4,
@@ -159,8 +153,6 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
                                   }
                                 },
                               ),
-
-                              // Scanning Animation Overlay
                               Center(
                                 child: Container(
                                   width: isSmallDevice ? 180 : 220,
@@ -174,7 +166,6 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
                                   ),
                                   child: Stack(
                                     children: [
-                                      // Corner decorations
                                       ...List.generate(4, (index) {
                                         return Positioned(
                                           top: index < 2 ? 0 : null,
@@ -224,10 +215,7 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
                         ),
                       ),
                     ),
-
                     SizedBox(height: isSmallDevice ? 12 : 16),
-
-                    // Instructions Card
                     Container(
                       padding: EdgeInsets.all(isSmallDevice ? 10 : 12),
                       decoration: BoxDecoration(
@@ -264,16 +252,12 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
                         ],
                       ),
                     ),
-
                     SizedBox(height: isSmallDevice ? 12 : 16),
-
-                    // Modern Control Buttons
                     Wrap(
                       spacing: isSmallDevice ? 6 : 8,
                       runSpacing: isSmallDevice ? 6 : 8,
                       alignment: WrapAlignment.center,
                       children: [
-                        // Torch toggle
                         _ModernButton(
                           icon: _isTorchOn ? Icons.flash_on : Icons.flash_off,
                           label: isSmallDevice ? null : "Flash",
@@ -295,8 +279,6 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
                             }
                           },
                         ),
-
-                        // Switch camera
                         _ModernButton(
                           icon: Icons.flip_camera_ios,
                           label: isSmallDevice ? null : "Balik",
@@ -311,18 +293,14 @@ class _QRScannerDialogState extends State<QRScannerDialog> {
                             }
                           },
                         ),
-
-                        // Manual button - PERBAIKAN DI SINI
                         _ModernButton(
                           icon: Icons.keyboard,
                           label: "Manual",
                           backgroundColor: hijauGojek.withValues(alpha: 0.1),
                           foregroundColor: hijauGojek,
                           isSmall: isSmallDevice,
-                          onPressed: _handleManualInput, // Panggil method baru
+                          onPressed: _handleManualInput,
                         ),
-
-                        // Close button
                         _ModernButton(
                           icon: Icons.close,
                           label: "Tutup",
@@ -406,3 +384,5 @@ class _ModernButton extends StatelessWidget {
     );
   }
 }
+
+// checked

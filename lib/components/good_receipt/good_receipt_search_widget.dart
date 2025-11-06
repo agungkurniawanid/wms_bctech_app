@@ -28,3 +28,5 @@ class GoodReceiptSearchWidgets extends StatelessWidget {
     );
   }
 }
+
+// checked

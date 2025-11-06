@@ -1,4 +1,3 @@
-// todo:✅ Clean Code checked - Modern Design
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
@@ -18,28 +17,25 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage>
     with SingleTickerProviderStateMixin {
-  // Form state
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final _emailFieldKey = GlobalKey<FormFieldState<String>>();
   final _passwordFieldKey = GlobalKey<FormFieldState<String>>();
-
-  // Controller variable
   final FirebaseController _firebaseController = FirebaseController();
   final NewAuthController _authController = NewAuthController();
 
-  // Form variable
-  String _email = '', _password = '', token = '';
-  String? _selectedDivision;
-
-  // Daftar divisi perusahaan
   final List<Map<String, String>> _divisions = [
-    {'name': 'PT BC Technology', 'logo': 'data/images/bc-tech-logo.png'},
+    {
+      'name': 'PT Bina Cipta Technology',
+      'logo': 'data/images/bc-tech-logo.png',
+    },
     {'name': 'PT BISI International Tbk', 'logo': 'assets/icons/bisi.png'},
     {'name': 'PT Multi Sarana Indotani', 'logo': 'assets/icons/msi.png'},
     {'name': 'PT Tanindo Intertraco', 'logo': 'assets/icons/tanindo.png'},
   ];
 
-  // Animation variable
+  String _email = '', _password = '', token = '';
+  String? _selectedDivision;
+
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -47,7 +43,6 @@ class _LoginPageState extends State<LoginPage>
   void initState() {
     super.initState();
     _firebaseController.initializeFirebaseMessaging();
-
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -55,7 +50,6 @@ class _LoginPageState extends State<LoginPage>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
-
     _animationController.forward();
   }
 

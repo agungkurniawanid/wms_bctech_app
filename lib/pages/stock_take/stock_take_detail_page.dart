@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:wms_bctech/models/category_model.dart';
 import 'package:wms_bctech/models/item_choice_model.dart';
-import 'package:wms_bctech/models/stock_take_model.dart';
+import 'package:wms_bctech/models/stock/stock_take_model.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 
@@ -1142,7 +1142,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           title: _isSearching
               ? _buildSearchField()
               : Text(
-                  widget.stocktake?.documentno ?? 'Document Not Found',
+                  widget.stocktake?.documentid ?? 'Document Not Found',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -1204,7 +1204,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   }
 
   bool _isApproveVisible() {
-    return (widget.stocktake?.isapprove ?? "N") == "N";
+    return (widget.stocktake?.isApprove ?? "N") == "N";
   }
 
   // Color _getApproveButtonColor() {
@@ -1217,7 +1217,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
 
   void _onApprovePressed() {
     Map<String, dynamic> dummyData = {
-      'documentno': widget.stocktake?.documentno ?? 'DUMMY_DOC',
+      'documentno': widget.stocktake?.documentid ?? 'DUMMY_DOC',
       'isapprove': 'N',
     };
     _showMyDialogApprove(dummyData);
@@ -1419,7 +1419,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   }
 
   Future<void> _onProductTap(Map<String, dynamic> product, int index) async {
-    final isApproved = (widget.stocktake?.isapprove) == "Y";
+    final isApproved = (widget.stocktake?.isApprove) == "Y";
 
     if (isApproved) return;
 

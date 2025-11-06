@@ -26,10 +26,7 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
   });
 
   Color get _primaryColor {
-    return contextType == 'PO'
-        ? Colors
-              .blueAccent // Indigo untuk PO
-        : hijauGojek; // Emerald untuk SO
+    return contextType == 'PO' ? Colors.blueAccent : hijauGojek;
   }
 
   IconData get _headerIcon {
@@ -41,14 +38,14 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 280, // ✅ Dikurangi dari 320 ke 280
+      width: 280,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [Colors.white, Colors.grey.shade50],
         ),
-        borderRadius: BorderRadius.circular(16), // ✅ Dikurangi dari 20 ke 16
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: _primaryColor.withValues(alpha: 0.08),
@@ -68,9 +65,8 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ✅ COMPACT HEADER - Type Badge & Partner Name Combined
             Container(
-              padding: const EdgeInsets.all(16), // ✅ Dikurangi dari 20 ke 16
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -84,20 +80,15 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Type Badge Row
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(6), // ✅ Dikurangi
+                        padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: _primaryColor,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(
-                          _headerIcon,
-                          color: Colors.white,
-                          size: 16, // ✅ Dikurangi dari 20 ke 16
-                        ),
+                        child: Icon(_headerIcon, color: Colors.white, size: 16),
                       ),
                       const SizedBox(width: 8),
                       Container(
@@ -122,10 +113,7 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
-                  // Partner Name
                   Row(
                     children: [
                       Icon(
@@ -170,14 +158,12 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
                 ],
               ),
             ),
-
-            // ✅ COMPACT DETAILS SECTION
             Padding(
-              padding: const EdgeInsets.all(16), // ✅ Dikurangi dari 20 ke 16
+              padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
                   _buildCompactDetailRow(Icons.tag_rounded, title1, value1),
-                  const SizedBox(height: 10), // ✅ Dikurangi dari 14 ke 10
+                  const SizedBox(height: 10),
                   _buildCompactDetailRow(
                     Icons.calendar_today_rounded,
                     title2,
@@ -192,13 +178,9 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
                 ],
               ),
             ),
-
-            // ✅ COMPACT FOOTER
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                vertical: 10,
-              ), // ✅ Dikurangi dari 14 ke 10
+              padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                 color: _primaryColor.withValues(alpha: 0.04),
                 border: Border(
@@ -215,7 +197,7 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
                     'View Details',
                     style: TextStyle(
                       fontFamily: 'MonaSans',
-                      fontSize: 11, // ✅ Dikurangi dari 12 ke 11
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: _primaryColor,
                       letterSpacing: 0.5,
@@ -224,7 +206,7 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
                   const SizedBox(width: 4),
                   Icon(
                     Icons.arrow_forward_rounded,
-                    size: 12, // ✅ Dikurangi dari 14 ke 12
+                    size: 12,
                     color: _primaryColor,
                   ),
                 ],
@@ -240,18 +222,14 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(6), // ✅ Dikurangi dari 8 ke 6
+          padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
             color: _primaryColor.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(6),
           ),
-          child: Icon(
-            icon,
-            size: 14, // ✅ Dikurangi dari 16 ke 14
-            color: _primaryColor,
-          ),
+          child: Icon(icon, size: 14, color: _primaryColor),
         ),
-        const SizedBox(width: 10), // ✅ Dikurangi dari 12 ke 10
+        const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -260,7 +238,7 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
                 title,
                 style: TextStyle(
                   fontFamily: 'MonaSans',
-                  fontSize: 10, // ✅ Dikurangi dari 11 ke 10
+                  fontSize: 10,
                   fontWeight: FontWeight.w600,
                   color: Colors.grey.shade600,
                 ),
@@ -270,7 +248,7 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
                 value,
                 style: TextStyle(
                   fontFamily: 'MonaSans',
-                  fontSize: 13, // ✅ Dikurangi dari 14 ke 13
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: Colors.grey.shade900,
                   letterSpacing: -0.1,
@@ -285,3 +263,5 @@ class HomeRecentOrderCardWidget extends StatelessWidget {
     );
   }
 }
+
+// checked

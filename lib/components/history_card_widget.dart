@@ -96,8 +96,6 @@ class HistoryCard extends StatelessWidget {
                         ),
                       ),
                     ),
-
-                    // Trailing Icon
                     const SizedBox(width: 12.0),
                     Icon(
                       Icons.arrow_forward_ios_rounded,
@@ -106,7 +104,6 @@ class HistoryCard extends StatelessWidget {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 12.0),
                 Row(
                   children: [
@@ -127,7 +124,6 @@ class HistoryCard extends StatelessWidget {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 8.0),
                 Row(
                   children: [
@@ -248,3 +244,5 @@ class CompactHistoryCard extends StatelessWidget {
     );
   }
 }
+
+// checked
