@@ -1,7 +1,7 @@
 import 'package:get/get.dart';
 import 'package:wms_bctech/controllers/history_controller.dart';
 import 'package:wms_bctech/controllers/pid_controller.dart';
-import 'package:wms_bctech/controllers/stock_take_controller.dart';
+import 'package:wms_bctech/controllers/stock_take/stock_take_controller.dart';
 import 'package:wms_bctech/models/out/out_model.dart';
 import 'category_controller.dart';
 import 'weborder_controller.dart';

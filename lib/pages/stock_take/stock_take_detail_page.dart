@@ -1142,7 +1142,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           title: _isSearching
               ? _buildSearchField()
               : Text(
-                  widget.stocktake?.documentid ?? 'Document Not Found',
+                  widget.stocktake?.whName ?? 'Document Not Found',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -1176,6 +1176,19 @@ class _StockTakeDetailState extends State<StockTakeDetail>
             Icons.email_outlined,
             color: Colors.white,
             size: 24,
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        FloatingActionButton(
+          onPressed: _scanBarcodeDummy, // Menggunakan fungsi scan untuk "plus"
+          backgroundColor: hijauGojek, // Warna hijau untuk aksi tambah
+          heroTag: "addBtn", // Hero tag unik
+          elevation: 4,
+          child: const Icon(
+            Icons.add_rounded, // Ikon "Plus"
+            color: Colors.white,
+            size: 28,
           ),
         ),
         const SizedBox(height: 16),

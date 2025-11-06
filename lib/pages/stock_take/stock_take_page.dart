@@ -4,7 +4,7 @@ import 'package:logger/logger.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/models/stock/stock_take_model.dart';
 import 'package:wms_bctech/pages/stock_take/stock_take_header_page.dart';
-import 'package:wms_bctech/controllers/stock_take_controller.dart';
+import 'package:wms_bctech/controllers/stock_take/stock_take_controller.dart';
 
 class StockTakePage extends StatefulWidget {
   const StockTakePage({super.key});
@@ -543,7 +543,7 @@ class _StockTakePageState extends State<StockTakePage> {
       ),
     );
 
-    Get.to(() => StockTakeHeader());
+    Get.to(() => StockTakeHeader(stocktake: stock));
   }
 
   List<StockTakeModel> _getFilteredStocks() {

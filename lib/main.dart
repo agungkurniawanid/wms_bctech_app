@@ -10,7 +10,7 @@ import 'package:wms_bctech/controllers/in/in_controller.dart';
 import 'package:wms_bctech/controllers/out/out_controller.dart';
 import 'package:wms_bctech/controllers/role_controller.dart';
 import 'package:wms_bctech/controllers/global_controller.dart';
-import 'package:wms_bctech/controllers/stock_take_controller.dart';
+import 'package:wms_bctech/controllers/stock_take/stock_take_controller.dart';
 import 'package:wms_bctech/helpers/config_helper.dart';
 import 'package:wms_bctech/helpers/network_helper.dart';
 import 'package:wms_bctech/pages/splash_screen_page.dart';

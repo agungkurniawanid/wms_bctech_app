@@ -760,7 +760,15 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _createNewDocument,
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                StockTakeDetail(stocktake: widget.stocktake),
+                          ),
+                        );
+                      },
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -988,7 +996,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
               : Text(
                   (widget.stocktake?.lGort.isNotEmpty ?? false)
                       ? widget.stocktake!.lGort.join(', ')
-                      : "Stock Take Documents",
+                      : "PID ${widget.stocktake?.whName}",
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
