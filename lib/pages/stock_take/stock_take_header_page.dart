@@ -1,9 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
-import 'package:get/get.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/models/stock/stock_take_model.dart';
+import 'package:wms_bctech/models/stock/stock_take_detail_model.dart';
 import 'package:wms_bctech/pages/stock_take/stock_take_detail_page.dart';
+import 'package:shimmer/shimmer.dart'; // Pastikan package shimmer sudah ditambahkan
 
 class StockTakeHeader extends StatefulWidget {
   final StockTakeModel? stocktake;
@@ -15,7 +17,6 @@ class StockTakeHeader extends StatefulWidget {
 
 class _StockTakeHeaderState extends State<StockTakeHeader>
     with SingleTickerProviderStateMixin {
-  // Definisi warna hijau Gojek
   final Color hijauGojekLight = const Color(0xFF4CAF50);
   final Color hijauGojekDark = const Color(0xFF008A0E);
 
@@ -37,7 +38,6 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
     },
   ];
 
-  // Data dummy untuk dokumen stock take
   final List<Map<String, dynamic>> _dummyDocuments = [
     {
       'documentno': 'DOC001',
@@ -74,9 +74,13 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
   ];
 
   final List<Map<String, dynamic>> _filteredDocuments = [];
-
   final ScrollController _controller = ScrollController();
   final TextEditingController _searchController = TextEditingController();
+
+  // Product selection variables
+  final Set<String> _selectedProductIds = {}; // Store selected product IDs
+  final TextEditingController _productSearchController =
+      TextEditingController();
 
   bool allowBack = true;
   bool _isSearching = false;
@@ -159,6 +163,86 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
               .toList(),
         );
       });
+    }
+  }
+
+  void _showProductSelectionBottomSheet() {
+    // Reset search controller ketika bottom sheet dibuka
+    _productSearchController.clear();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ProductSelectionBottomSheet(
+        stocktake: widget.stocktake,
+        hijauGojek: hijauGojekLight,
+        hijauGojekDark: hijauGojekDark,
+        selectedProductIds: _selectedProductIds,
+        onConfirm: _createNewDocumentWithProducts,
+        productSearchController: _productSearchController,
+      ),
+    );
+  }
+
+  void _createNewDocumentWithProducts(
+    List<Map<String, dynamic>> selectedProducts,
+  ) async {
+    try {
+      EasyLoading.show(status: 'Membuat dokumen...');
+
+      final newDocRef = FirebaseFirestore.instance.collection('stock').doc();
+      final newDocId = newDocRef.id;
+
+      final newDocument = {
+        'documentid': newDocId,
+        'createdby': 'Demo User',
+        'created': DateTime.now().toString(),
+        'isapprove': 'N',
+        'lGORT': widget.stocktake?.lGort ?? ['WH-NEW'],
+        'detail': selectedProducts,
+        'totalItems': selectedProducts.length,
+        'documentno': 'DOC${DateTime.now().millisecondsSinceEpoch}',
+        'whName': widget.stocktake?.whName ?? 'New Warehouse',
+      };
+
+      await newDocRef.set(newDocument);
+
+      EasyLoading.dismiss();
+
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => StockTakeDetail(
+            stocktake: StockTakeModel(
+              documentid: newDocId,
+              createdBy: 'Demo User',
+              created: DateTime.now().toString(),
+              isApprove: 'N',
+              lGort: widget.stocktake?.lGort ?? ['WH-NEW'],
+              detail: selectedProducts
+                  .map((p) => StockTakeDetailModel.fromJson(p))
+                  .toList(),
+              updated: '',
+              updatedby: '',
+              doctype: 'stocktake',
+              lastQuery: '',
+              countDetail: selectedProducts.length,
+              whName: widget.stocktake?.whName ?? 'New Warehouse',
+              whValue: '',
+              locatorValue: '',
+            ),
+          ),
+        ),
+      );
+
+      EasyLoading.showSuccess('Dokumen berhasil dibuat!');
+    } catch (e) {
+      EasyLoading.dismiss();
+      EasyLoading.showError('Gagal membuat dokumen: $e');
     }
   }
 
@@ -253,19 +337,21 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                             ? LinearGradient(
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
-                                colors: [hijauGojek, hijauGojekDark],
+                                colors: [hijauGojekLight, hijauGojekDark],
                               )
                             : null,
                         color: isSelected ? null : Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: isSelected ? hijauGojek : Colors.grey.shade300,
+                          color: isSelected
+                              ? hijauGojekLight
+                              : Colors.grey.shade300,
                           width: isSelected ? 0 : 1.5,
                         ),
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                  color: hijauGojek.withValues(alpha: 0.3),
+                                  color: hijauGojekLight.withValues(alpha: 0.3),
                                   blurRadius: 12,
                                   offset: const Offset(0, 6),
                                 ),
@@ -336,7 +422,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: hijauGojek.withValues(alpha: 0.08),
+            color: hijauGojekLight.withValues(alpha: 0.08),
             blurRadius: 15,
             offset: const Offset(0, 5),
             spreadRadius: 0,
@@ -355,11 +441,9 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Document Number Badge
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -369,12 +453,12 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [hijauGojek, hijauGojekDark],
+                          colors: [hijauGojekLight, hijauGojekDark],
                         ),
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: hijauGojek.withValues(alpha: 0.3),
+                            color: hijauGojekLight.withValues(alpha: 0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 4),
                           ),
@@ -401,8 +485,6 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                         ],
                       ),
                     ),
-
-                    // Status Badge
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -448,10 +530,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 16),
-
-                // Divider
                 Container(
                   height: 1,
                   decoration: BoxDecoration(
@@ -464,13 +543,9 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 16),
-
-                // Info Section
                 Row(
                   children: [
-                    // Left Section
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -479,7 +554,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                             Icons.person_rounded,
                             'Created By',
                             document['createdby'],
-                            hijauGojek,
+                            hijauGojekLight,
                           ),
                           const SizedBox(height: 12),
                           _buildInfoRow(
@@ -491,22 +566,18 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                         ],
                       ),
                     ),
-
-                    // Vertical Divider
                     Container(
                       width: 1,
                       height: 60,
                       margin: const EdgeInsets.symmetric(horizontal: 16),
                       color: Colors.grey.shade200,
                     ),
-
-                    // Right Section - Stats
                     Column(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: hijauGojek.withValues(alpha: 0.1),
+                            color: hijauGojekLight.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
@@ -536,17 +607,14 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 16),
-
-                // Bottom Action
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: hijauGojek.withValues(alpha: 0.05),
+                    color: hijauGojekLight.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
@@ -563,7 +631,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                       Icon(
                         Icons.arrow_forward_ios_rounded,
                         size: 14,
-                        color: hijauGojek,
+                        color: hijauGojekLight,
                       ),
                     ],
                   ),
@@ -624,219 +692,6 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
     );
   }
 
-  Future<void> _showCreateDocumentDialog() async {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Icon Header
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Colors.orange.shade400, Colors.orange.shade600],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.orange.shade200,
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.white,
-                  size: 40,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Title
-              const Text(
-                'Create New Document?',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Description
-              Text(
-                'Are you sure to create a new stock take document based on current stock?',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.grey.shade600,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Info Box
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: hijauGojek.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: hijauGojek.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      color: hijauGojekDark,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'This action will create a new document for stock taking',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: hijauGojekDark,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Action Buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        side: BorderSide(
-                          color: Colors.grey.shade300,
-                          width: 1.5,
-                        ),
-                        foregroundColor: Colors.grey.shade700,
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.close_rounded, size: 20),
-                          SizedBox(width: 8),
-                          Text(
-                            'Cancel',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                StockTakeDetail(stocktake: widget.stocktake),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        backgroundColor: hijauGojek,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.check_circle_rounded, size: 20),
-                          SizedBox(width: 8),
-                          Text(
-                            'Create',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _createNewDocument() async {
-    try {
-      EasyLoading.show(
-        status: 'Creating Document...',
-        maskType: EasyLoadingMaskType.black,
-      );
-
-      // Simulasi pembuatan dokumen baru
-      await Future.delayed(const Duration(seconds: 2));
-
-      // Tambah dokumen dummy baru
-      final newDoc = {
-        'documentno': 'DOC00${_dummyDocuments.length + 1}',
-        'createdby': 'Demo User',
-        'created': DateTime.now().toString().substring(0, 19),
-        'isapprove': 'N',
-        'lGORT': ['WH-NEW'],
-        'totalItems': 0,
-      };
-
-      setState(() {
-        _dummyDocuments.insert(0, newDoc);
-        _filterDocuments();
-      });
-
-      EasyLoading.dismiss();
-      Get.back();
-      EasyLoading.showSuccess('Document created successfully!');
-    } catch (e) {
-      EasyLoading.dismiss();
-      EasyLoading.showError('Failed to create document');
-    }
-  }
-
   Widget _buildDocumentList() {
     if (_filteredDocuments.isEmpty) {
       return Expanded(child: _buildEmptyState());
@@ -872,7 +727,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  hijauGojek.withValues(alpha: 0.1),
+                  hijauGojekLight.withValues(alpha: 0.1),
                   hijauGojekLight.withValues(alpha: 0.1),
                 ],
               ),
@@ -903,31 +758,12 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
               height: 1.5,
             ),
           ),
-          const SizedBox(height: 32),
-          ElevatedButton.icon(
-            onPressed: _showCreateDocumentDialog,
-            icon: const Icon(Icons.add_rounded, size: 20),
-            label: const Text(
-              'Create Document',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: hijauGojek,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 0,
-            ),
-          ),
         ],
       ),
     );
   }
 
   void _navigateToDetail(Map<String, dynamic> document, int index) {
-    // Buat StockTakeModel dummy dari data document
     final stockTakeModel = StockTakeModel(
       documentid: document['documentno'],
       createdBy: document['createdby'],
@@ -987,7 +823,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [hijauGojek, hijauGojekDark],
+                colors: [hijauGojekLight, hijauGojekDark],
               ),
             ),
           ),
@@ -1010,8 +846,8 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
           children: [_buildStatusChoiceChips(), _buildDocumentList()],
         ),
         floatingActionButton: FloatingActionButton.extended(
-          onPressed: _showCreateDocumentDialog,
-          backgroundColor: hijauGojek,
+          onPressed: _showProductSelectionBottomSheet,
+          backgroundColor: hijauGojekLight,
           foregroundColor: Colors.white,
           elevation: 4,
           icon: const Icon(Icons.add_rounded, size: 24),
@@ -1036,6 +872,824 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
     _animationController.dispose();
     _controller.dispose();
     _searchController.dispose();
+    _productSearchController.dispose();
+    super.dispose();
+  }
+}
+
+// Bottom Sheet Widget yang terpisah dengan pagination dan live search
+class _ProductSelectionBottomSheet extends StatefulWidget {
+  final StockTakeModel? stocktake;
+  final Color hijauGojek;
+  final Color hijauGojekDark;
+  final Set<String> selectedProductIds;
+  final Function(List<Map<String, dynamic>>) onConfirm;
+  final TextEditingController productSearchController;
+
+  const _ProductSelectionBottomSheet({
+    required this.stocktake,
+    required this.hijauGojek,
+    required this.hijauGojekDark,
+    required this.selectedProductIds,
+    required this.onConfirm,
+    required this.productSearchController,
+  });
+
+  @override
+  State<_ProductSelectionBottomSheet> createState() =>
+      _ProductSelectionBottomSheetState();
+}
+
+class _ProductSelectionBottomSheetState
+    extends State<_ProductSelectionBottomSheet> {
+  final ScrollController _scrollController = ScrollController();
+  final List<Map<String, dynamic>> _allProducts = [];
+  final List<Map<String, dynamic>> _displayedProducts = [];
+  final Map<String, Map<String, dynamic>> _selectedProductsMap = {};
+
+  bool _isLoading = false;
+  bool _hasMoreData = true;
+  bool _isSearching = false;
+  String _searchQuery = '';
+  int _currentPage = 0;
+  static const int _pageSize = 50;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _loadInitialData();
+
+    // Setup live search
+    widget.productSearchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    final query = widget.productSearchController.text.trim();
+    if (query != _searchQuery) {
+      setState(() {
+        _searchQuery = query;
+        _performSearch(query);
+      });
+    }
+  }
+
+  void _performSearch(String query) {
+    if (query.isEmpty) {
+      // Kembalikan ke data awal
+      setState(() {
+        _isSearching = false;
+        _displayedProducts.clear();
+        _currentPage = 0;
+        _hasMoreData = true;
+      });
+      _loadMoreData();
+    } else {
+      // Lakukan pencarian
+      setState(() {
+        _isSearching = true;
+        _displayedProducts.clear();
+
+        final searchLower = query.toLowerCase();
+        final filteredProducts = _allProducts.where((product) {
+          final matnr = (product['matnr'] ?? '').toString().toLowerCase();
+          final maktx = (product['maktx'] ?? '').toString().toLowerCase();
+          return matnr.contains(searchLower) || maktx.contains(searchLower);
+        }).toList();
+
+        _displayedProducts.addAll(filteredProducts);
+        _hasMoreData = false; // Tidak perlu pagination saat search
+      });
+    }
+  }
+
+  void _loadInitialData() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // Fetch semua data dari Firestore
+      final snapshot = await FirebaseFirestore.instance
+          .collection('stock')
+          .where('_documentid', isEqualTo: widget.stocktake?.documentid ?? '')
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final productDoc = snapshot.docs.first;
+        final productData = productDoc.data();
+        final details = productData['detail'] as List<dynamic>? ?? [];
+
+        setState(() {
+          _allProducts.clear();
+          _allProducts.addAll(
+            details.map((e) => e as Map<String, dynamic>).toList(),
+          );
+        });
+      }
+
+      // --- PERBAIKAN DI SINI ---
+      // Set loading ke false SETELAH data di-fetch
+      // dan SEBELUM memanggil _loadMoreData
+      setState(() {
+        _isLoading = false;
+      });
+      // --- END PERBAIKAN ---
+
+      // Load first page
+      _loadMoreData(); // Sekarang fungsi ini akan berjalan
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      EasyLoading.showError('Gagal memuat data: $e');
+    }
+  }
+
+  void _loadMoreData() {
+    if (_isLoading || !_hasMoreData || _isSearching) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    // Simulasi delay untuk loading
+    Future.delayed(const Duration(milliseconds: 500), () {
+      final startIndex = _currentPage * _pageSize;
+      final endIndex = startIndex + _pageSize;
+
+      if (startIndex >= _allProducts.length) {
+        setState(() {
+          _hasMoreData = false;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final newProducts = _allProducts.sublist(
+        startIndex,
+        endIndex > _allProducts.length ? _allProducts.length : endIndex,
+      );
+
+      setState(() {
+        _displayedProducts.addAll(newProducts);
+        _currentPage++;
+        _isLoading = false;
+        _hasMoreData = endIndex < _allProducts.length;
+      });
+    });
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMoreData();
+    }
+  }
+
+  void _toggleProductSelection(Map<String, dynamic> product) {
+    final matnr = product['matnr']?.toString() ?? 'NO_MATNR';
+    final serno = product['serno']?.toString() ?? 'NO_SERNO';
+    final String productKey = '$matnr|$serno';
+
+    setState(() {
+      // Menggunakan productKey (berisi matnr|serno)
+      if (_selectedProductsMap.containsKey(productKey)) {
+        _selectedProductsMap.remove(productKey);
+        widget.selectedProductIds.remove(productKey);
+      } else {
+        _selectedProductsMap[productKey] =
+            product; // Tetap simpan seluruh objek
+        widget.selectedProductIds.add(productKey);
+      }
+    });
+  }
+
+  void _confirmSelection() {
+    if (_selectedProductsMap.isEmpty) {
+      EasyLoading.showError('Pilih minimal satu produk');
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Buat Dokumen PID?',
+          style: TextStyle(
+            color: widget.hijauGojekDark,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Apakah Anda yakin ingin membuat dokumen PID dengan:'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: widget.hijauGojek.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: widget.hijauGojek.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: widget.hijauGojek,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${_selectedProductsMap.length} produk terpilih',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: widget.hijauGojekDark,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(),
+            const SizedBox(height: 8),
+            ..._selectedProductsMap.values
+                .take(3)
+                .map(
+                  (product) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: widget.hijauGojek,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            product['maktx'] ?? 'No Name',
+                            style: const TextStyle(fontSize: 13),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            if (_selectedProductsMap.length > 3)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '... dan ${_selectedProductsMap.length - 3} produk lainnya',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Batal', style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Close dialog
+              Navigator.of(context).pop(); // Close bottom sheet
+              widget.onConfirm(_selectedProductsMap.values.toList());
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: widget.hijauGojek,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text(
+              'Ya, Buat Dokumen',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(28),
+              topRight: Radius.circular(28),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Drag Handle
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
+              // Header
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    bottom: BorderSide(color: Colors.grey.shade200),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: widget.hijauGojek.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                Icons.inventory_2_rounded,
+                                color: widget.hijauGojekDark,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              'Pilih Produk',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${_selectedProductsMap.length} produk dipilih',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: Colors.grey.shade700,
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Search Bar
+              Container(
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: widget.productSearchController,
+                  decoration: InputDecoration(
+                    hintText: 'Cari nama atau SKU produk...',
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: 14,
+                    ),
+                    border: InputBorder.none,
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      color: widget.hijauGojek,
+                      size: 22,
+                    ),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(
+                              Icons.clear_rounded,
+                              color: Colors.grey.shade400,
+                              size: 20,
+                            ),
+                            onPressed: () {
+                              widget.productSearchController.clear();
+                            },
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                  ),
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+
+              // Product List
+              Expanded(
+                child: _displayedProducts.isEmpty && !_isLoading
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        controller: _scrollController,
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount:
+                            _displayedProducts.length + (_isLoading ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index == _displayedProducts.length) {
+                            return _buildLoadingShimmer();
+                          }
+
+                          final product = _displayedProducts[index];
+                          final matnr =
+                              product['matnr']?.toString() ?? 'NO_MATNR';
+                          final serno =
+                              product['serno']?.toString() ?? 'NO_SERNO';
+
+                          // Gunakan kombinasi matnr|serno agar selalu unik
+                          final String productKey = '$matnr|$serno';
+
+                          final isSelected = _selectedProductsMap.containsKey(
+                            productKey,
+                          );
+
+                          return _buildProductItem(product, isSelected);
+                        },
+                      ),
+              ),
+
+              // Action Buttons
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            side: BorderSide(
+                              color: Colors.grey.shade300,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Text(
+                            'Batal',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: _confirmSelection,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: widget.hijauGojek,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.check_circle_rounded, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Buat Dokumen (${_selectedProductsMap.length})',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProductItem(Map<String, dynamic> product, bool isSelected) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? widget.hijauGojek.withValues(alpha: 0.08)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected ? widget.hijauGojek : Colors.grey.shade200,
+          width: isSelected ? 2 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isSelected
+                ? widget.hijauGojek.withValues(alpha: 0.1)
+                : Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: () => _toggleProductSelection(product),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                // Checkbox
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: isSelected ? widget.hijauGojek : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isSelected
+                          ? widget.hijauGojek
+                          : Colors.grey.shade400,
+                      width: 2,
+                    ),
+                  ),
+                  child: isSelected
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 12),
+
+                // Product Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product['maktx'] ?? 'No Name',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: isSelected
+                              ? widget.hijauGojekDark
+                              : Colors.black87,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  'SKU: ${product['matnr'] ?? 'N/A'}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade700,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: hijauGojek.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  'SERNO: ${product['serno'] ?? 'N/A'}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: hijauGojek,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                // Stock Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? widget.hijauGojek.withValues(alpha: 0.15)
+                        : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.inventory_rounded,
+                        size: 16,
+                        color: isSelected
+                            ? widget.hijauGojekDark
+                            : Colors.grey.shade600,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${product['labst'] ?? 0}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: isSelected
+                              ? widget.hijauGojekDark
+                              : Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingShimmer() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Shimmer.fromColors(
+        baseColor: Colors.grey.shade300,
+        highlightColor: Colors.grey.shade100,
+        child: Container(
+          height: 80,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _searchQuery.isNotEmpty
+                  ? Icons.search_off_rounded
+                  : Icons.inventory_2_outlined,
+              size: 64,
+              color: Colors.grey.shade400,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            _searchQuery.isNotEmpty
+                ? 'Tidak ada produk ditemukan'
+                : 'Tidak ada produk',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _searchQuery.isNotEmpty
+                ? 'Coba kata kunci lain'
+                : 'Belum ada produk tersedia',
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    widget.productSearchController.removeListener(_onSearchChanged);
     super.dispose();
   }
 }

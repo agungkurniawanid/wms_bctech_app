@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:wms_bctech/controllers/auth/auth_controller.dart';
+import 'package:wms_bctech/controllers/global_controller.dart';
+import 'package:wms_bctech/helpers/text_helper.dart';
 import 'package:wms_bctech/models/category_model.dart';
 import 'package:wms_bctech/models/item_choice_model.dart';
+import 'package:wms_bctech/models/stock/stock_take_detail_model.dart';
 import 'package:wms_bctech/models/stock/stock_take_model.dart';
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
@@ -74,65 +78,15 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   FocusNode focusNode = FocusNode();
   int localctn = 0;
   double localpcs = 0.0;
-
   bool isScanning = false;
 
   // Data dummy untuk menggantikan data dari Firestore
-  final List<Map<String, dynamic>> _dummyStockData = [
-    {
-      'matnr': 'MAT001',
-      'nORMT': 'BOX001',
-      'mAKTX': 'Product A',
-      'labst': 100.0,
-      'insme': 50.0,
-      'speme': 25.0,
-      'selectedChoice': 'UU',
-      'lgort': 'WH-A01',
-      'werks': 'PLANT01',
-      'marm': [
-        {'meinh': 'KG', 'umrez': '10.0', 'umren': '1.0'},
-        {'meinh': 'BOX', 'umrez': '1.0', 'umren': '1.0'},
-      ],
-      'checkboxValidation': ValueNotifier<bool>(false),
-      'isApprove': 'N',
-    },
-    {
-      'matnr': 'MAT002',
-      'nORMT': 'BOX002',
-      'mAKTX': 'Product B',
-      'labst': 200.0,
-      'insme': 75.0,
-      'speme': 30.0,
-      'selectedChoice': 'QI',
-      'lgort': 'WH-B02',
-      'werks': 'PLANT01',
-      'marm': [
-        {'meinh': 'KG', 'umrez': '5.0', 'umren': '1.0'},
-        {'meinh': 'BOX', 'umrez': '1.0', 'umren': '1.0'},
-      ],
-      'checkboxValidation': ValueNotifier<bool>(false),
-      'isApprove': 'N',
-    },
-    {
-      'matnr': 'MAT003',
-      'nORMT': 'BOX003',
-      'mAKTX': 'Product C',
-      'labst': 150.0,
-      'insme': 60.0,
-      'speme': 20.0,
-      'selectedChoice': 'BLOCK',
-      'lgort': 'WH-C03',
-      'werks': 'PLANT02',
-      'marm': [
-        {'meinh': 'KG', 'umrez': '8.0', 'umren': '1.0'},
-        {'meinh': 'BOX', 'umrez': '1.0', 'umren': '1.0'},
-      ],
-      'checkboxValidation': ValueNotifier<bool>(false),
-      'isApprove': 'N',
-    },
-  ];
-
+  final List<Map<String, dynamic>> _dummyStockData = [];
   final List<Map<String, dynamic>> _dummyInputData = [];
+
+  // 1. Dapatkan instance controller-nya
+  final NewAuthController authController = Get.find<NewAuthController>();
+  final GlobalVM globalVM = Get.find<GlobalVM>();
 
   @override
   void initState() {
@@ -144,8 +98,24 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
-    _searchQuery = TextEditingController();
 
+    _dummyStockData.clear(); // Bersihkan daftar
+    if (widget.stocktake?.detail != null &&
+        widget.stocktake!.detail.isNotEmpty) {
+      // Loop data dari header
+      for (var productModel in widget.stocktake!.detail) {
+        // Ubah model ke Map
+        var productMap = productModel.toMap();
+
+        // Tambahkan field UI yang dibutuhkan oleh headerCard2
+        productMap['checkboxValidation'] = ValueNotifier<bool>(false);
+        productMap['selectedChoice'] = 'UU'; // Atur default 'UU'
+
+        // Tambahkan ke daftar
+        _dummyStockData.add(productMap);
+      }
+    }
+    _searchQuery = TextEditingController();
     sortListSection.value = ['A1-1', 'A1-2', 'B1-1', 'B1-2', 'C1-1'];
     selectedSection.value = 'A1-1';
 
@@ -174,7 +144,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   }
 
   String calculTotalbun(Map<String, dynamic> item, String validation) {
-    return "50.0";
+    return "0.0";
   }
 
   String conversion(
@@ -184,13 +154,13 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   ) {
     try {
       if (name == "KG") {
-        return "25.0";
+        return "-";
       } else {
-        return "10.0";
+        return "-";
       }
     } catch (e) {
       Logger().e(e);
-      return "0.0";
+      return "-";
     }
   }
 
@@ -277,9 +247,12 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                             ),
                           ),
                           const SizedBox(width: 12),
+                          // KODE PERBAIKAN
                           Expanded(
                             child: Text(
-                              inmodel['mAKTX'],
+                              // 1. Ubah ke 'maktx' (huruf kecil)
+                              // 2. Beri nilai default jika null
+                              inmodel['maktx'] ?? 'Nama Produk Tdk Tersedia',
                               style: GoogleFonts.roboto(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -301,13 +274,13 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                           _buildInfoChip(
                             icon: Icons.qr_code_2_rounded,
                             label: 'Box',
-                            value: inmodel['nORMT'],
+                            value: '0',
                             color: Colors.blue,
                           ),
                           _buildInfoChip(
                             icon: Icons.tag_rounded,
                             label: 'SKU',
-                            value: inmodel['matnr'],
+                            value: inmodel['matnr'] ?? '0.0',
                             color: Colors.purple,
                           ),
                         ],
@@ -318,29 +291,29 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                 const SizedBox(width: 12),
 
                 // Checkbox
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.shade300, width: 1),
-                  ),
-                  child: ValueListenableBuilder<bool>(
-                    valueListenable: inmodel['checkboxValidation'],
-                    builder: (context, value, _) {
-                      return Checkbox(
-                        value: value,
-                        onChanged: (bool? newValue) {
-                          inmodel['checkboxValidation'].value =
-                              newValue ?? false;
-                        },
-                        activeColor: hijauGojek,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+                // Container(
+                //   decoration: BoxDecoration(
+                //     color: Colors.white,
+                //     borderRadius: BorderRadius.circular(10),
+                //     border: Border.all(color: Colors.grey.shade300, width: 1),
+                //   ),
+                //   child: ValueListenableBuilder<bool>(
+                //     valueListenable: inmodel['checkboxValidation'],
+                //     builder: (context, value, _) {
+                //       return Checkbox(
+                //         value: value,
+                //         onChanged: (bool? newValue) {
+                //           inmodel['checkboxValidation'].value =
+                //               newValue ?? false;
+                //         },
+                //         activeColor: hijauGojek,
+                //         shape: RoundedRectangleBorder(
+                //           borderRadius: BorderRadius.circular(4),
+                //         ),
+                //       );
+                //     },
+                //   ),
+                // ),
               ],
             ),
           ),
@@ -466,15 +439,15 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                   _buildDataRow(
                     label: 'Physical',
                     labelColor: Colors.blue.shade700,
-                    values: [calculTotalbun(inmodel, "Bun"), "5.0", "2.5"],
+                    values: [calculTotalbun(inmodel, "Bun"), "-", "-"],
                     isEven: false,
                   ),
 
                   // Different Row
                   _buildDataRow(
                     label: 'Different',
-                    labelColor: Colors.red.shade700,
-                    values: ["-50.0", "-5.0", "-2.5"],
+                    labelColor: const Color.fromARGB(255, 56, 55, 55),
+                    values: ["0.0", "-", "-"],
                     isEven: true,
                   ),
                 ],
@@ -572,7 +545,9 @@ class _StockTakeDetailState extends State<StockTakeDetail>
             (value) => Expanded(
               flex: 2,
               child: Text(
-                value,
+                (value.isEmpty || value.isEmpty || value == "null")
+                    ? "-"
+                    : value,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.grey.shade700,
@@ -655,8 +630,10 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                         ),
                       ),
                       const SizedBox(height: 4),
+                      // KODE PERBAIKAN
                       Text(
-                        '${indetail['nORMT'].trim()} - ${indetail['mAKTX']}',
+                        // Ambil nilai, beri default string kosong JIKA null, BARU panggil .trim()
+                        '${(indetail['nORMT'] ?? '').trim()} - ${indetail['mAKTX'] ?? 'Nama Tdk Tersedia'}',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -1317,12 +1294,18 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                       color: Colors.blue.shade700,
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      'Demo User',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.blue.shade700,
+                    Obx(
+                      () => Text(
+                        globalVM.username.value.isEmpty
+                            ? 'Demo User'
+                            : TextHelper.formatUserName(
+                                globalVM.username.value,
+                              ),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue.shade700,
+                        ),
                       ),
                     ),
                   ],
@@ -1331,8 +1314,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
             ],
           ),
         ),
-
-        // Category Chips
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
@@ -1533,44 +1514,4 @@ class _StockTakeDetailState extends State<StockTakeDetail>
       builder: (context) => modalBottomSheet(product, _dummyStockData),
     );
   }
-}
-
-// Dummy model classes
-class StockTakeDetailModel {
-  final Map<String, dynamic> data;
-
-  StockTakeDetailModel(this.data);
-
-  factory StockTakeDetailModel.fromJson(Map<String, dynamic> json) {
-    return StockTakeDetailModel(json);
-  }
-
-  String get matnr => data['matnr'] ?? '';
-  String get nORMT => data['nORMT'] ?? '';
-  String get mAKTX => data['mAKTX'] ?? '';
-  double get labst => data['labst'] ?? 0.0;
-  double get insme => data['insme'] ?? 0.0;
-  double get speme => data['speme'] ?? 0.0;
-  String get selectedChoice => data['selectedChoice'] ?? 'UU';
-  String get lgort => data['lgort'] ?? '';
-  String get werks => data['werks'] ?? '';
-  List<dynamic> get marm => data['marm'] ?? [];
-  ValueNotifier<bool> get checkboxValidation => data['checkboxValidation'];
-  String get isApprove => data['isApprove'] ?? 'N';
-}
-
-TextStyle safeGoogleFont(
-  String fontFamily, {
-  double fontSize = 14,
-  FontWeight fontWeight = FontWeight.normal,
-  double height = 1.0,
-  Color color = Colors.black,
-}) {
-  return TextStyle(
-    fontFamily: fontFamily,
-    fontSize: fontSize,
-    fontWeight: fontWeight,
-    height: height,
-    color: color,
-  );
 }
