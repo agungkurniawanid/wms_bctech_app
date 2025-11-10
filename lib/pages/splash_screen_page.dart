@@ -98,7 +98,7 @@ class _SplashScreenPageState extends State<SplashScreenPage>
             height: double.infinity,
             decoration: const BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('data/images/bg-fix.jpg'),
+                image: AssetImage('data/images/2(2).jpg'),
                 fit: BoxFit.cover,
                 alignment: Alignment.center,
               ),
