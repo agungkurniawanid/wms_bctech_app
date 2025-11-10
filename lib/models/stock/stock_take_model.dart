@@ -10,6 +10,8 @@ class StockTakeModel {
   final String locatorValue;
   final String whName;
   final String whValue;
+  final String orgValue;
+  final String orgName;
 
   // testing
   final String isApprove;
@@ -28,6 +30,8 @@ class StockTakeModel {
     required this.locatorValue,
     required this.whName,
     required this.whValue,
+    required this.orgValue,
+    required this.orgName,
     required this.isApprove,
     required this.createdBy,
     required this.created,
@@ -55,6 +59,8 @@ class StockTakeModel {
         locatorValue: data['locator_value'] as String? ?? '',
         whName: data['wh_name'] as String? ?? '',
         whValue: data['wh_value'] as String? ?? '',
+        orgValue: data['org_value'] as String? ?? '',
+        orgName: data['org_name'] as String? ?? '',
         isApprove: data['isapprove'] as String? ?? '',
         createdBy: data['createdby'] as String? ?? '',
         created: data['created'] as String? ?? '',
@@ -95,6 +101,8 @@ class StockTakeModel {
       locatorValue: '',
       whName: '',
       whValue: '',
+      orgValue: '',
+      orgName: '',
       isApprove: '',
       createdBy: '',
       created: '',
@@ -122,6 +130,8 @@ class StockTakeModel {
       locatorValue: locatorValue ?? this.locatorValue,
       whName: whName ?? this.whName,
       whValue: whValue ?? this.whValue,
+      orgValue: orgValue,
+      orgName: orgName,
       isApprove: '',
       createdBy: '',
       created: '',
@@ -141,6 +151,8 @@ class StockTakeModel {
       'locator_value': locatorValue,
       'wh_name': whName,
       'wh_value': whValue,
+      'org_value': orgValue,
+      'org_name': orgName,
       'isapprove': isApprove,
     };
   }
