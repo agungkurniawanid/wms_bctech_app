@@ -419,7 +419,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                     ),
                   ),
 
-                  // Stock Row
                   _buildDataRow(
                     label: 'Stock',
                     labelColor: hijauGojekDark,
