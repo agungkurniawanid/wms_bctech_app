@@ -21,10 +21,16 @@ class StockTakeDetail extends StatefulWidget {
   final int? index;
   final String? documentno;
 
+  // MODIFIKASI: Tambahkan parameter baru
+  final bool isViewMode; // Mode preview/read-only
+  final bool fromDocumentList; // Dari list PID document
+
   const StockTakeDetail({
     this.stocktake,
     this.index,
     this.documentno,
+    this.isViewMode = false,
+    this.fromDocumentList = false,
     super.key,
   });
 
@@ -85,6 +91,9 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   double localpcs = 0.0;
   bool isScanning = false;
 
+  late bool _isViewMode;
+  late bool _fromDocumentList;
+
   // Data dummy untuk menggantikan data dari Firestore
   final List<Map<String, dynamic>> _dummyStockData = [];
   // final List<Map<String, dynamic>> _dummyInputData = []; // MODIFIKASI: Tidak digunakan lagi, diganti _cachedPidDetails
@@ -101,6 +110,11 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   @override
   void initState() {
     super.initState();
+
+    // MODIFIKASI: Inisialisasi mode
+    _isViewMode = widget.isViewMode;
+    _fromDocumentList = widget.fromDocumentList;
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -109,28 +123,63 @@ class _StockTakeDetailState extends State<StockTakeDetail>
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
 
-    _dummyStockData.clear(); // Bersihkan daftar
+    _dummyStockData.clear();
     if (widget.stocktake?.detail != null &&
         widget.stocktake!.detail.isNotEmpty) {
-      // Loop data dari header
       for (var productModel in widget.stocktake!.detail) {
-        // Ubah model ke Map
         var productMap = productModel.toMap();
-
-        // Tambahkan field UI yang dibutuhkan oleh headerCard2
         productMap['checkboxValidation'] = ValueNotifier<bool>(false);
-        productMap['selectedChoice'] = 'UU'; // Atur default 'UU'
+        productMap['selectedChoice'] = 'UU';
 
-        // Tambahkan ke daftar
+        // MODIFIKASI: Jika mode view, set selectedChoice dari data asli
+        if (_isViewMode && productModel.selectedChoice.isNotEmpty) {
+          productMap['selectedChoice'] = productModel.selectedChoice;
+        }
+
         _dummyStockData.add(productMap);
       }
     }
+
+    // MODIFIKASI: Jika dari document list, load data PID ke cache
+    if (_fromDocumentList) {
+      _loadPidDocumentDetails();
+    }
+
     _searchQuery = TextEditingController();
     sortListSection.value = ['A1-1', 'A1-2', 'B1-1', 'B1-2', 'C1-1'];
     selectedSection.value = 'A1-1';
 
     _initializeChoiceChips();
     _animationController.forward();
+  }
+
+  // MODIFIKASI: Fungsi untuk load data PID document ke cache
+
+  Future<void> _loadPidDocumentDetails() async {
+    if (widget.documentno == null) return;
+
+    try {
+      EasyLoading.show(status: 'Loading document...');
+
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('pid_document')
+          .doc(widget.documentno!)
+          .get();
+
+      if (docSnapshot.exists) {
+        final pidDoc = PidDocumentModel.fromFirestore(docSnapshot, null);
+
+        setState(() {
+          _cachedPidDetails.clear();
+          _cachedPidDetails.addAll(pidDoc.products);
+        });
+      }
+
+      EasyLoading.dismiss();
+    } catch (e) {
+      EasyLoading.dismiss();
+      _logger.e('Error loading PID document: $e');
+    }
   }
 
   void _initializeChoiceChips() {
@@ -202,14 +251,14 @@ class _StockTakeDetailState extends State<StockTakeDetail>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: hijauGojek.withOpacity(0.1), // MODIFIKASI: withOpacity
+            color: hijauGojek.withValues(alpha: 0.1),
             blurRadius: 15,
             offset: const Offset(0, 5),
             spreadRadius: 0,
           ),
         ],
         border: Border.all(
-          color: hijauGojek.withOpacity(0.3), // MODIFIKASI: withOpacity
+          color: hijauGojek.withValues(alpha: 0.3),
           width: 1.5,
         ),
       ),
@@ -223,8 +272,8 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  hijauGojek.withOpacity(0.3), // MODIFIKASI: withOpacity
-                  hijauGojekLight.withOpacity(0.07), // MODIFIKASI: withOpacity
+                  hijauGojek.withValues(alpha: 0.3),
+                  hijauGojekLight.withValues(alpha: 0.07),
                 ],
               ),
               borderRadius: const BorderRadius.only(
@@ -353,7 +402,9 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                                                 : choice == "QI"
                                                 ? Colors.orange
                                                 : Colors.red)
-                                            .withOpacity(0.3), // MODIFIKASI
+                                            .withValues(
+                                              alpha: 0.3,
+                                            ), // MODIFIKASI
                                     blurRadius: 8,
                                     offset: const Offset(0, 4),
                                   ),
@@ -459,10 +510,10 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1), // MODIFIKASI
+        color: color.withValues(alpha: 0.1), // MODIFIKASI
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: color.withOpacity(0.3),
+          color: color.withValues(alpha: 0.3),
           width: 1,
         ), // MODIFIKASI
       ),
@@ -554,6 +605,31 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     );
   }
 
+  Widget _buildNoImagePlaceholder() {
+    return Container(
+      color: Colors.grey[100],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.image_not_supported_rounded,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'No Image Available',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget modalBottomSheet(
     Map<String, dynamic> indetail,
     List<Map<String, dynamic>> inDetailList,
@@ -566,13 +642,17 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     // ---
     // Logika Kunci: Cek data yang sudah ada di cache
     // ---
+
+    final bool isReadOnly = _isViewMode;
+
+    // Cari data yang sudah ada di cache
     PidDocumentDetailModel? existingDetail;
     try {
       existingDetail = _cachedPidDetails.firstWhere(
         (d) => d.productId == indetail['matnr']?.toString(),
       );
     } catch (e) {
-      existingDetail = null; // Tidak ditemukan
+      existingDetail = null;
     }
 
     // State untuk form
@@ -584,7 +664,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     TextEditingController bunController = TextEditingController(
       text: existingDetail?.physicalQty.toString() ?? '0',
     );
-    TextEditingController boxController = TextEditingController(text: '0');
 
     return StatefulBuilder(
       builder: (context, setState) {
@@ -614,13 +693,14 @@ class _StockTakeDetailState extends State<StockTakeDetail>
               ),
 
               // Header
+              // MODIFIKASI: Update header untuk menampilkan mode
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      hijauGojek.withOpacity(0.1), // MODIFIKASI
-                      hijauGojekLight.withOpacity(0.05), // MODIFIKASI
+                      hijauGojek.withValues(alpha: 0.1),
+                      hijauGojekLight.withValues(alpha: 0.05),
                     ],
                   ),
                 ),
@@ -630,12 +710,19 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [hijauGojek, hijauGojekDark],
+                          colors: isReadOnly
+                              ? [
+                                  Colors.grey,
+                                  Colors.grey.shade700,
+                                ] // Warna berbeda untuk mode view
+                              : [hijauGojek, hijauGojekDark],
                         ),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(
-                        Icons.edit_rounded,
+                      child: Icon(
+                        isReadOnly
+                            ? Icons.visibility_rounded
+                            : Icons.edit_rounded,
                         color: Colors.white,
                         size: 24,
                       ),
@@ -646,7 +733,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Edit Product',
+                            isReadOnly ? 'View Product' : 'Edit Product',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey.shade600,
@@ -659,11 +746,38 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: hijauGojekDark,
+                              color: isReadOnly
+                                  ? Colors.grey.shade700
+                                  : hijauGojekDark,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          // MODIFIKASI: Tambahkan badge untuk mode view
+                          if (isReadOnly) ...[
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade100,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: Colors.orange.shade300,
+                                ),
+                              ),
+                              child: Text(
+                                'VIEW ONLY',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.orange.shade800,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -687,20 +801,79 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
+                      // images
+                      Container(
+                        width: 150,
+                        height: 150,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.grey[300]!,
+                            width: 1,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child:
+                              (indetail['image'] != null &&
+                                  indetail['image'].toString().isNotEmpty)
+                              ? Image.network(
+                                  indetail['image'].toString(),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return _buildNoImagePlaceholder();
+                                  },
+                                  loadingBuilder:
+                                      (context, child, loadingProgress) {
+                                        if (loadingProgress == null) {
+                                          return child;
+                                        }
+                                        return Center(
+                                          child: CircularProgressIndicator(
+                                            value:
+                                                loadingProgress
+                                                        .expectedTotalBytes !=
+                                                    null
+                                                ? loadingProgress
+                                                          .cumulativeBytesLoaded /
+                                                      loadingProgress
+                                                          .expectedTotalBytes!
+                                                : null,
+                                          ),
+                                        );
+                                      },
+                                )
+                              : _buildNoImagePlaceholder(),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
                       // Material/SKU/Product ID
-                      _buildReadOnlyField(
-                        label: 'Material/SKU/Product ID',
-                        value: indetail['matnr']?.toString() ?? 'N/A',
-                        icon: Icons.qr_code_rounded,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _buildReadOnlyField(
+                                label: 'Material/SKU/Product ID',
+                                value: indetail['matnr']?.toString() ?? 'N/A',
+                                icon: Icons.qr_code_rounded,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: _buildReadOnlyField(
+                                label: 'Compatible',
+                                value: '0',
+                                icon: Icons.settings_suggest_rounded,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
 
-                      // Compatible
-                      _buildReadOnlyField(
-                        label: 'Compatible',
-                        value: '0',
-                        icon: Icons.settings_suggest_rounded,
-                      ),
                       const SizedBox(height: 16),
 
                       // Material Description
@@ -714,98 +887,191 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                       const SizedBox(height: 16),
 
                       // Stock Bun
-                      _buildReadOnlyField(
-                        label: 'Stock Bun',
-                        value: indetail['labst']?.toString() ?? '0.0',
-                        icon: Icons.inventory_2_rounded,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Stock Box
-                      _buildReadOnlyField(
-                        label: 'Stock Box',
-                        value: '0.0',
-                        icon: Icons.inventory_rounded,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _buildReadOnlyField(
+                                label: 'Stock Bun',
+                                value: indetail['labst']?.toString() ?? '0.0',
+                                icon: Icons.inventory_2_rounded,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: _buildReadOnlyField(
+                                label: 'Stock Box',
+                                value: '0.0',
+                                icon: Icons.inventory_rounded,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
 
                       // Section Dropdown (Read Only)
-                      _buildReadOnlyDropdown(
-                        label: 'Section',
-                        value: selectedSection,
-                        items: sectionList,
-                        icon: Icons.location_on_rounded,
-                        onChanged:
-                            (
-                              value,
-                            ) {}, // Tidak melakukan apa-apa karena read only
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Total Physical Bun
-                      _buildReadOnlyField(
-                        label: 'Total Physical Bun',
-                        value: '0.0',
-                        icon: Icons.inventory_2_rounded,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Total Physical Box
-                      _buildReadOnlyField(
-                        label: 'Total Physical Box',
-                        value: '0.0',
-                        icon: Icons.pallet,
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 1, // Section biasanya lebih panjang
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _buildReadOnlyDropdown(
+                                label: 'Section',
+                                value: selectedSection,
+                                items: sectionList,
+                                icon: Icons.location_on_rounded,
+                                onChanged: (value) {}, // read-only
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 1,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              child: _buildReadOnlyField(
+                                label: 'Total Physical Bun',
+                                value: '0.0',
+                                icon: Icons.inventory_2_rounded,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 1,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: _buildReadOnlyField(
+                                label: 'Total Physical Box',
+                                value: '0.0',
+                                icon: Icons.pallet,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
 
                       // Bun Input Field (Bisa diinput)
-                      _buildInputField(
-                        label: 'Bun',
-                        controller: bunController,
-                        icon: Icons.add_circle_outline_rounded,
-                        keyboardType: TextInputType.number,
+                      Row(
+                        children: [
+                          // Bun Input
+                          Expanded(
+                            flex: 1,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: isReadOnly
+                                  ? _buildReadOnlyField(
+                                      label: 'Bun',
+                                      value:
+                                          existingDetail?.physicalQty
+                                              .toString() ??
+                                          '0',
+                                      icon: Icons.add_circle_outline_rounded,
+                                    )
+                                  : _buildInputField(
+                                      label: 'Bun',
+                                      controller: bunController,
+                                      icon: Icons.add_circle_outline_rounded,
+                                      keyboardType: TextInputType.number,
+                                      autoFocus: true,
+                                    ),
+                            ),
+                          ),
+
+                          // Box (Read Only)
+                          Expanded(
+                            flex: 1,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              child: _buildReadOnlyField(
+                                label: 'Box',
+                                value: '0',
+                                icon: Icons.all_inbox_rounded,
+                              ),
+                            ),
+                          ),
+
+                          // Pallet Dropdown (Read Only)
+                          Expanded(
+                            flex: 1,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: _buildReadOnlyDropdown(
+                                label: 'Pallet',
+                                value: selectedPallet,
+                                items: palletList,
+                                icon: Icons.inventory_2_rounded,
+                                onChanged: (value) {}, // read-only
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
 
-                      // Box Field (Read Only)
-                      _buildReadOnlyField(
-                        label: 'Box',
-                        value: '0',
-                        icon: Icons.all_inbox_rounded,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Pallet Dropdown (Read Only)
-                      _buildReadOnlyDropdown(
-                        label: 'Pallet',
-                        value: selectedPallet,
-                        items: palletList,
-                        icon: Icons.inventory_2_rounded,
-                        onChanged:
-                            (
-                              value,
-                            ) {}, // Tidak melakukan apa-apa karena read only
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Cell Dropdown (Read Only)
-                      _buildReadOnlyDropdown(
-                        label: 'Cell',
-                        value: selectedCell,
-                        items: cellList,
-                        icon: Icons.grid_view_rounded,
-                        onChanged:
-                            (
-                              value,
-                            ) {}, // Tidak melakukan apa-apa karena read only
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 1, // Section biasanya lebih panjang
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: // Cell Dropdown (Read Only)
+                              _buildReadOnlyDropdown(
+                                label: 'Cell',
+                                value: selectedCell,
+                                items: cellList,
+                                icon: Icons.grid_view_rounded,
+                                onChanged:
+                                    (
+                                      value,
+                                    ) {}, // Tidak melakukan apa-apa karena read only
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 1,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              child: _buildReadOnlyField(
+                                label: 'Total Physical Bun',
+                                value: '0.0',
+                                icon: Icons.inventory_2_rounded,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 1,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: _buildReadOnlyField(
+                                label: 'Total Physical Box',
+                                value: '0.0',
+                                icon: Icons.pallet,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
 
                       // Product SN
-                      _buildReadOnlyField(
-                        label: 'Product SN',
-                        value: indetail['matnr']?.toString() ?? 'N/A',
-                        icon: Icons.numbers_rounded,
+                      Visibility(
+                        visible: false,
+                        child: _buildReadOnlyField(
+                          label: 'Product SN',
+                          value: indetail['matnr']?.toString() ?? 'N/A',
+                          icon: Icons.numbers_rounded,
+                        ),
                       ),
                       const SizedBox(height: 24),
                     ],
@@ -853,92 +1119,95 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          // Validasi input bun
-                          if (bunController.text.isEmpty) {
-                            EasyLoading.showError('Field Bun harus diisi');
-                            return;
-                          }
+                    if (!isReadOnly) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            // Validasi input bun
+                            if (bunController.text.isEmpty) {
+                              EasyLoading.showError('Field Bun harus diisi');
+                              return;
+                            }
 
-                          final bunValue = double.tryParse(bunController.text);
-                          if (bunValue == null) {
-                            EasyLoading.showError(
-                              'Field Bun harus berupa angka',
+                            final bunValue = double.tryParse(
+                              bunController.text,
                             );
-                            return;
-                          }
+                            if (bunValue == null) {
+                              EasyLoading.showError(
+                                'Field Bun harus berupa angka',
+                              );
+                              return;
+                            }
 
-                          // MODIFIKASI: Ganti logika save
-                          EasyLoading.show(
-                            status: 'Caching...',
-                            maskType: EasyLoadingMaskType.black,
-                          );
+                            // MODIFIKASI: Ganti logika save
+                            EasyLoading.show(
+                              status: 'Caching...',
+                              maskType: EasyLoadingMaskType.black,
+                            );
 
-                          // Buat model detail
-                          final newDetail = PidDocumentDetailModel(
-                            productId: indetail['matnr']?.toString() ?? 'N/A',
-                            productSN:
-                                indetail['serno']?.toString() ??
-                                'N/A', // Sesuai permintaan
-                            physicalQty: bunValue
-                                .toInt(), // Hanya ambil BUN qty
-                          );
+                            // Buat model detail
+                            final newDetail = PidDocumentDetailModel(
+                              productId: indetail['matnr']?.toString() ?? 'N/A',
+                              productSN:
+                                  indetail['serno']?.toString() ??
+                                  'N/A', // Sesuai permintaan
+                              physicalQty: bunValue
+                                  .toInt(), // Hanya ambil BUN qty
+                            );
 
-                          // Cek apakah sudah ada di cache, jika ada, replace
-                          final existingIndex = _cachedPidDetails.indexWhere(
-                            (d) => d.productId == newDetail.productId,
-                          );
+                            // Cek apakah sudah ada di cache, jika ada, replace
+                            final existingIndex = _cachedPidDetails.indexWhere(
+                              (d) => d.productId == newDetail.productId,
+                            );
 
-                          // Perbarui list di main state, bukan di modal state
-                          // Kita tidak perlu setState di dalam modal,
-                          // karena datanya akan di-refresh oleh setState
-                          // di _showProductBottomSheet setelah modal ditutup
-                          if (existingIndex != -1) {
-                            _cachedPidDetails[existingIndex] =
-                                newDetail; // Replace
-                          } else {
-                            _cachedPidDetails.add(newDetail); // Add new
-                          }
+                            // Perbarui list di main state, bukan di modal state
+                            // Kita tidak perlu setState di dalam modal,
+                            // karena datanya akan di-refresh oleh setState
+                            // di _showProductBottomSheet setelah modal ditutup
+                            if (existingIndex != -1) {
+                              _cachedPidDetails[existingIndex] =
+                                  newDetail; // Replace
+                            } else {
+                              _cachedPidDetails.add(newDetail); // Add new
+                            }
 
-                          await Future.delayed(
-                            const Duration(milliseconds: 500),
-                          );
-
-                          EasyLoading.dismiss();
-                          if (mounted) {
+                            await Future.delayed(
+                              const Duration(milliseconds: 500),
+                            );
+                            if (!context.mounted) return;
+                            EasyLoading.dismiss();
                             Navigator.of(context).pop();
                             EasyLoading.showSuccess('Data cached locally!');
-                          }
-                          // MODIFIKASI: Selesai
-                        },
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          backgroundColor: hijauGojek,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.check_circle_rounded, size: 20),
-                            SizedBox(width: 8),
-                            Text(
-                              'Save',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
+
+                            // MODIFIKASI: Selesai
+                          },
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          ],
+                            backgroundColor: hijauGojek,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.check_circle_rounded, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'Save',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -1067,6 +1336,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     required TextEditingController controller,
     required IconData icon,
     required TextInputType keyboardType,
+    bool autoFocus = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1085,12 +1355,13 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: hijauGojek.withOpacity(0.5), // MODIFIKASI
+              color: hijauGojek.withValues(alpha: 0.5), // MODIFIKASI
               width: 1.5,
             ),
           ),
           child: TextField(
             controller: controller,
+            autofocus: autoFocus,
             keyboardType: keyboardType,
             decoration: InputDecoration(
               contentPadding: const EdgeInsets.symmetric(
@@ -1117,7 +1388,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     return Container(
       height: 45,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2), // MODIFIKASI
+        color: Colors.white.withValues(alpha: 0.2), // MODIFIKASI
         borderRadius: BorderRadius.circular(25),
       ),
       child: TextField(
@@ -1127,7 +1398,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           hintText: 'Cari produk...',
           border: InputBorder.none,
           hintStyle: TextStyle(
-            color: Colors.white.withOpacity(0.7), // MODIFIKASI
+            color: Colors.white.withValues(alpha: 0.7), // MODIFIKASI
             fontSize: 15,
           ),
           prefixIcon: const Icon(
@@ -1322,7 +1593,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
       final String newPidId = await _generatePidId(orgValue);
 
       // 2. Siapkan data header
-      final String? createdBy = globalVM.username.value.isEmpty
+      final String createdBy = globalVM.username.value.isEmpty
           ? "Demo User"
           : globalVM.username.value;
       final String? whName = widget.stocktake?.whName;
@@ -1429,10 +1700,10 @@ class _StockTakeDetailState extends State<StockTakeDetail>
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: hijauGojek.withOpacity(0.1), // MODIFIKASI
+                  color: hijauGojek.withValues(alpha: 0.1), // MODIFIKASI
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: hijauGojek.withOpacity(0.3), // MODIFIKASI
+                    color: hijauGojek.withValues(alpha: 0.3), // MODIFIKASI
                     width: 1,
                   ),
                 ),
@@ -1497,24 +1768,42 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                     child: ElevatedButton(
                       // MODIFIKASI: Update logika OnPressed
                       onPressed: () async {
+                        // Cek mounted pertama sebelum async gap
+                        if (!mounted) return;
+
+                        // EasyLoading.show sebelum await, jadi ini AMAN
                         EasyLoading.show(status: 'Saving Document...');
 
                         try {
-                          // Panggil fungsi generator dan save
+                          // Ini adalah async gap
                           await _generateAndSavePidDocument();
 
+                          // Cek mounted LAGI setelah async gap
                           if (!mounted) return;
+
+                          // --- PERBAIKAN: Tambahkan ignore di sini ---
+                          // EasyLoading menggunakan context secara internal
+                          // ignore: use_build_context_synchronously
                           EasyLoading.showSuccess(
                             'Document saved successfully!',
                           );
 
-                          // Tutup dialog
+                          // --- PERBAIKAN: Tambahkan ignore di sini ---
+                          // Navigator menggunakan context secara eksplisit
+                          // ignore: use_build_context_synchronously
                           Navigator.of(context).pop();
 
-                          // Kembali ke halaman sebelumnya setelah sukses
+                          // Kembali ke halaman sebelumnya (GetX, aman dari context)
                           Get.back();
                         } catch (e) {
                           _logger.e('Error during approve process: $e');
+
+                          // Cek mounted LAGI di dalam catch block
+                          if (!mounted) return;
+
+                          // --- PERBAIKAN: Tambahkan ignore di sini ---
+                          // EasyLoading juga menggunakan context
+                          // ignore: use_build_context_synchronously
                           EasyLoading.showError(
                             'Failed to save document: ${e.toString()}',
                           );
@@ -1570,7 +1859,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           leading: Container(
             margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2), // MODIFIKASI
+              color: Colors.white.withValues(alpha: 0.2), // MODIFIKASI
               borderRadius: BorderRadius.circular(12),
             ),
             child: IconButton(
@@ -1607,12 +1896,11 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   }
 
   Widget _buildFloatingActionButtons() {
-    if (!_isApproveVisible()) {
+    // MODIFIKASI: Nonaktifkan FAB di mode view
+    if (!_isApproveVisible() || _isViewMode) {
       return const SizedBox.shrink();
     }
 
-    // MODIFIKASI: Tambahkan logika disable tombol approve
-    // Tombol disable jika jumlah item di cache tidak sama dengan total item
     bool isApproveDisabled = _cachedPidDetails.length != _dummyStockData.length;
 
     return Column(
@@ -1634,7 +1922,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
         const SizedBox(height: 16),
         // Approve Button
         FloatingActionButton.extended(
-          // MODIFIKASI: Terapkan logika disable
           onPressed: isApproveDisabled ? null : _onApprovePressed,
           backgroundColor: isApproveDisabled
               ? Colors.grey.shade400
@@ -1649,7 +1936,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
             size: 24,
           ),
           label: Text(
-            // Beri feedback ke user
             isApproveDisabled
                 ? 'Complete all (${_cachedPidDetails.length}/${_dummyStockData.length})'
                 : 'Approve',
@@ -1702,8 +1988,8 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                hijauGojek.withOpacity(0.1), // MODIFIKASI
-                hijauGojekLight.withOpacity(0.05), // MODIFIKASI
+                hijauGojek.withValues(alpha: 0.1), // MODIFIKASI
+                hijauGojekLight.withValues(alpha: 0.05), // MODIFIKASI
               ],
             ),
             border: Border(
@@ -1718,7 +2004,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: hijauGojek.withOpacity(0.1), // MODIFIKASI
+                      color: hijauGojek.withValues(alpha: 0.1), // MODIFIKASI
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -1818,8 +2104,8 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                  color: hijauGojek.withOpacity(
-                                    0.3,
+                                  color: hijauGojek.withValues(
+                                    alpha: 0.3,
                                   ), // MODIFIKASI
                                   blurRadius: 8,
                                   offset: const Offset(0, 4),
@@ -1890,14 +2176,10 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   }
 
   Future<void> _onProductTap(Map<String, dynamic> product, int index) async {
-    final isApproved = (widget.stocktake?.isApprove) == "Y";
-
-    if (isApproved) return;
+    // MODIFIKASI: Di mode view, tetap bisa buka sheet tapi read-only
+    // if (isApproved && !_isViewMode) return; // Di-comment agar bisa buka di mode view
 
     try {
-      // --- PERBAIKAN: Hapus pemanggilan ke fungsi yang tidak perlu ---
-      // await _prepareProductDetail(product, index); // DIHAPUS
-      // -------------------------------------------------------------
       await _showProductBottomSheet(product);
     } catch (e) {
       Logger().e('Error in product tap: $e');

@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
+import 'package:wms_bctech/helpers/date_helper.dart';
+import 'package:wms_bctech/helpers/text_helper.dart';
+import 'package:wms_bctech/models/pid_document/pid_document_model.dart';
 import 'package:wms_bctech/models/stock/stock_take_model.dart';
 import 'package:wms_bctech/models/stock/stock_take_detail_model.dart';
 import 'package:wms_bctech/pages/stock_take/stock_take_detail_page.dart';
@@ -26,67 +31,40 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
   final List<Map<String, dynamic>> _statusChoices = [
     {
       'id': 1,
-      'label': 'N',
+      'label': 'N', // 'N' akan kita petakan ke status != 'completed'
       'labelName': 'In Progress',
       'icon': Icons.pending_actions_rounded,
     },
     {
       'id': 2,
-      'label': 'Y',
+      'label': 'Y', // 'Y' akan kita petakan ke status == 'completed'
       'labelName': 'Completed',
       'icon': Icons.check_circle_rounded,
     },
   ];
 
-  final List<Map<String, dynamic>> _dummyDocuments = [
-    {
-      'documentno': 'DOC001',
-      'createdby': 'User A',
-      'created': '2024-01-15 10:30:00',
-      'isapprove': 'N',
-      'lGORT': ['WH-A01'],
-      'totalItems': 125,
-    },
-    {
-      'documentno': 'DOC002',
-      'createdby': 'User B',
-      'created': '2024-01-14 14:20:00',
-      'isapprove': 'Y',
-      'lGORT': ['WH-B02'],
-      'totalItems': 89,
-    },
-    {
-      'documentno': 'DOC003',
-      'createdby': 'User C',
-      'created': '2024-01-13 09:15:00',
-      'isapprove': 'N',
-      'lGORT': ['WH-C03'],
-      'totalItems': 234,
-    },
-    {
-      'documentno': 'DOC004',
-      'createdby': 'User A',
-      'created': '2024-01-12 16:45:00',
-      'isapprove': 'Y',
-      'lGORT': ['WH-D04'],
-      'totalItems': 156,
-    },
-  ];
+  // --- MODIFIKASI: Hapus _dummyDocuments ---
+  // final List<Map<String, dynamic>> _dummyDocuments = [ ... ]; // DIHAPUS
 
-  final List<Map<String, dynamic>> _filteredDocuments = [];
+  // --- MODIFIKASI: Tambahkan list untuk data live dari Firestore ---
+  final List<PidDocumentModel> _allPidDocuments = [];
+  final List<PidDocumentModel> _filteredDocuments = [];
+  bool _isLoading = true; // Tambahkan state loading
+
   final ScrollController _controller = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
-  // Product selection variables
-  final Set<String> _selectedProductIds = {}; // Store selected product IDs
+  // Product selection variables (Tidak berubah, untuk FAB)
+  final Set<String> _selectedProductIds = {};
   final TextEditingController _productSearchController =
       TextEditingController();
 
   bool allowBack = true;
   bool _isSearching = false;
-  int _selectedStatusId = 1;
+  int _selectedStatusId = 2;
+  StreamSubscription? _pidDocumentSubscription;
   String searchQuery = '';
-  String _choiceForChip = 'N';
+  String _choiceForChip = 'Y'; // Default 'In Progress'
 
   @override
   void initState() {
@@ -98,23 +76,140 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
-    _initializeData();
+
+    // --- MODIFIKASI: Ganti _initializeData dengan _setupDocumentStream ---
+    _setupDocumentStream(); // <-- Menggunakan stream untuk data real-time
     _animationController.forward();
   }
 
-  void _initializeData() {
-    _filteredDocuments.addAll(_dummyDocuments);
-    _filterDocuments();
+  // --- MODIFIKASI: Ganti _initializeData untuk fetch dari Firestore ---
+  Future<void> _setupDocumentStream() async {
+    // Set loading true di awal
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final locator = widget.stocktake?.locatorValue;
+      if (locator == null || locator.isEmpty) {
+        // Handle jika locator tidak ada
+        setState(() {
+          _isLoading = false;
+        });
+        _filterDocuments(); // Filter list kosong, akan tampilkan empty state
+        return;
+      }
+
+      // Query ke collection 'pid_document'
+      final query = FirebaseFirestore.instance
+          .collection('pid_document')
+          .where('locatorValue', isEqualTo: locator)
+          .orderBy('createdAt', descending: true);
+
+      // Batalkan listener lama jika ada (untuk safety)
+      await _pidDocumentSubscription?.cancel();
+
+      // --- MODIFIKASI: Gunakan .snapshots() BUKAN .get() ---
+      _pidDocumentSubscription = query.snapshots().listen(
+        (querySnapshot) {
+          // Konversi snapshot ke List<PidDocumentModel>
+          final List<PidDocumentModel> fetchedDocs = querySnapshot.docs
+              .map((doc) => PidDocumentModel.fromFirestore(doc, null))
+              .toList();
+
+          if (!mounted) return;
+          setState(() {
+            _allPidDocuments.clear();
+            _allPidDocuments.addAll(fetchedDocs);
+            _isLoading = false; // Set loading false setelah data didapat
+          });
+
+          _filterDocuments(); // Terapkan filter setiap ada update
+        },
+        onError: (e) {
+          // Handle error dari stream
+          if (!mounted) return;
+          setState(() {
+            _isLoading = false;
+          });
+          EasyLoading.showError('Gagal memuat dokumen: $e');
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+      EasyLoading.showError('Error stream: $e');
+    }
   }
 
+  // --- MODIFIKASI: Tambahkan fungsi _handleRefresh untuk RefreshIndicator ---
+  Future<void> _handleRefresh() async {
+    // Fungsi ini akan melakukan fetch data sekali (one-time fetch)
+    // saat pengguna menarik layar ke bawah.
+    // Ini adalah "pelengkap" dari stream, untuk memberi user rasa kontrol.
+    try {
+      final locator = widget.stocktake?.locatorValue;
+      if (locator == null || locator.isEmpty) {
+        return; // Tidak ada locator, tidak perlu refresh
+      }
+
+      // Query ke collection 'pid_document' menggunakan .get()
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('pid_document')
+          .where('locatorValue', isEqualTo: locator)
+          .orderBy('createdAt', descending: true)
+          .get(); // <-- Pakai .get() untuk refresh manual
+
+      // Konversi snapshot ke List<PidDocumentModel>
+      final List<PidDocumentModel> fetchedDocs = querySnapshot.docs
+          .map((doc) => PidDocumentModel.fromFirestore(doc, null))
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _allPidDocuments.clear();
+        _allPidDocuments.addAll(fetchedDocs);
+        // Tidak perlu set _isLoading, karena ini refresh manual di latar
+      });
+
+      _filterDocuments(); // Terapkan filter
+    } catch (e) {
+      EasyLoading.showError('Gagal menyegarkan data: $e');
+    }
+  }
+
+  // --- MODIFIKASI: Update _filterDocuments untuk list<PidDocumentModel> ---
   void _filterDocuments() {
     setState(() {
       _filteredDocuments.clear();
-      _filteredDocuments.addAll(
-        _dummyDocuments
-            .where((doc) => doc['isapprove'] == _choiceForChip)
-            .toList(),
-      );
+
+      // 1. Filter berdasarkan Status Tab
+      List<PidDocumentModel> statusFiltered = [];
+      if (_choiceForChip == 'Y') {
+        // 'Y' = Completed
+        statusFiltered = _allPidDocuments
+            .where((doc) => doc.status == 'completed')
+            .toList();
+      } else {
+        // 'N' = In Progress (semua status selain 'completed')
+        statusFiltered = _allPidDocuments
+            .where((doc) => doc.status != 'completed')
+            .toList();
+      }
+
+      // 2. Filter berdasarkan Search Query
+      if (searchQuery.isEmpty) {
+        _filteredDocuments.addAll(statusFiltered);
+      } else {
+        final query = searchQuery.toUpperCase();
+        _filteredDocuments.addAll(
+          statusFiltered.where(
+            (doc) => doc.pidDocument.toUpperCase().contains(query),
+          ),
+        );
+      }
     });
   }
 
@@ -124,52 +219,31 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
     });
   }
 
+  // --- MODIFIKASI: Update _stopSearching ---
   void _stopSearching() {
-    _clearSearchQuery();
-    setState(() {
-      _isSearching = false;
-    });
-  }
-
-  void _clearSearchQuery() {
     setState(() {
       _isSearching = false;
       _searchController.clear();
-      _filterDocuments();
+      searchQuery = ''; // Pastikan reset query
     });
+    _filterDocuments(); // Terapkan ulang filter
   }
 
+  // --- MODIFIKASI: Update _updateSearchQuery ---
   void _updateSearchQuery(String newQuery) {
     setState(() {
       searchQuery = newQuery;
-      _searchDocuments(newQuery);
     });
+    _filterDocuments(); // Panggil filter utama
   }
 
-  void _searchDocuments(String search) {
-    if (search.isEmpty) {
-      _filterDocuments();
-    } else {
-      final query = search.toUpperCase();
-      setState(() {
-        _filteredDocuments.clear();
-        _filteredDocuments.addAll(
-          _dummyDocuments
-              .where(
-                (doc) =>
-                    doc['documentno'].contains(query) &&
-                    doc['isapprove'] == _choiceForChip,
-              )
-              .toList(),
-        );
-      });
-    }
-  }
+  // --- MODIFIKASI: Hapus _searchDocuments (logika dipindah ke _filterDocuments) ---
+  // void _searchDocuments(String search) { ... } // DIHAPUS
 
+  // --- (Fungsi _showProductSelectionBottomSheet & _createNewDocumentWithProducts tidak berubah) ---
+  // --- (Keduanya terkait FAB "New Document" yang logikanya masih ke 'stock') ---
   void _showProductSelectionBottomSheet() {
-    // Reset search controller ketika bottom sheet dibuka
     _productSearchController.clear();
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -190,6 +264,8 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
   void _createNewDocumentWithProducts(
     List<Map<String, dynamic>> selectedProducts,
   ) async {
+    // ... (Logika fungsi ini TIDAK SAYA UBAH, masih menyimpan ke 'stock' collection)
+    // ... (Sesuai scope permintaan yang hanya mengubah 'read' data)
     try {
       EasyLoading.show(status: 'Membuat dokumen...');
 
@@ -247,6 +323,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
       EasyLoading.showError('Gagal membuat dokumen: $e');
     }
   }
+  // --- (Akhir dari fungsi yang tidak diubah) ---
 
   Widget _buildSearchField() {
     return Container(
@@ -294,7 +371,8 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
             if (_searchController.text.isEmpty) {
               _stopSearching();
             } else {
-              _clearSearchQuery();
+              // _clearSearchQuery(); // _stopSearching sudah memanggil ini
+              _stopSearching();
             }
           },
           tooltip: 'Clear',
@@ -315,24 +393,24 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
 
   Widget _buildStatusChoiceChips() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: _statusChoices.map((choice) {
           final isSelected = _selectedStatusId == choice['id'];
           return Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: () => _onStatusSelected(choice),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                        horizontal: 12,
+                        vertical: 6,
+                        horizontal: 8,
                       ),
                       decoration: BoxDecoration(
                         gradient: isSelected
@@ -343,25 +421,27 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                               )
                             : null,
                         color: isSelected ? null : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isSelected
                               ? hijauGojekLight
                               : Colors.grey.shade300,
-                          width: isSelected ? 0 : 1.5,
+                          width: isSelected ? 0 : 1.2,
                         ),
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                  color: hijauGojekLight.withValues(alpha: 0.3),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 6),
+                                  color: hijauGojekLight.withValues(
+                                    alpha: 0.25,
+                                  ),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
                                 ),
                               ]
                             : [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 4,
+                                  color: Colors.black.withValues(alpha: 0.04),
+                                  blurRadius: 3,
                                   offset: const Offset(0, 2),
                                 ),
                               ],
@@ -374,19 +454,19 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                             color: isSelected
                                 ? Colors.white
                                 : Colors.grey.shade600,
-                            size: 28,
+                            size: 22, // 🔹 lebih kecil dari 28
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Text(
                             choice['labelName'] ?? '',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 11.5, // 🔹 dari 13 → 11.5
+                              fontWeight: FontWeight.w600,
                               color: isSelected
                                   ? Colors.white
                                   : Colors.grey.shade700,
-                              letterSpacing: 0.3,
+                              letterSpacing: 0.2,
                             ),
                           ),
                         ],
@@ -406,12 +486,13 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
     setState(() {
       _selectedStatusId = choice['id'] ?? 0;
       _choiceForChip = choice['label'] ?? 'N';
-      _filterDocuments();
     });
+    _filterDocuments(); // Terapkan filter
   }
 
-  Widget _buildDocumentCard(Map<String, dynamic> document, int index) {
-    final isCompleted = document['isapprove'] == 'Y';
+  // --- MODIFIKASI: Update _buildDocumentCard untuk menerima PidDocumentModel ---
+  Widget _buildDocumentCard(PidDocumentModel document, int index) {
+    final isCompleted = document.status == 'completed';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -436,7 +517,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
-          onTap: () => _navigateToDetail(document, index),
+          onTap: () => _navigateToDetail(document, index), // Kirim model
           borderRadius: BorderRadius.circular(20),
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -476,7 +557,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            document['documentno'],
+                            document.pidDocument, // Ganti ke pidDocument
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
@@ -555,14 +636,18 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                           _buildInfoRow(
                             Icons.person_rounded,
                             'Created By',
-                            document['createdby'],
+                            TextHelper.formatUserName(
+                              document.createdBy ?? 'N/A',
+                            ), // Ganti ke createdBy
                             hijauGojekLight,
                           ),
                           const SizedBox(height: 12),
                           _buildInfoRow(
                             Icons.access_time_rounded,
                             'Created At',
-                            document['created'],
+                            DateHelper.formatDate(
+                              document.createdAt?.toLocal().toString(),
+                            ), // Ganti ke createdAt
                             Colors.blue.shade600,
                           ),
                         ],
@@ -590,7 +675,7 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '${document['totalItems']}',
+                          '${document.products.length}', // Ganti ke total products
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -694,11 +779,40 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
     );
   }
 
+  // --- MODIFIKASI: Tambahkan _buildLoadingShimmerCard ---
+  Widget _buildLoadingShimmerCard() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey.shade300,
+      highlightColor: Colors.grey.shade100,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        height: 220, // Sesuaikan tinggi dengan card asli
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+    );
+  }
+
+  // --- MODIFIKASI: Update _buildDocumentList untuk handle loading ---
   Widget _buildDocumentList() {
+    // 1. Handle Loading
+    if (_isLoading) {
+      return Expanded(
+        child: ListView.builder(
+          itemCount: 5, // Tampilkan 5 shimmer placeholder
+          itemBuilder: (context, index) => _buildLoadingShimmerCard(),
+        ),
+      );
+    }
+
+    // 2. Handle Empty State
     if (_filteredDocuments.isEmpty) {
       return Expanded(child: _buildEmptyState());
     }
 
+    // 3. Handle Data
     return Expanded(
       child: FadeTransition(
         opacity: _fadeAnimation,
@@ -708,7 +822,8 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
           padding: const EdgeInsets.only(bottom: 80),
           itemCount: _filteredDocuments.length,
           itemBuilder: (BuildContext context, int index) {
-            final document = _filteredDocuments[index];
+            final document =
+                _filteredDocuments[index]; // Ini adalah PidDocumentModel
             return _buildDocumentCard(document, index);
           },
         ),
@@ -736,14 +851,20 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
               borderRadius: BorderRadius.circular(60),
             ),
             child: Icon(
-              Icons.inventory_2_rounded,
+              // --- MODIFIKASI: Ganti ikon berdasarkan apakah sedang mencari ---
+              _isSearching || searchQuery.isNotEmpty
+                  ? Icons.search_off_rounded
+                  : Icons.inventory_2_rounded,
               size: 60,
               color: Colors.grey.shade400,
             ),
           ),
           const SizedBox(height: 24),
           Text(
-            'No Documents Found',
+            // --- MODIFIKASI: Ganti teks berdasarkan apakah sedang mencari ---
+            _isSearching || searchQuery.isNotEmpty
+                ? 'Dokumen Tidak Ditemukan'
+                : 'Belum Ada Dokumen',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -752,7 +873,10 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
           ),
           const SizedBox(height: 8),
           Text(
-            'Create a new document to get started',
+            // --- MODIFIKASI: Ganti teks berdasarkan apakah sedang mencari ---
+            _isSearching || searchQuery.isNotEmpty
+                ? 'Coba ubah kata kunci pencarian Anda'
+                : 'Dokumen "In Progress" atau "Completed" akan tampil di sini',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
@@ -765,24 +889,42 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
     );
   }
 
-  void _navigateToDetail(Map<String, dynamic> document, int index) {
+  // --- MODIFIKASI: Update _navigateToDetail untuk memetakan PidDocumentModel ke StockTakeModel ---
+  // --- MODIFIKASI: Update _navigateToDetail untuk menambahkan flag viewMode ---
+  void _navigateToDetail(PidDocumentModel document, int index) {
+    // Buat StockTakeModel 'palsu' dari PidDocumentModel untuk navigasi
     final stockTakeModel = StockTakeModel(
-      documentid: document['documentno'],
-      createdBy: document['createdby'],
-      created: document['created'],
-      isApprove: document['isapprove'],
-      lGort: document['lGORT'],
-      detail: [],
+      documentid: document.pidDocument,
+      createdBy: document.createdBy ?? '',
+      created: document.createdAt?.toString() ?? '',
+      isApprove: document.status == 'completed' ? 'Y' : 'N',
+      lGort: (document.locatorValue != null) ? [document.locatorValue!] : [],
+      // MODIFIKASI: Kirim daftar produk dari PID document
+      detail: document.products.map((pidProduct) {
+        // Konversi ke StockTakeDetailModel
+        return StockTakeDetailModel(
+          matnr: pidProduct.productId,
+          serno: pidProduct.productSN,
+          maktx: 'Product ${pidProduct.productId}', // Default name
+          labst: pidProduct.physicalQty.toDouble(),
+          insme: 0.0,
+          speme: 0.0,
+          isApprove: document.status == 'completed' ? 'Y' : 'N',
+          selectedChoice: 'UU',
+          checkboxValidation: ValueNotifier<bool>(false),
+        );
+      }).toList(),
       updated: '',
       updatedby: '',
-      doctype: '',
+      doctype: 'pid_document', // Tandai asalnya PENTING UNTUK LOGIC READ-ONLY
       lastQuery: widget.stocktake?.lastQuery ?? '',
-      countDetail: widget.stocktake?.countDetail ?? 0,
-      whName: widget.stocktake?.whName ?? 'New Warehouse',
-      whValue: widget.stocktake?.whValue ?? '',
-      locatorValue: widget.stocktake?.locatorValue ?? '',
-      orgValue: widget.stocktake?.orgValue ?? '',
-      orgName: widget.stocktake?.orgName ?? '',
+      countDetail: document.products.length,
+      whName: document.whName ?? widget.stocktake?.whName ?? 'Warehouse',
+      whValue: document.whValue ?? widget.stocktake?.whValue ?? '',
+      locatorValue:
+          document.locatorValue ?? widget.stocktake?.locatorValue ?? '',
+      orgValue: document.orgValue ?? widget.stocktake?.orgValue ?? '',
+      orgName: document.orgName ?? widget.stocktake?.orgName ?? '',
     );
 
     Navigator.of(context).push(
@@ -790,7 +932,10 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
         builder: (context) => StockTakeDetail(
           stocktake: stockTakeModel,
           index: index,
-          documentno: document['documentno'],
+          documentno: document.pidDocument,
+          // MODIFIKASI TAMBAHAN: Tambahkan parameter untuk mode view
+          isViewMode: true, // Flag untuk mode preview
+          fromDocumentList: true, // Flag dari list PID document
         ),
       ),
     );
@@ -846,8 +991,12 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
                 ),
           centerTitle: true,
         ),
-        body: Column(
-          children: [_buildStatusChoiceChips(), _buildDocumentList()],
+        body: RefreshIndicator(
+          onRefresh: _handleRefresh, // <-- Panggil fungsi refresh
+          color: hijauGojekLight,
+          child: Column(
+            children: [_buildStatusChoiceChips(), _buildDocumentList()],
+          ),
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _showProductSelectionBottomSheet,
@@ -873,6 +1022,9 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
 
   @override
   void dispose() {
+    // --- MODIFIKASI: Batalkan subscription saat halaman ditutup ---
+    _pidDocumentSubscription?.cancel();
+
     _animationController.dispose();
     _controller.dispose();
     _searchController.dispose();
@@ -882,6 +1034,8 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
 }
 
 // Bottom Sheet Widget yang terpisah dengan pagination dan live search
+// (Kode ini disalin dari prompt Anda dan tidak diubah,
+//  karena permintaannya adalah untuk memodifikasi StockTakeHeader)
 class _ProductSelectionBottomSheet extends StatefulWidget {
   final StockTakeModel? stocktake;
   final Color hijauGojek;
