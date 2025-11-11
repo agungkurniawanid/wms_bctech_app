@@ -166,7 +166,7 @@ class OutModel implements ImmobileItem {
     final data = documentSnapshot.data() as Map<String, dynamic>?;
     if (data == null) return OutModel();
 
-    String _timestampToString(dynamic ts) {
+    String timestampToString(dynamic ts) {
       if (ts == null) {
         return ""; // Kembalikan string kosong jika null
       }
@@ -212,9 +212,9 @@ class OutModel implements ImmobileItem {
       totallines: (data['totallines'] as num?)?.toDouble() ?? 0.0,
       user1Id: data['user1_id'] ?? "",
       clientid: data['clientid'] ?? "",
-      created: _timestampToString(data['created']),
+      created: timestampToString(data['created']),
       createdby: data['createdby'] ?? "",
-      updated: _timestampToString(data['updated']),
+      updated: timestampToString(data['updated']),
       updatedby: data['updatedby'] ?? "",
       issync: data['issync'] ?? "", // <-- DIPERBAIKI: Key 'issync' bukan 'sync'
       orgid: data['orgid'] ?? "",
