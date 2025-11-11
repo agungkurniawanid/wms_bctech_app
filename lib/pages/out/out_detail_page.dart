@@ -58,7 +58,7 @@ class _OutDetailPageState extends State<OutDetailPage>
   late final AnimationController controller;
   bool allow = true;
   int idPeriodSelected = 1;
-  final List<String> sortList = ['PO Date', 'Customer'];
+  final List<String> sortList = ['SO Date', 'Customer'];
   final OutController _outController = Get.find<OutController>();
   final List<ItemChoice> listchoice = [];
   final List<Category> listcategory = [];
@@ -2988,10 +2988,10 @@ class _OutDetailPageState extends State<OutDetailPage>
   }
 
   Widget _buildModernProductCard(OutDetailModel outDetailModel, int index) {
-    final qtyEntered = outDetailModel.qtyEntered?.toInt() ?? 0;
+    final qtyOrdered = outDetailModel.qtyordered?.toInt() ?? 0;
     final qtydelivered = outDetailModel.qtydelivered?.toInt() ?? 0;
-    final remainingQty = qtyEntered - qtydelivered;
-    final progress = qtyEntered > 0 ? (qtydelivered / qtyEntered) : 0.0;
+    final remainingQty = qtyOrdered - qtydelivered;
+    final progress = qtyOrdered > 0 ? (qtydelivered / qtyOrdered) : 0.0;
 
     final isSNInput = outDetailModel.isSN;
 
@@ -3163,7 +3163,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                         children: [
                           _buildQuantityChipWithLabel(
                             "Total Pesanan",
-                            "$qtyEntered",
+                            "$qtyOrdered",
                             Icons.shopping_cart,
                           ),
                           _buildQuantityChipWithLabel(
@@ -3172,7 +3172,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                             Icons.check_circle,
                           ),
                           _buildQuantityChipWithLabel(
-                            "Sisa Kirim",
+                            "Belum Kirim",
                             "$remainingQty",
                             Icons.pending_actions,
                           ),
@@ -3277,31 +3277,34 @@ class _OutDetailPageState extends State<OutDetailPage>
                         colors: [hijauGojek.withValues(alpha: 0.3), hijauGojek],
                       ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        isSNInput == "Y"
-                            ? IconButton(
-                                icon: Icon(
-                                  Icons.qr_code_scanner_rounded,
-                                  color: Colors.white,
-                                  size: 28,
-                                ),
-                                onPressed: () => _startQRScan(outDetailModel),
-                                tooltip: "Scan QR Code",
-                              )
-                            : IconButton(
-                                icon: Icon(
-                                  Icons.keyboard,
-                                  color: Colors.white,
-                                  size: 28,
-                                ),
-                                onPressed: () =>
-                                    _startManualInput(outDetailModel),
-                                tooltip: "Input Manual",
-                              ),
-                      ],
-                    ),
+                    child: qtydelivered != qtyOrdered
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              isSNInput == "Y"
+                                  ? IconButton(
+                                      icon: Icon(
+                                        Icons.qr_code_scanner_rounded,
+                                        color: Colors.white,
+                                        size: 28,
+                                      ),
+                                      onPressed: () =>
+                                          _startQRScan(outDetailModel),
+                                      tooltip: "Scan QR Code",
+                                    )
+                                  : IconButton(
+                                      icon: Icon(
+                                        Icons.keyboard,
+                                        color: Colors.white,
+                                        size: 28,
+                                      ),
+                                      onPressed: () =>
+                                          _startManualInput(outDetailModel),
+                                      tooltip: "Input Manual",
+                                    ),
+                            ],
+                          )
+                        : SizedBox.shrink(),
                   ),
                 ),
             ],
@@ -3313,11 +3316,11 @@ class _OutDetailPageState extends State<OutDetailPage>
 
   // Progress Bar menggunakan progress_bar_chart
   // Widget _buildProgressBarChart(
-  //   int qtyEntered,
+  //   int qtyOrdered,
   //   int qtydelivered,
   //   int progressPercentage,
   // ) {
-  //   final remainingQty = qtydelivered - qtyEntered;
+  //   final remainingQty = qtydelivered - qtyOrdered;
   //   final remainingPercentage = 100 - progressPercentage;
 
   //   final List<StatisticsItem> progressStats = [
@@ -3364,7 +3367,7 @@ class _OutDetailPageState extends State<OutDetailPage>
   //               ),
   //               SizedBox(width: 4),
   //               Text(
-  //                 'Selesai: $progressPercentage% ($qtyEntered)',
+  //                 'Selesai: $progressPercentage% ($qtyOrdered)',
   //                 style: TextStyle(
   //                   fontSize: 11,
   //                   color: Colors.green.shade700,
@@ -4207,8 +4210,8 @@ class _OutDetailPageState extends State<OutDetailPage>
         throw Exception(result['error'] ?? 'Gagal generate GR ID');
       }
     } catch (e) {
-      debugPrint('❌ Error generating GR ID: $e');
-      _showErrorDialog('Gagal generate GR ID: $e');
+      debugPrint('❌ Error generating DO ID: $e');
+      _showErrorDialog('Gagal generate DO ID: $e');
       return null;
     }
   }
@@ -4320,6 +4323,72 @@ class _OutDetailPageState extends State<OutDetailPage>
     return _pendingGrDetails.any(
       (detail) => detail.sn == null || detail.sn!.isEmpty,
     );
+  }
+
+  Future<void> _updateSOQTYDelivered(
+    String productId,
+    int addedQuantity,
+  ) async {
+    // 1. Dapatkan nomor dokumen PO
+    final String documentNo = widget.flag?.documentno ?? "";
+    if (documentNo.isEmpty) return;
+
+    final docRef = FirebaseFirestore.instance.collection('out').doc(documentNo);
+    _logger.i(
+      "Akan meng-update qtydelivered di PO: $documentNo untuk Produk: $productId",
+    );
+
+    try {
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final docSnapshot = await transaction.get(docRef);
+        if (!docSnapshot.exists) {
+          throw "Dokumen PO $documentNo tidak ditemukan!";
+        }
+
+        // Ambil 'details' sebagai List<dynamic>
+        List<dynamic> detailsDynamic = docSnapshot.data()?['details'] ?? [];
+
+        // Konversi ke List<Map<String, dynamic>>
+        List<Map<String, dynamic>> details = List<Map<String, dynamic>>.from(
+          detailsDynamic,
+        );
+
+        bool productFound = false;
+        for (int i = 0; i < details.length; i++) {
+          // 2. Cari produk yang sesuai di dalam array 'details'
+          //    (Ganti 'm_product_id' jika key di Firestore Anda berbeda)
+          if (details[i]['m_product_id'] == productId) {
+            // 3. Ambil nilai 'qtydelivered' saat ini
+            //    (Ganti 'qtydelivered' jika key di Firestore Anda berbeda)
+            double currentQty =
+                (details[i]['qtydelivered'] as num?)?.toDouble() ?? 0.0;
+
+            // 4. Tambahkan kuantitas baru dan update map
+            details[i]['qtydelivered'] = currentQty + addedQuantity;
+
+            productFound = true;
+            _logger.i(
+              "Produk $productId ditemukan. Qty baru: ${details[i]['qtydelivered']}",
+            );
+            break;
+          }
+        }
+
+        if (productFound) {
+          // 5. Tulis kembali seluruh array 'details' yang sudah diperbarui
+          transaction.update(docRef, {'details': details});
+        } else {
+          _logger.w(
+            "Produk $productId tidak ditemukan di PO $documentNo untuk di-update qtydelivered-nya",
+          );
+        }
+      });
+
+      _logger.i("Berhasil update qtydelivered di PO untuk $productId");
+    } catch (e) {
+      _logger.e("Gagal update qtydelivered di PO: $e");
+      Fluttertoast.showToast(msg: "Gagal update data PO: $e");
+    }
   }
 
   Future<void> _saveToFirestore(
@@ -4435,6 +4504,7 @@ class _OutDetailPageState extends State<OutDetailPage>
 
         if (updateResult['success'] == true) {
           // ✅ UPDATE PENAMPUNG SEMENTARA DENGAN DATA TERBARU
+          await _updateSOQTYDelivered(productId, quantity);
           _safeSetState(() {
             _pendingGrDetails.clear();
             _pendingGrDetails.addAll(updatedDetails);
@@ -4564,7 +4634,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      "GR ID: $doId",
+                      "DO ID: $doId",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.green.shade800,
@@ -4687,7 +4757,7 @@ class _OutDetailPageState extends State<OutDetailPage>
     // ✅ KOSONGKAN VARIABLE PENAMPUNG SEBELUM NAVIGASI
     _resetGrData();
 
-    _logger.d('✅ Navigate to DeliveryOrderPage with GR ID: $_currentdoId');
+    _logger.d('✅ Navigate to DeliveryOrderPage with DO ID: $_currentdoId');
     Get.offAll(() => DeliveryOrderPage());
   }
 
@@ -5398,7 +5468,7 @@ class _OutDetailPageState extends State<OutDetailPage>
             children: [
               _buildInfoItem(
                 Icons.calendar_today,
-                "PO Date",
+                "SO Date",
                 DateHelper.formatDate(widget.flag?.dateordered ?? ""),
               ),
               _buildInfoItem(
@@ -5494,40 +5564,130 @@ class _OutDetailPageState extends State<OutDetailPage>
   // }
 
   Future<void> _updateDeliveryOrderStatusToSuccess() async {
-    if (_currentdoId == null) return;
+    // Ambil PO Document No dari widget, BUKAN GR ID
+    final String? poDocumentNo = widget.flag?.documentno;
+
+    if (poDocumentNo == null || poDocumentNo.isEmpty) {
+      Fluttertoast.showToast(msg: "Error: SO Document Number tidak ditemukan!");
+      return;
+    }
+
+    // Pastikan GR ID sudah ada (user sudah input setidaknya 1 item)
+    if (_currentdoId == null) {
+      Fluttertoast.showToast(
+        msg: "Tidak ada data GR yang diinput untuk di-complete!",
+      );
+      return;
+    }
 
     try {
-      _isSendingToKafka.value = true;
+      _isSendingToKafka.value = true; // Gunakan sebagai loading flag
 
-      // Update atau buat field status di Firestore menjadi "success"
+      // --- BAGIAN 1: LOGIKA BARU UNTUK UPDATE PO ('in' collection) ---
+      _logger.i(
+        "Memulai update status 'is_fully_delivered' untuk PO: $poDocumentNo",
+      );
+
+      final poDocRef = FirebaseFirestore.instance
+          .collection('out')
+          .doc(poDocumentNo);
+
+      // Gunakan Transaction untuk membaca, memodifikasi, dan menulis data PO
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final docSnapshot = await transaction.get(poDocRef);
+        if (!docSnapshot.exists) {
+          throw "Dokumen PO $poDocumentNo tidak ditemukan!";
+        }
+
+        final data = docSnapshot.data();
+        if (data == null) {
+          throw "Data Dokumen PO null!";
+        }
+
+        List<dynamic> detailsDynamic = data['details'] ?? [];
+        List<Map<String, dynamic>> updatedDetails =
+            List<Map<String, dynamic>>.from(detailsDynamic);
+
+        // Flag untuk mengecek header
+        bool allItemsAreFullyDelivered = true;
+
+        if (updatedDetails.isEmpty) {
+          // Jika tidak ada item, PO tidak bisa dianggap fully delivered
+          allItemsAreFullyDelivered = false;
+        }
+
+        // 1. Cek setiap item di details
+        for (int i = 0; i < updatedDetails.length; i++) {
+          var item = updatedDetails[i];
+
+          // Konversi ke num agar aman (bisa handle int atau double)
+          num qtyDelivered = item['qtydelivered'] ?? 0;
+          num qtyOrdered = item['qtyordered'] ?? 0;
+
+          // 2. Bandingkan qtydelivered vs qtyordered
+          // (Gunakan >= untuk keamanan jika ada over-delivery)
+          if (qtyDelivered >= qtyOrdered && qtyOrdered > 0) {
+            // 3. Update 'is_fully_delivered' di item
+            item['is_fully_delivered'] = "Y";
+            _logger.d("Item ${item['m_product_id']} di-set ke Y");
+          } else {
+            item['is_fully_delivered'] = "N";
+            _logger.d("Item ${item['m_product_id']} di-set ke N");
+            // 4. Jika satu item saja belum "Y", maka header juga "N"
+            allItemsAreFullyDelivered = false;
+          }
+        }
+
+        // 5. Siapkan data update untuk dokumen PO
+        Map<String, dynamic> poUpdateData = {
+          'details': updatedDetails, // Array details yang sudah diperbarui
+          'is_fully_delivered': allItemsAreFullyDelivered
+              ? "Y"
+              : "N", // Field header utama
+          'updated': FieldValue.serverTimestamp(), // Catat waktu update
+          'updatedby': globalVM.username.value,
+        };
+
+        // 6. Update dokumen PO di dalam transaksi
+        transaction.update(poDocRef, poUpdateData);
+      });
+
+      _logger.i("✅ Berhasil update 'is_fully_delivered' di PO: $poDocumentNo");
+
+      // --- BAGIAN 2: LOGIKA ASLI (UPDATE 'good_receipt' collection) ---
+      _logger.i("Memulai update status 'completed' untuk GR: $_currentdoId");
+
       await FirebaseFirestore.instance
           .collection('delivery_order')
           .doc(_currentdoId!)
           .set(
-            {'status': 'completed'},
+            {'status': 'completed'}, // Tandai GR sebagai 'completed'
             SetOptions(merge: true),
-          ); // merge: true untuk update field yang ada tanpa menghapus field lain
+          );
 
-      // Tunggu sebentar untuk memastikan status terupdate
-      await Future.delayed(Duration(seconds: 2));
+      _logger.i("✅ Berhasil update status 'completed' di GR: $_currentdoId");
+
+      // --- BAGIAN 3: FEEDBACK & NAVIGASI (Logika Asli) ---
+      await Future.delayed(Duration(seconds: 1)); // Beri jeda sedikit
 
       Fluttertoast.showToast(
-        msg: "Data berhasil diupdate ke Completed",
+        msg: "Data PO & GR berhasil diupdate ke Completed",
         backgroundColor: Colors.green,
         textColor: Colors.white,
       );
+
       Future.delayed(const Duration(seconds: 1), () {
         Get.to(DeliveryOrderPage());
       });
     } catch (e) {
+      _logger.e("❌ Gagal mengupdate status: $e");
       Fluttertoast.showToast(
         msg: "Gagal mengupdate status: $e",
         backgroundColor: Colors.red,
         textColor: Colors.white,
+        toastLength: Toast.LENGTH_LONG,
       );
-      Future.delayed(const Duration(seconds: 1), () {
-        Get.to(DeliveryOrderPage());
-      });
+      // Jangan navigasi jika gagal, biarkan user di halaman ini
     } finally {
       _isSendingToKafka.value = false;
     }
@@ -5652,7 +5812,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              "GR ID: $_currentdoId",
+                              "DO ID: $_currentdoId",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: _isdoIdSavedToFirestore
@@ -7703,9 +7863,9 @@ class _OutDetailPageState extends State<OutDetailPage>
         : detailsList;
 
     final total = displayList.fold<double>(0, (currentSum, item) {
-      final qtyEntered = item.qtyEntered ?? 0.0;
+      final qtyOrdered = item.qtyordered ?? 0.0;
       final qtydelivered = item.qtydelivered ?? 0.0;
-      final remainingQty = qtydelivered - qtyEntered;
+      final remainingQty = qtydelivered - qtyOrdered;
       return currentSum + (remainingQty > 0 ? remainingQty : 0);
     });
     return total.toStringAsFixed(2);
@@ -7932,7 +8092,7 @@ class _OutDetailPageState extends State<OutDetailPage>
       );
 
       if (hasAnyData) {
-        _showSuccessToast("Data berhasil ditambahkan ke GR ID: $_currentdoId");
+        _showSuccessToast("Data berhasil ditambahkan ke DO ID: $_currentdoId");
       }
 
       _resetGrData();
@@ -8070,7 +8230,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                             backgroundColor: Color(0xFFE8F5E8),
                             borderColor: Color(0xFFC8E6C9),
                             child: Text(
-                              "GR ID: $_currentdoId",
+                              "DO ID: $_currentdoId",
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 color: Color(0xFF2E7D32),

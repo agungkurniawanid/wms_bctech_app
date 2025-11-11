@@ -79,39 +79,64 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
     }
   }
 
+  // di good_receipt_detail_page.dart
+
   Future<void> _loadMoreData() async {
     if (_isLoadingMore || !_hasMoreData || _isSearching) {
       return;
     }
+
     setState(() {
       _isLoadingMore = true;
     });
+
+    // Simulasi delay untuk loading
     await Future.delayed(const Duration(milliseconds: 500));
-    final startIndex = _currentPage * _itemsPerPage;
+
+    // Perhitungan startIndex sekarang benar (dimulai dari halaman ke-2)
+    final startIndex =
+        _currentPage * _itemsPerPage; // <-- (Akan menjadi 1 * 20 = 20)
     final endIndex = startIndex + _itemsPerPage;
+
+    if (startIndex >= _filteredItems.length) {
+      // <-- Cek jika startIndex sudah di luar batas
+      setState(() {
+        _hasMoreData = false;
+        _isLoadingMore = false;
+      });
+      return;
+    }
 
     if (endIndex < _filteredItems.length) {
       setState(() {
         _displayedItems.addAll(_filteredItems.sublist(startIndex, endIndex));
-        _currentPage++;
+        _currentPage++; // <-- Pindah ke halaman berikutnya
         _isLoadingMore = false;
       });
     } else {
       final remainingItems = _filteredItems.sublist(startIndex);
       setState(() {
         _displayedItems.addAll(remainingItems);
-        _hasMoreData = false;
+        _hasMoreData = false; // <-- Data sudah habis
         _isLoadingMore = false;
+        // _currentPage tidak perlu di-increment lagi di sini
       });
     }
   }
 
+  // di good_receipt_detail_page.dart
+
   void _resetPagination() {
     setState(() {
-      _currentPage = 0;
+      _currentPage = 1; // <-- UBAH INI DARI 0 MENJADI 1
       _hasMoreData = true;
       _isLoadingMore = false;
       _displayedItems = _filteredItems.take(_itemsPerPage).toList();
+
+      // Logika tambahan untuk cek _hasMoreData
+      if (_displayedItems.length < _itemsPerPage) {
+        _hasMoreData = false;
+      }
     });
   }
 
@@ -127,37 +152,41 @@ class _DeliveryOrderDetailPageState extends State<DeliveryOrderDetailPage> {
           .get();
 
       if (deliveryOrderDoc.exists) {
+        // 1. Cukup panggil satu kali
         _deliveryOrderData = DeliveryOrderModel.fromFirestore(
           deliveryOrderDoc,
           null,
         );
 
-        if (deliveryOrderDoc.exists) {
-          _deliveryOrderData = DeliveryOrderModel.fromFirestore(
-            deliveryOrderDoc,
-            null,
-          );
-          final kafkaStatus = deliveryOrderDoc.data()?['status'];
-
-          if (kafkaStatus == null) {
-            _deliveryOrderStatus = 'Belum Dikirim';
-          } else if (kafkaStatus == 'error') {
-            _deliveryOrderStatus = 'Error';
-          } else if (kafkaStatus == 'success') {
-            _deliveryOrderStatus = 'Completed';
-          } else {
-            _deliveryOrderStatus = 'Processing';
-          }
-          _detailItems = _processDetailItems(_deliveryOrderData!.details);
-          _filteredItems = List.from(_detailItems);
-          _resetPagination();
-          await _loadProductNames();
+        // 2. Tentukan status
+        final kafkaStatus = deliveryOrderDoc.data()?['status'];
+        if (kafkaStatus == null) {
+          _deliveryOrderStatus = 'Belum Dikirim';
+        } else if (kafkaStatus == 'error') {
+          _deliveryOrderStatus = 'Error';
+        } else if (kafkaStatus == 'completed') {
+          _deliveryOrderStatus = 'Completed';
+        } else {
+          _deliveryOrderStatus = 'Processing';
         }
+
+        // 3. Panggil proses detail HANYA SATU KALI
         _detailItems = _processDetailItems(_deliveryOrderData!.details);
         _filteredItems = List.from(_detailItems);
         _resetPagination();
         await _loadProductNames();
+
+        // 4. Hapus blok 'if' bersarang dan pemanggilan duplikat
+        // Blok duplikat yang dihapus ada di sini
+      } else {
+        // Tambahkan penanganan jika dokumen tidak ada
+        _logger.w('Dokumen Delivery Order tidak ditemukan: ${widget.doId}');
+        _detailItems.clear();
+        _filteredItems.clear();
+        _resetPagination();
       }
+
+      // 5. Selalu set _isLoading = false di akhir 'try'
       setState(() {
         _isLoading = false;
       });

@@ -117,7 +117,7 @@ class InDetail {
       flag: data['flag'] != null ? List<String>.from(data['flag']) : [],
       sN: data['SN'] != null ? List<String>.from(data['SN']) : [],
       isSN: data['isSN']?.toString() ?? '',
-      isFullyDelivered: data['isFullyDelivered']?.toString() ?? '',
+      isFullyDelivered: data['is_fully_delivered']?.toString() ?? '',
       mProductId: data['m_product_id']?.toString() ?? '',
       mProductName: data['m_product_name']?.toString() ?? '',
       priceactual: (data['priceactual'] is num)
@@ -132,7 +132,7 @@ class InDetail {
       qtydelivered: (data['qtydelivered'] is num)
           ? (data['qtydelivered'] as num).toDouble()
           : 0.0,
-      qtyEntered: data['qtyEntered']?.toInt() ?? 0,
+      qtyEntered: data['qtyentered']?.toInt() ?? 0,
       qtyinvoiced: (data['qtyinvoiced'] is num)
           ? (data['qtyinvoiced'] as num).toDouble()
           : 0.0,

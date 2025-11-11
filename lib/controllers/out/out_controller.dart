@@ -495,6 +495,7 @@ class OutController extends GetxController {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('out')
           .where('documentno', isEqualTo: documentNo)
+          .where('is_fully_delivered', isEqualTo: 'N')
           .get();
 
       if (querySnapshot.docs.isEmpty) {
@@ -513,8 +514,11 @@ class OutController extends GetxController {
       }
 
       _logger.i('Jumlah details ditemukan: ${outModel.details!.length}');
-
-      return outModel.details!;
+      final filteredDetails = outModel.details!.where((OutDetailModel detail) {
+        // Kita gunakan '?? "N"' untuk keamanan
+        return (detail.isFullyDelivered ?? "N") == "N";
+      }).toList();
+      return filteredDetails;
     } catch (e) {
       _logger.e('Error dalam getDetailsByDocumentNo: $e');
       rethrow;
@@ -555,9 +559,7 @@ class OutController extends GetxController {
             final filteredDetails = outModel.details!.where((
               OutDetailModel detail,
             ) {
-              final qtyEntered = detail.qtyEntered ?? 0.0;
-              final qtydelivered = detail.qtydelivered ?? 0.0;
-              return qtyEntered < qtydelivered;
+              return (detail.isFullyDelivered ?? "N") == "N";
             }).toList();
 
             _logger.i(

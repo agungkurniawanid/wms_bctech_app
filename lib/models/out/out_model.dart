@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:wms_bctech/models/out/out_detail_model.dart';
 import '../immobileitem_model.dart';
 
@@ -165,6 +166,21 @@ class OutModel implements ImmobileItem {
     final data = documentSnapshot.data() as Map<String, dynamic>?;
     if (data == null) return OutModel();
 
+    String _timestampToString(dynamic ts) {
+      if (ts == null) {
+        return ""; // Kembalikan string kosong jika null
+      }
+      if (ts is Timestamp) {
+        // Ubah Timestamp ke DateTime, lalu format ke String
+        // Gunakan format yang SAMA seperti di fungsi 'approveIn' Anda
+        return DateFormat('yyyy-MM-dd kk:mm:ss').format(ts.toDate());
+      }
+      if (ts is String) {
+        return ts; // Kembalikan string jika datanya memang sudah string
+      }
+      return ""; // Fallback
+    }
+
     return OutModel(
       dateordered: data['dateordered'] ?? "",
       documentno: data['documentno'] ?? "",
@@ -188,7 +204,7 @@ class OutModel implements ImmobileItem {
       freightcostrule: data['freightcostrule'] ?? "",
       isFullyDelivered:
           data['is_fully_delivered'] ??
-          "", // <-- DIPERBAIKI: Default value harus String, bukan boolean false
+          "N", // <-- DIPERBAIKI: Default value harus String, bukan boolean false
       mPricelistId: data['m_pricelist_id'] ?? "",
       mProductCategoryId: data['m_product_category_id'] ?? "",
       mWarehouseId: data['m_warehouse_id'] ?? "",
@@ -196,9 +212,9 @@ class OutModel implements ImmobileItem {
       totallines: (data['totallines'] as num?)?.toDouble() ?? 0.0,
       user1Id: data['user1_id'] ?? "",
       clientid: data['clientid'] ?? "",
-      created: data['created'] ?? "",
+      created: _timestampToString(data['created']),
       createdby: data['createdby'] ?? "",
-      updated: data['updated'] ?? "",
+      updated: _timestampToString(data['updated']),
       updatedby: data['updatedby'] ?? "",
       issync: data['issync'] ?? "", // <-- DIPERBAIKI: Key 'issync' bukan 'sync'
       orgid: data['orgid'] ?? "",

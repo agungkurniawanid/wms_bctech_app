@@ -149,7 +149,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     sortListSection.value = ['A1-1', 'A1-2', 'B1-1', 'B1-2', 'C1-1'];
     selectedSection.value = 'A1-1';
 
-    _initializeChoiceChips();
+    // _initializeChoiceChips();
     _animationController.forward();
   }
 
@@ -182,14 +182,14 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     }
   }
 
-  void _initializeChoiceChips() {
-    listchoice = [
-      ItemChoice(id: 1, label: 'FZ', labelName: 'Frozen'),
-      ItemChoice(id: 2, label: 'CH', labelName: 'Chilled'),
-      ItemChoice(id: 3, label: 'ALL', labelName: 'All Products'),
-    ];
-    namechoice = listchoice[0].label!;
-  }
+  // void _initializeChoiceChips() {
+  //   listchoice = [
+  //     ItemChoice(id: 1, label: 'FZ', labelName: 'Frozen'),
+  //     ItemChoice(id: 2, label: 'CH', labelName: 'Chilled'),
+  //     ItemChoice(id: 3, label: 'ALL', labelName: 'All Products'),
+  //   ];
+  //   namechoice = listchoice[0].label!;
+  // }
 
   @override
   void dispose() {
@@ -203,7 +203,29 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   }
 
   String calculTotalbun(Map<String, dynamic> item, String validation) {
-    return "0.0";
+    // 1. Ambil ID produk (matnr) dari item yang sedang ditampilkan di card
+    final String? currentProductId = item['matnr']?.toString();
+
+    if (currentProductId == null) {
+      return "0.0"; // Jika item tidak punya ID, kembalikan 0
+    }
+
+    // 2. Cari data di dalam cache (_cachedPidDetails)
+    try {
+      // 'firstWhere' akan mencari item di cache yang productId-nya
+      // sama dengan ID produk di card ini.
+      final cachedDetail = _cachedPidDetails.firstWhere(
+        (detail) => detail.productId == currentProductId,
+      );
+
+      // 3. Jika DITEMUKAN, kembalikan nilai physicalQty yang sudah disimpan
+      // Ubah ke double lalu ke string agar sesuai format
+      return (cachedDetail.physicalQty).toDouble().toString();
+    } catch (e) {
+      // 4. Jika TIDAK DITEMUKAN ('firstWhere' melempar error),
+      // artinya item ini belum di-input. Kembalikan "0.0"
+      return "0.0";
+    }
   }
 
   String conversion(
@@ -1910,7 +1932,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
         // Email Button
         FloatingActionButton(
           onPressed: _onEmailPressed,
-          backgroundColor: Colors.blue.shade600,
+          backgroundColor: Colors.orange.shade600,
           heroTag: "emailBtn",
           elevation: 4,
           child: const Icon(
@@ -1925,7 +1947,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           onPressed: isApproveDisabled ? null : _onApprovePressed,
           backgroundColor: isApproveDisabled
               ? Colors.grey.shade400
-              : hijauGojek,
+              : Colors.blueAccent,
           foregroundColor: isApproveDisabled
               ? Colors.grey.shade600
               : Colors.white,

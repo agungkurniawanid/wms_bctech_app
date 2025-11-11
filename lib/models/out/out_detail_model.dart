@@ -117,7 +117,7 @@ class OutDetailModel {
       flag: data['flag'] != null ? List<String>.from(data['flag']) : [],
       sN: data['SN'] != null ? List<String>.from(data['SN']) : [],
       isSN: data['isSN']?.toString() ?? '',
-      isFullyDelivered: data['isFullyDelivered']?.toString() ?? '',
+      isFullyDelivered: data['is_fully_delivered']?.toString() ?? '',
       mProductId: data['m_product_id']?.toString() ?? '',
       mProductName: data['m_product_name']?.toString() ?? '',
       priceactual: (data['priceactual'] is num)

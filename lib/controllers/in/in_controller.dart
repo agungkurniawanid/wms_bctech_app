@@ -494,6 +494,7 @@ class InVM extends GetxController {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('in')
           .where('documentno', isEqualTo: documentNo)
+          .where('is_fully_delivered', isEqualTo: 'N')
           .get();
 
       if (querySnapshot.docs.isEmpty) {
@@ -511,9 +512,20 @@ class InVM extends GetxController {
         return [];
       }
 
-      _logger.i('Jumlah details ditemukan: ${inModel.details!.length}');
+      _logger.i('Jumlah details (sebelum filter): ${inModel.details!.length}');
 
-      return inModel.details!;
+      // [PERBAIKAN] Tambahkan filter di sini
+      final filteredDetails = inModel.details!.where((InDetail detail) {
+        // Kita gunakan '?? "N"' untuk keamanan
+        return (detail.isFullyDelivered ?? "N") == "N";
+      }).toList();
+
+      _logger.i(
+        'Jumlah details (setelah filter "N"): ${filteredDetails.length}',
+      );
+
+      // Kembalikan data yang sudah difilter
+      return filteredDetails;
     } catch (e) {
       _logger.e('Error dalam getDetailsByDocumentNo: $e');
       rethrow;
@@ -548,9 +560,9 @@ class InVM extends GetxController {
             }
 
             final filteredDetails = inModel.details!.where((InDetail detail) {
-              final qtyEntered = detail.qtyEntered ?? 0.0;
-              final qtyOrdered = detail.qtyordered ?? 0.0;
-              return qtyEntered < qtyOrdered;
+              // Kita gunakan '?? "N"' untuk keamanan, jika field-nya null,
+              // kita anggap "N" (belum terkirim)
+              return (detail.isFullyDelivered ?? "N") == "N";
             }).toList();
 
             _logger.i(

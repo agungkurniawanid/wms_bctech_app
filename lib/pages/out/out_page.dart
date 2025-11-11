@@ -34,13 +34,13 @@ class _OutPageState extends State<OutPage> {
   //   {'id': '3', 'label': 'ALL', 'labelName': 'All'},
   // ];
 
-  final List<String> _sortList = ['All', 'PO Date', 'Vendor'];
+  final List<String> _sortList = ['All', 'SO Date', 'Vendor'];
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
   bool _isSearching = false;
   // String _selectedChoiceId = '3';
-  String _selectedSort = 'PO Date';
+  String _selectedSort = 'SO Date';
   String choiceInValue = 'ALL';
 
   @override
@@ -237,10 +237,10 @@ class _OutPageState extends State<OutPage> {
 
   void _handleSortChange(String? value) {
     setState(() {
-      _selectedSort = value ?? 'PO Date';
+      _selectedSort = value ?? 'SO Date';
 
       // Sort logic - bisa diimplementasikan di controller jika diperlukan
-      if (value == "PO Date") {
+      if (value == "SO Date") {
         _outController.tolistSalesOrder.sort((a, b) {
           final aDate = a.dateordered ?? '';
           final bDate = b.dateordered ?? '';

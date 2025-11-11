@@ -79,6 +79,8 @@ class _GoodReceiptDetailPageState extends State<GoodReceiptDetailPage> {
   }
 
   // Load more data untuk pagination
+  // di good_receipt_detail_page.dart
+
   Future<void> _loadMoreData() async {
     if (_isLoadingMore || !_hasMoreData || _isSearching) {
       return;
@@ -91,34 +93,55 @@ class _GoodReceiptDetailPageState extends State<GoodReceiptDetailPage> {
     // Simulasi delay untuk loading
     await Future.delayed(const Duration(milliseconds: 500));
 
-    final startIndex = _currentPage * _itemsPerPage;
+    // Perhitungan startIndex sekarang benar (dimulai dari halaman ke-2)
+    final startIndex =
+        _currentPage * _itemsPerPage; // <-- (Akan menjadi 1 * 20 = 20)
     final endIndex = startIndex + _itemsPerPage;
+
+    if (startIndex >= _filteredItems.length) {
+      // <-- Cek jika startIndex sudah di luar batas
+      setState(() {
+        _hasMoreData = false;
+        _isLoadingMore = false;
+      });
+      return;
+    }
 
     if (endIndex < _filteredItems.length) {
       setState(() {
         _displayedItems.addAll(_filteredItems.sublist(startIndex, endIndex));
-        _currentPage++;
+        _currentPage++; // <-- Pindah ke halaman berikutnya
         _isLoadingMore = false;
       });
     } else {
       final remainingItems = _filteredItems.sublist(startIndex);
       setState(() {
         _displayedItems.addAll(remainingItems);
-        _hasMoreData = false;
+        _hasMoreData = false; // <-- Data sudah habis
         _isLoadingMore = false;
+        // _currentPage tidak perlu di-increment lagi di sini
       });
     }
   }
 
   // Reset pagination ketika filter/search berubah
+  // di good_receipt_detail_page.dart
+
   void _resetPagination() {
     setState(() {
-      _currentPage = 0;
+      _currentPage = 1; // <-- UBAH INI DARI 0 MENJADI 1
       _hasMoreData = true;
       _isLoadingMore = false;
       _displayedItems = _filteredItems.take(_itemsPerPage).toList();
+
+      // Logika tambahan untuk cek _hasMoreData
+      if (_displayedItems.length < _itemsPerPage) {
+        _hasMoreData = false;
+      }
     });
   }
+
+  // di good_receipt_detail_page.dart
 
   Future<void> _loadGrinDetailData() async {
     try {
@@ -134,37 +157,26 @@ class _GoodReceiptDetailPageState extends State<GoodReceiptDetailPage> {
       if (grinDoc.exists) {
         _grinData = GoodReceiptModel.fromFirestore(grinDoc, null);
 
-        if (grinDoc.exists) {
-          _grinData = GoodReceiptModel.fromFirestore(grinDoc, null);
-
-          // === TENTUKAN STATUS DARI lastSentToKafkaLogStatus ===
-          final kafkaStatus = grinDoc.data()?['status'];
-          if (kafkaStatus == null) {
-            _grinStatus = 'Belum Dikirim';
-          } else if (kafkaStatus == 'error') {
-            _grinStatus = 'Error';
-          } else if (kafkaStatus == 'success') {
-            _grinStatus = 'Completed';
-          } else {
-            _grinStatus = 'Processing';
-          }
-
-          // Process detail items
-          _detailItems = _processDetailItems(_grinData!.details);
-          _filteredItems = List.from(_detailItems);
-          _resetPagination(); // Initialize pagination
-
-          // Load product names
-          await _loadProductNames();
+        // === TENTUKAN STATUS DARI status === (Bukan lastSentToKafkaLogStatus)
+        final kafkaStatus = grinDoc.data()?['status'];
+        if (kafkaStatus == null) {
+          _grinStatus = 'Belum Dikirim';
+        } else if (kafkaStatus == 'error') {
+          _grinStatus = 'Error';
+        } else if (kafkaStatus == 'completed') {
+          _grinStatus = 'Completed';
+        } else {
+          _grinStatus = 'Processing'; // (Contoh: 'drafted', 'pending')
         }
+
         // Process detail items
         _detailItems = _processDetailItems(_grinData!.details);
         _filteredItems = List.from(_detailItems);
         _resetPagination(); // Initialize pagination
 
-        // Load product names from IN collection
+        // Load product names
         await _loadProductNames();
-      }
+      } // <-- Hapus blok 'if (grinDoc.exists)' kedua yang duplikat
 
       setState(() {
         _isLoading = false;

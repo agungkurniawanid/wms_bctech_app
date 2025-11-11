@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'in_detail_model.dart';
 import '../immobileitem_model.dart';
 
@@ -162,6 +163,22 @@ class InModel implements ImmobileItem {
     final data = documentSnapshot.data() as Map<String, dynamic>?;
     if (data == null) return InModel();
 
+    // Helper kecil untuk konversi Timestamp ke String
+    String _timestampToString(dynamic ts) {
+      if (ts == null) {
+        return ""; // Kembalikan string kosong jika null
+      }
+      if (ts is Timestamp) {
+        // Ubah Timestamp ke DateTime, lalu format ke String
+        // Gunakan format yang SAMA seperti di fungsi 'approveIn' Anda
+        return DateFormat('yyyy-MM-dd kk:mm:ss').format(ts.toDate());
+      }
+      if (ts is String) {
+        return ts; // Kembalikan string jika datanya memang sudah string
+      }
+      return ""; // Fallback
+    }
+
     return InModel(
       dateordered: data['dateordered'] ?? "",
       documentno: data['documentno'] ?? "",
@@ -180,7 +197,7 @@ class InModel implements ImmobileItem {
           ?.map((e) => InDetail.fromJson(e as Map<String, dynamic>))
           .toList(),
       freightcostrule: data['freightcostrule'] ?? "",
-      isFullyDelivered: data['is_fully_delivered'] ?? false,
+      isFullyDelivered: data['is_fully_delivered'] ?? "N",
       mPricelistId: data['m_pricelist_id'] ?? "",
       mProductCategoryId: data['m_product_category_id'] ?? "",
       mWarehouseId: data['m_warehouse_id'] ?? "",
@@ -188,9 +205,9 @@ class InModel implements ImmobileItem {
       totallines: (data['totallines'] as num?)?.toDouble() ?? 0.0,
       user1Id: data['user1_id'] ?? "",
       clientid: data['clientid'] ?? "",
-      created: data['created'] ?? "",
+      created: _timestampToString(data['created']),
       createdby: data['createdby'] ?? "",
-      updated: data['updated'] ?? "",
+      updated: _timestampToString(data['updated']),
       updatedby: data['updatedby'] ?? "",
       issync: data['sync'] ?? "",
       orgid: data['orgid'] ?? "",
