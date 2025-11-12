@@ -4384,13 +4384,22 @@ class _OutDetailPageState extends State<OutDetailPage>
 
     try {
       // 1. Validasi A: Cek apakah SN ada di master 'serial_numbers'
-      _logger.d('🔍 Validasi A: Cek master SN: $trimmedSerial');
-      final masterSnDoc = await firestore
+      _logger.d('🔍 Validasi A: Cek master SN (query): $trimmedSerial');
+
+      // --- ⛔ PERBAIKAN DI SINI ⛔ ---
+      // Hapus .doc(trimmedSerial) dan ganti dengan .where('sn', ...)
+      // Ini akan mencari dokumen yang memiliki field 'sn' yang cocok
+      final masterSnQuery = await firestore
           .collection('serial_numbers')
-          .doc(trimmedSerial)
+          .where(
+            'sn',
+            isEqualTo: trimmedSerial,
+          ) // <-- Gunakan query, bukan doc ID
+          .limit(1)
           .get();
 
-      if (!masterSnDoc.exists) {
+      if (masterSnQuery.docs.isEmpty) {
+        // <-- Cek jika hasil query kosong
         _logger.w(
           '❌ Validasi A Gagal: SN $trimmedSerial tidak terdaftar di master.',
         );
@@ -4400,9 +4409,11 @@ class _OutDetailPageState extends State<OutDetailPage>
               'Serial number "$trimmedSerial" tidak terdaftar di master data.',
         };
       }
+      // --- ⛔ BATAS PERBAIKAN ⛔ ---
       _logger.d('✅ Validasi A Sukses: SN $trimmedSerial ditemukan di master.');
 
       // 2. Validasi B: Cek apakah SN sudah digunakan di 'sales_order_serial_numbers'
+      // (Kode ini sudah benar, menggunakan .where())
       _logger.d('🔍 Validasi B: Cek penggunaan SN di outbound: $trimmedSerial');
       final outboundSnQuery = await firestore
           .collection('sales_order_serial_numbers')

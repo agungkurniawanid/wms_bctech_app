@@ -583,23 +583,35 @@ class DeliveryOrderController extends GetxController {
 
   Future<bool> isSerialNumberUnique(String serialNumber) async {
     try {
-      final trimmed = serialNumber.trim().toLowerCase();
-      if (trimmed.isEmpty) return true;
+      // 1. Simpan SN asli (jangan .toLowerCase())
+      final trimmedSerial = serialNumber.trim();
+      if (trimmedSerial.isEmpty) return true; // Anggap valid jika kosong
 
-      final doc = await FirebaseFirestore.instance
+      _logger.d('🔍 Validasi SN global (query): $trimmedSerial');
+
+      // 2. Query ke field 'sn' untuk mengecek duplikat
+      //    Ini adalah cara yang benar: cepat, efisien, dan hanya membaca 1 data.
+      final querySnapshot = await _firestore
           .collection('serial_numbers')
-          .doc(trimmed)
+          .where('sn', isEqualTo: trimmedSerial) // <-- Mencari field 'sn'
+          .limit(1)
           .get();
 
-      if (doc.exists) {
-        _logger.w('❌ SN $trimmed sudah ada di DO: ${doc['do_id']}');
-        return false;
+      // 3. Jika query tidak menemukan dokumen, berarti unik
+      final isUnique = querySnapshot.docs.isEmpty;
+
+      if (!isUnique) {
+        _logger.w(
+          '❌ SN $trimmedSerial sudah ada di GR: ${querySnapshot.docs.first.data()['gr_id']}',
+        );
+      } else {
+        _logger.d('✅ SN $trimmedSerial unik secara global');
       }
-      _logger.d('✅ SN $trimmed unik secara global');
-      return true;
+
+      return isUnique;
     } catch (e) {
       _logger.e('❌ Error cek SN global: $e');
-      return false;
+      return false; // Anggap tidak unik jika terjadi error
     }
   }
 
@@ -794,20 +806,22 @@ class DeliveryOrderController extends GetxController {
     required String productId,
   }) async {
     try {
-      final trimmed = serialNumber.trim().toLowerCase();
-      if (trimmed.isEmpty) return;
+      // 1. JANGAN .toLowerCase(), simpan data asli
+      final trimmedSerial = serialNumber.trim();
+      if (trimmedSerial.isEmpty) return;
 
-      await FirebaseFirestore.instance
-          .collection('serial_numbers')
-          .doc(trimmed)
-          .set({
-            'do_id': doId,
-            'productid': productId,
-            'createdat': FieldValue.serverTimestamp(),
-          });
+      // 2. Gunakan .add() untuk membuat ID dokumen otomatis
+      // Ini mengizinkan SN berisi '/' atau karakter spesial lainnya
+      await FirebaseFirestore.instance.collection('serial_numbers').add({
+        // <-- Menggunakan .add()
+        'sn': trimmedSerial, // <-- Menyimpan SN asli di field 'sn'
+        'do_id': doId,
+        'productid': productId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
       _logger.d(
-        '✅ Serial number $trimmed disimpan ke koleksi global serial_numbers',
+        '✅ Serial number $trimmedSerial disimpan ke koleksi global serial_numbers',
       );
     } catch (e) {
       _logger.e('❌ Gagal simpan serial number global: $e');

@@ -69,6 +69,8 @@ dependencies:
   rename_app: ^1.6.5
   flutter_launcher_icons: ^0.14.4
   device_info_plus: ^12.2.0
+  cached_network_image: ^3.4.1
+  image_picker: ^1.2.1
 
 dev_dependencies:
   flutter_test:
