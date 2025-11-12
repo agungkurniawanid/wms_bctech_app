@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
 import 'package:flutter/cupertino.dart';
@@ -2193,11 +2194,9 @@ class _OutDetailPageState extends State<OutDetailPage>
 
   void _saveScanResult(OutDetailModel product) async {
     final serialNumber = _serialNumberController.text.trim();
-
-    // ✅ UNTUK SCAN QR: QUANTITY SELALU 1
     final quantity = 1; // Fixed quantity untuk scan QR
 
-    // Validasi input
+    // Validasi SN (harus ada untuk QR scan)
     if (serialNumber.isEmpty) {
       Fluttertoast.showToast(
         msg: "Serial number tidak boleh kosong untuk scan QR",
@@ -2206,45 +2205,38 @@ class _OutDetailPageState extends State<OutDetailPage>
       return;
     }
 
-    // Validasi format serial number
-    if (serialNumber.length < 2) {
-      Fluttertoast.showToast(
-        msg: "Serial number terlalu pendek. Minimal 2 karakter.",
-        backgroundColor: Colors.orange,
-      );
-      return;
-    }
-
     try {
       setState(() {
         isScanning = false;
-      });
+      }); // Matikan state scanning
+      EasyLoading.show(status: 'Memvalidasi SN: $serialNumber...');
 
-      // ✅ VALIDASI SERIAL NUMBER UNIK SECARA GLOBAL
-      _logger.d('🔍 Memvalidasi serial number: $serialNumber');
-      final isSerialNumberUnique = await _validateSerialNumberBeforeSave(
+      // --- VALIDASI BARU ---
+      final validationResult = await _validateOutboundSerialNumber(
         serialNumber,
       );
-
-      if (!isSerialNumberUnique) {
-        return; // Stop execution if validation fails
+      if (validationResult['success'] == false) {
+        EasyLoading.dismiss();
+        _showErrorDialog(validationResult['error']); // Tampilkan dialog error
+        return; // Hentikan eksekusi
       }
+      // --- BATAS VALIDASI BARU ---
 
-      _logger.d('✅ Serial number valid, menampilkan konfirmasi...');
+      EasyLoading.dismiss();
+      _logger.d(
+        '✅ Validasi SN $serialNumber sukses, menampilkan konfirmasi...',
+      );
 
-      // ✅ TAMPILKAN DIALOG KONFIRMASI SEBELUM MENYIMPAN
+      // Tampilkan dialog konfirmasi
       _showSaveConfirmationDialog(
         product,
         serialNumber,
         quantity,
         fromQR: true,
-        shouldCloseBottomSheet: true, // ✅ TUTUP BOTTOM SHEET SETELAH SIMPAN
-        shouldNavigate: false, // ✅ JANGAN NAVIGASI
+        shouldCloseBottomSheet: true,
+        shouldNavigate: false,
         onAfterSave: () {
-          // ✅ CALLBACK SETELAH SIMPAN BERHASIL - TAMPILKAN KEMBALI CAMERA SCANNING
           _logger.d('🔄 Menampilkan kembali camera scanning setelah simpan...');
-
-          // Tunggu sebentar untuk memastikan bottom sheet tertutup
           Future.delayed(const Duration(milliseconds: 300), () {
             if (mounted) {
               _startQRScan(product);
@@ -2253,6 +2245,7 @@ class _OutDetailPageState extends State<OutDetailPage>
         },
       );
     } catch (e) {
+      EasyLoading.dismiss();
       Fluttertoast.showToast(
         msg: "Gagal memvalidasi: $e",
         backgroundColor: Colors.red,
@@ -4076,17 +4069,9 @@ class _OutDetailPageState extends State<OutDetailPage>
   void _saveManualInput(OutDetailModel product, {bool fromQR = false}) async {
     final serialNumber = _serialNumberController.text.trim();
     final quantity = _quantity.value;
+    final bool hasSerialNumber = serialNumber.isNotEmpty;
 
-    // ✅ VALIDASI KHUSUS UNTUK MANUAL INPUT DARI QR (fromQR = true)
-    if (fromQR && serialNumber.isEmpty) {
-      Fluttertoast.showToast(
-        msg: "Serial number harus diisi untuk input manual dari QR",
-        backgroundColor: Colors.orange,
-        textColor: Colors.white,
-      );
-      return;
-    }
-
+    // Validasi kuantitas
     if (quantity <= 0) {
       Fluttertoast.showToast(
         msg: "Quantity harus lebih dari 0",
@@ -4095,59 +4080,50 @@ class _OutDetailPageState extends State<OutDetailPage>
       return;
     }
 
-    final bool hasSerialNumber = serialNumber.isNotEmpty;
-
-    // Jika ada serial number, validasi format
-    if (hasSerialNumber && serialNumber.length < 2) {
+    // Validasi SN jika wajib (fromQR)
+    if (fromQR && !hasSerialNumber) {
       Fluttertoast.showToast(
-        msg: "Serial number terlalu pendek. Minimal 2 karakter.",
+        msg: "Serial number harus diisi untuk input manual dari QR",
         backgroundColor: Colors.orange,
       );
       return;
     }
 
     try {
-      // Show loading
       setState(() {
         isScanning = false;
       });
+      EasyLoading.show(status: 'Memproses data...');
 
-      // ✅ VALIDASI SERIAL NUMBER UNIK JIKA ADA
+      // --- VALIDASI BARU (HANYA JIKA ADA SN) ---
       if (hasSerialNumber) {
-        debugPrint('🔍 Validasi serial number manual: $serialNumber');
-        final isSerialNumberUnique = await _checkSerialNumberUniqueOptimized(
+        EasyLoading.show(status: 'Memvalidasi SN: $serialNumber...');
+        final validationResult = await _validateOutboundSerialNumber(
           serialNumber,
         );
-
-        if (!isSerialNumberUnique) {
-          Fluttertoast.showToast(
-            msg:
-                "Serial number '$serialNumber' sudah digunakan di sistem. Harus unik secara global!",
-            backgroundColor: Colors.orange,
-            textColor: Colors.white,
-            toastLength: Toast.LENGTH_LONG,
-          );
-          return;
+        if (validationResult['success'] == false) {
+          EasyLoading.dismiss();
+          _showErrorDialog(validationResult['error']); // Tampilkan dialog error
+          return; // Hentikan eksekusi
         }
-        debugPrint('✅ Serial number manual valid: $serialNumber');
+        _logger.d('✅ Validasi SN $serialNumber sukses.');
       }
+      // --- BATAS VALIDASI BARU ---
 
-      // ✅ TAMPILKAN DIALOG KONFIRMASI SEBELUM MENYIMPAN
+      EasyLoading.dismiss();
+      _logger.d('✅ Data valid, menampilkan konfirmasi...');
+
+      // Tampilkan dialog konfirmasi
       _showSaveConfirmationDialog(
         product,
         hasSerialNumber ? serialNumber : null,
         quantity,
         fromQR: fromQR,
-        shouldCloseBottomSheet: true, // ✅ TUTUP BOTTOM SHEET SETELAH SIMPAN
-        shouldNavigate: false, // ✅ JANGAN NAVIGASI
+        shouldCloseBottomSheet: true,
+        shouldNavigate: false,
         onAfterSave: () {
-          // ✅ CALLBACK SETELAH SIMPAN BERHASIL - TUTUP BOTTOM SHEET
           _logger.d('✅ Data manual berhasil disimpan, menutup bottom sheet...');
-
-          // Reset form
           _resetForm();
-
-          // Tampilkan toast sukses
           Fluttertoast.showToast(
             msg: "Data berhasil disimpan",
             backgroundColor: Colors.green,
@@ -4156,7 +4132,7 @@ class _OutDetailPageState extends State<OutDetailPage>
         },
       );
     } catch (e) {
-      // Show error message
+      EasyLoading.dismiss();
       Fluttertoast.showToast(
         msg: "Gagal memvalidasi: $e",
         backgroundColor: Colors.red,
@@ -4391,6 +4367,70 @@ class _OutDetailPageState extends State<OutDetailPage>
     }
   }
 
+  // ✅ FUNGSI VALIDASI BARU UNTUK OUTBOUND
+  /// Cek (A) apakah SN ada di master, dan (B) apakah SN sudah dipakai di outbound.
+  Future<Map<String, dynamic>> _validateOutboundSerialNumber(
+    String serialNumber,
+  ) async {
+    final trimmedSerial = serialNumber.trim();
+    if (trimmedSerial.isEmpty) {
+      return {'success': false, 'error': 'Serial number kosong.'};
+    }
+    if (trimmedSerial.length < 2) {
+      return {'success': false, 'error': 'Serial number terlalu pendek.'};
+    }
+
+    final firestore = FirebaseFirestore.instance;
+
+    try {
+      // 1. Validasi A: Cek apakah SN ada di master 'serial_numbers'
+      _logger.d('🔍 Validasi A: Cek master SN: $trimmedSerial');
+      final masterSnDoc = await firestore
+          .collection('serial_numbers')
+          .doc(trimmedSerial)
+          .get();
+
+      if (!masterSnDoc.exists) {
+        _logger.w(
+          '❌ Validasi A Gagal: SN $trimmedSerial tidak terdaftar di master.',
+        );
+        return {
+          'success': false,
+          'error':
+              'Serial number "$trimmedSerial" tidak terdaftar di master data.',
+        };
+      }
+      _logger.d('✅ Validasi A Sukses: SN $trimmedSerial ditemukan di master.');
+
+      // 2. Validasi B: Cek apakah SN sudah digunakan di 'sales_order_serial_numbers'
+      _logger.d('🔍 Validasi B: Cek penggunaan SN di outbound: $trimmedSerial');
+      final outboundSnQuery = await firestore
+          .collection('sales_order_serial_numbers')
+          .where('sn', isEqualTo: trimmedSerial)
+          .limit(1)
+          .get();
+
+      if (outboundSnQuery.docs.isNotEmpty) {
+        final docId = outboundSnQuery.docs.first.id;
+        final doId = outboundSnQuery.docs.first.data()['do_id'] ?? 'N/A';
+        _logger.w(
+          '❌ Validasi B Gagal: SN $trimmedSerial sudah di-input di DO $doId (doc: $docId).',
+        );
+        return {
+          'success': false,
+          'error':
+              'Serial number "$trimmedSerial" sudah di-input pada DO $doId.',
+        };
+      }
+
+      _logger.d('✅ Validasi B Sukses: SN $trimmedSerial belum digunakan.');
+      return {'success': true};
+    } catch (e) {
+      _logger.e('❌ Error validasi SN: $e');
+      return {'success': false, 'error': 'Error server: $e'};
+    }
+  }
+
   Future<void> _saveToFirestore(
     OutDetailModel product,
     String? serialNumber,
@@ -4409,24 +4449,8 @@ class _OutDetailPageState extends State<OutDetailPage>
       final bool hasSerialNumber =
           trimmedSerial != null && trimmedSerial.isNotEmpty;
 
-      // ✅ VALIDASI SERIAL NUMBER UNIK GLOBALLY (jika ada serial number)
-      if (hasSerialNumber) {
-        _logger.d('🔍 Memulai validasi serial number: $trimmedSerial');
-
-        if (trimmedSerial.length < 2) {
-          throw Exception("Serial number terlalu pendek. Minimal 2 karakter.");
-        }
-
-        // Validasi unik secara global
-        final isSerialNumberUnique = await _validateSerialNumberBeforeSave(
-          trimmedSerial,
-        );
-
-        if (!isSerialNumberUnique) {
-          return; // Stop execution if validation fails
-        }
-        _logger.d('✅ : $trimmedSerial');
-      }
+      // ⛔ VALIDASI GLOBAL SUDAH DILAKUKAN SEBELUM DIALOG KONFIRMASI
+      // KITA TIDAK PERLU VALIDASI ULANG DI SINI.
 
       final deliveryOrderController = Get.find<DeliveryOrderController>();
 
@@ -4438,29 +4462,13 @@ class _OutDetailPageState extends State<OutDetailPage>
       );
 
       if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text(
-                hasSerialNumber
-                    ? "Validasi & menyimpan serial number..."
-                    : "Menyimpan data...",
-              ),
-            ],
-          ),
-        ),
-      );
+      EasyLoading.show(status: 'Menyimpan data...');
 
       String? doIdToUse = _currentdoId;
       if (doIdToUse == null) {
         doIdToUse = await _generateAndStoredoId();
         if (doIdToUse == null) {
-          throw Exception('Gagal generate GR ID');
+          throw Exception('Gagal generate DO ID');
         }
       }
 
@@ -4468,6 +4476,7 @@ class _OutDetailPageState extends State<OutDetailPage>
         doIdToUse,
       );
       if (existingGr != null) {
+        // Cek duplikat sekali lagi (safety check) di dalam GR yang SAMA
         if (hasSerialNumber) {
           final isDuplicateInSameGr = existingGr.details.any(
             (detail) =>
@@ -4477,8 +4486,7 @@ class _OutDetailPageState extends State<OutDetailPage>
 
           if (isDuplicateInSameGr) {
             throw Exception(
-              "Serial number '$trimmedSerial' sudah digunakan dalam GR ini ($doIdToUse). "
-              "Serial number harus unik.",
+              "Serial number '$trimmedSerial' sudah digunakan dalam DO ini ($doIdToUse).",
             );
           }
         }
@@ -4496,11 +4504,7 @@ class _OutDetailPageState extends State<OutDetailPage>
               newDetails: updatedDetails,
             );
 
-        if (mounted) {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          }
-        }
+        EasyLoading.dismiss();
 
         if (updateResult['success'] == true) {
           // ✅ UPDATE PENAMPUNG SEMENTARA DENGAN DATA TERBARU
@@ -4511,18 +4515,28 @@ class _OutDetailPageState extends State<OutDetailPage>
             _isdoIdSavedToFirestore = true;
           });
 
-          _logger.d('✅ Detail berhasil diproses ke GR: $doIdToUse');
-          if (hasSerialNumber) {
-            _logger.d('✅ Serial number berhasil disimpan: $trimmedSerial');
-          }
+          _logger.d('✅ Detail berhasil diproses ke DO: $doIdToUse');
 
+          // --- LOGIKA SIMPAN SN BARU ---
           if (hasSerialNumber) {
-            await deliveryOrderController.saveSerialNumberGlobal(
-              serialNumber: trimmedSerial,
-              doId: doIdToUse,
-              productId: productId,
+            _logger.d(
+              '💾 Menyimpan SN $trimmedSerial ke sales_order_serial_numbers...',
             );
+            final snData = {
+              'createdat': FieldValue.serverTimestamp(),
+              'do_id': doIdToUse,
+              'productid': productId,
+              'sn': trimmedSerial,
+            };
+            await FirebaseFirestore.instance
+                .collection('sales_order_serial_numbers')
+                .add(snData);
+            _logger.d('✅ SN $trimmedSerial berhasil disimpan.');
           }
+          // --- BATAS LOGIKA SIMPAN SN BARU ---
+
+          // ⛔ HAPUS LOGIKA LAMA `saveSerialNumberGlobal` (jika ada)
+          // await deliveryOrderController.saveSerialNumberGlobal(...) // <-- HAPUS INI
 
           if (shouldCloseBottomSheet &&
               mounted &&
@@ -4542,7 +4556,7 @@ class _OutDetailPageState extends State<OutDetailPage>
             Fluttertoast.showToast(
               msg: hasSerialNumber
                   ? "Serial number berhasil disimpan: $trimmedSerial"
-                  : "Data berhasil disimpan ke GR",
+                  : "Data berhasil disimpan ke DO",
               backgroundColor: Colors.green,
               textColor: Colors.white,
             );
@@ -4554,6 +4568,7 @@ class _OutDetailPageState extends State<OutDetailPage>
         throw Exception('GR tidak ditemukan di Firestore');
       }
     } catch (e) {
+      EasyLoading.dismiss(); // Pastikan loading ditutup jika ada error
       if (mounted) {
         if (Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
@@ -5661,7 +5676,10 @@ class _OutDetailPageState extends State<OutDetailPage>
           .collection('delivery_order')
           .doc(_currentdoId!)
           .set(
-            {'status': 'completed'}, // Tandai GR sebagai 'completed'
+            {
+              'status': 'completed',
+              'updatedat': FieldValue.serverTimestamp(),
+            }, // Tandai GR sebagai 'completed'
             SetOptions(merge: true),
           );
 
@@ -6001,7 +6019,7 @@ class _OutDetailPageState extends State<OutDetailPage>
                                 size: 18,
                               ),
                               label: Text(
-                                isSent ? 'Completed' : 'Complete GR',
+                                isSent ? 'Completed' : 'Complete DO',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 13,

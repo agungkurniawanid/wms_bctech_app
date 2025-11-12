@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
@@ -734,9 +735,22 @@ class _ProfilePageState extends State<ProfilePage> {
                       Expanded(
                         child: ElevatedButton(
                           onPressed: () async {
+                            // 1. Tutup dialog dulu
                             Navigator.of(context).pop();
+
+                            // 2. Tampilkan loading
+                            EasyLoading.show(status: 'Logging out...');
+
+                            // 3. Panggil fungsi logout dari controller
+                            // (Ini akan menghapus sesi di Firestore & SharedPreferences)
                             await _authController.logout();
-                            Get.offAll(const LoginPage());
+
+                            // 4. Tutup loading
+                            EasyLoading.dismiss();
+
+                            // 5. Navigasi ke halaman Login
+                            // Gunakan Get.offAll agar stack navigasi bersih
+                            Get.offAll(() => const LoginPage());
                           },
                           style: ElevatedButton.styleFrom(
                             foregroundColor: Colors.white,

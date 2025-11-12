@@ -5575,7 +5575,10 @@ class _InDetailPageState extends State<InDetailPage>
           .collection('good_receipt')
           .doc(_currentGrId!)
           .set(
-            {'status': 'completed'}, // Tandai GR sebagai 'completed'
+            {
+              'status': 'completed',
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, // Tandai GR sebagai 'completed'
             SetOptions(merge: true),
           );
 

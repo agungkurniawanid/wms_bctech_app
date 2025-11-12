@@ -52,12 +52,12 @@ class PidDocumentModel {
   ) {
     if (productsData == null) return [];
 
-    return productsData.map((item) {
-      return PidDocumentDetailModel(
-        productId: item['productid'] ?? item['productId'] ?? '',
-        physicalQty: (item['physicalQty'] as num?)?.toInt() ?? 0,
-      );
-    }).toList();
+    return productsData
+        .map(
+          (item) =>
+              PidDocumentDetailModel.fromMap(item as Map<String, dynamic>),
+        )
+        .toList();
   }
 
   /// Convert ke Map (untuk disimpan ke Firestore)

@@ -8,6 +8,7 @@ class DeliveryOrderModel {
   final DateTime? createdAt;
   final String? status;
   final List<DeliveryOrderDetailModel> details;
+  final DateTime? updatedAt;
 
   DeliveryOrderModel({
     required this.doId,
@@ -16,6 +17,7 @@ class DeliveryOrderModel {
     this.createdBy,
     this.createdAt,
     this.status,
+    this.updatedAt,
   });
 
   factory DeliveryOrderModel.fromFirestore(
@@ -31,6 +33,7 @@ class DeliveryOrderModel {
       createdAt: (data['createdat'] as Timestamp?)?.toDate(),
       details: _parseDetails(data['details']),
       status: data['status'] ?? '',
+      updatedAt: (data['updatedat'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -58,6 +61,7 @@ class DeliveryOrderModel {
       'createdat': createdAt,
       'status': status,
       'details': details.map((detail) => detail.toMap()).toList(),
+      'updatedat': updatedAt,
     };
   }
 

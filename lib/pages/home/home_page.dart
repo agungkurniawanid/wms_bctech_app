@@ -48,6 +48,7 @@ class _HomePage extends State<HomePage> {
     _initializeData();
     _setupInControllerListeners();
     _setupOutControllerListeners();
+
     _loadDataAfterBuild();
     authController.loadUserId();
   }
@@ -68,8 +69,8 @@ class _HomePage extends State<HomePage> {
       debugPrint('[OutController] Loading state: $loading');
     });
 
-    ever(outController.tolistSalesOrderapprove, (list) {
-      _logListUpdate('SO', list);
+    ever(outController.tolistSalesOrderRecent, (list) {
+      _logListUpdate('SO Recent', list);
     });
   }
 
@@ -253,7 +254,7 @@ class _HomePage extends State<HomePage> {
                           return HomeShimmerLoadingWidget();
                         }
 
-                        final data = outController.tolistSalesOrder;
+                        final data = outController.tolistSalesOrderRecent;
                         debugPrint('Rendering SO data length: ${data.length}');
 
                         if (data.isEmpty) {

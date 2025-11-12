@@ -112,19 +112,37 @@ class DeliveryOrderController extends GetxController {
       }
 
       final List<DeliveryOrderModel> newDeliveryOrderList = [];
+      final oneDayAgo = DateTime.now().subtract(const Duration(days: 1));
 
       for (final doc in snapshot.docs) {
         try {
-          final deliveryOrderModel = DeliveryOrderModel.fromFirestore(
+          final grModel = DeliveryOrderModel.fromFirestore(
             doc as DocumentSnapshot<Map<String, dynamic>>,
             null,
           );
-          newDeliveryOrderList.add(deliveryOrderModel);
+
+          // --- INI LOGIKA FILTER ANDA ---
+          if (grModel.status != 'completed') {
+            // 1. Jika status BUKAN completed, selalu tambahkan
+            newDeliveryOrderList.add(grModel);
+          } else {
+            // 2. Jika status COMPLETED, cek updatedAt
+            if (grModel.updatedAt != null &&
+                grModel.updatedAt!.isAfter(oneDayAgo)) {
+              // 2a. Jika updatedAt ada dan dalam 24 jam terakhir, tambahkan
+              newDeliveryOrderList.add(grModel);
+            } else {
+              // 2b. Jika completed dan sudah lama (atau updatedAt null), jangan tambahkan
+              _logger.d(
+                '🚫 Menyembunyikan GR (completed & > 24 jam): ${grModel.doId}',
+              );
+            }
+          }
+          // --- BATAS LOGIKA FILTER ---
         } catch (e) {
-          _logger.e('❌ Error parsing DO document ${doc.id}: $e');
+          _logger.e('❌ Error parsing GR document ${doc.id}: $e');
         }
       }
-
       _lastDocument = snapshot.docs.last;
 
       if (isInitial) {

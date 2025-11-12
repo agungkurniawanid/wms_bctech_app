@@ -8,6 +8,7 @@ class GoodReceiptModel {
   final DateTime? createdAt;
   final String? status;
   final List<GoodReceiptDetailModel> details;
+  final DateTime? updatedAt;
 
   GoodReceiptModel({
     required this.grId,
@@ -16,6 +17,7 @@ class GoodReceiptModel {
     this.createdBy,
     this.createdAt,
     this.status,
+    this.updatedAt,
   });
 
   // Factory method untuk membuat model dari DocumentSnapshot
@@ -32,6 +34,7 @@ class GoodReceiptModel {
       createdAt: (data['createdat'] as Timestamp?)?.toDate(),
       details: _parseDetails(data['details']),
       status: data['status'] ?? '',
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -59,6 +62,7 @@ class GoodReceiptModel {
       'createdat': createdAt,
       'status': status,
       'details': details.map((detail) => detail.toMap()).toList(),
+      'updatedAt': updatedAt,
     };
   }
 

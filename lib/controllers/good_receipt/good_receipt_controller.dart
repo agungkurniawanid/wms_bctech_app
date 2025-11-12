@@ -96,6 +96,7 @@ class GoodReceiptController extends GetxController {
   }
 
   // Core method untuk load data dengan pagination
+  // Core method untuk load data dengan pagination
   Future<void> _loadMoreGrinData({required bool isInitial}) async {
     _logger.d(
       '📥 _loadMoreGrinData - isInitial: $isInitial, lastDocument: $_lastDocument',
@@ -121,6 +122,8 @@ class GoodReceiptController extends GetxController {
       }
 
       final List<GoodReceiptModel> newGrList = [];
+      // --- MODIFIKASI DIMULAI DISINI ---
+      final oneDayAgo = DateTime.now().subtract(const Duration(days: 1));
 
       for (final doc in snapshot.docs) {
         try {
@@ -128,11 +131,30 @@ class GoodReceiptController extends GetxController {
             doc as DocumentSnapshot<Map<String, dynamic>>,
             null,
           );
-          newGrList.add(grModel);
+
+          // --- INI LOGIKA FILTER ANDA ---
+          if (grModel.status != 'completed') {
+            // 1. Jika status BUKAN completed, selalu tambahkan
+            newGrList.add(grModel);
+          } else {
+            // 2. Jika status COMPLETED, cek updatedAt
+            if (grModel.updatedAt != null &&
+                grModel.updatedAt!.isAfter(oneDayAgo)) {
+              // 2a. Jika updatedAt ada dan dalam 24 jam terakhir, tambahkan
+              newGrList.add(grModel);
+            } else {
+              // 2b. Jika completed dan sudah lama (atau updatedAt null), jangan tambahkan
+              _logger.d(
+                '🚫 Menyembunyikan GR (completed & > 24 jam): ${grModel.grId}',
+              );
+            }
+          }
+          // --- BATAS LOGIKA FILTER ---
         } catch (e) {
           _logger.e('❌ Error parsing GR document ${doc.id}: $e');
         }
       }
+      // --- MODIFIKASI SELESAI ---
 
       // Update last document untuk pagination berikutnya
       _lastDocument = snapshot.docs.last;

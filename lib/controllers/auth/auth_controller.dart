@@ -1,6 +1,10 @@
+// [FILE LENGKAP: auth_controller.dart]
+
 import 'dart:convert';
+import 'dart:io' show Platform; // <-- PASTIKAN IMPORT INI ADA
 import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:device_info_plus/device_info_plus.dart'; // <-- PASTIKAN IMPORT INI ADA
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
@@ -24,11 +28,34 @@ class NewAuthController extends GetxController {
   final FirebaseController _firebaseController = FirebaseController();
   final globalVM = Get.find<GlobalVM>();
 
+  // --- TAMBAHAN UNTUK DEVICE ID ---
+  final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
+  // --- BATAS TAMBAHAN ---
+
   var isLoading = false.obs;
   var userId = ''.obs;
   var userData = Rxn<NewUserModel>();
   var userName = RxnString();
   var userEmail = RxnString();
+
+  // --- FUNGSI BARU UNTUK MENDAPATKAN DEVICE ID ---
+  Future<String> _getDeviceId() async {
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await _deviceInfo.androidInfo;
+        return androidInfo.id; // ID unik dan konsisten di Android
+      } else if (Platform.isIOS) {
+        final iosInfo = await _deviceInfo.iosInfo;
+        return iosInfo.identifierForVendor ??
+            'ios_device_error'; // Unik per aplikasi per vendor
+      }
+      return 'unknown_platform';
+    } catch (e) {
+      _logger.e('Error getting device ID: $e');
+      return 'device_error';
+    }
+  }
+  // --- BATAS FUNGSI BARU ---
 
   Future<void> loadUserId() async {
     final prefs = await SharedPreferences.getInstance();
@@ -38,6 +65,26 @@ class NewAuthController extends GetxController {
 
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // --- PERBAIKAN LOGOUT: Hapus sesi dari Firestore ---
+    final deviceId = await _getDeviceId();
+    if (deviceId != 'device_error' && deviceId != 'unknown_platform') {
+      try {
+        await _firebaseController
+            .stopSessionListener(); // Hentikan listener dulu
+        await _firestore
+            .collection('auth')
+            .doc('bisi')
+            .collection('active_sessions')
+            .doc(deviceId)
+            .delete();
+        _logger.i('Sesi untuk device $deviceId telah dihapus.');
+      } catch (e) {
+        _logger.e('Gagal menghapus sesi saat logout: $e');
+      }
+    }
+    // --- BATAS PERBAIKAN ---
+
     await prefs.remove('userid');
     await prefs.remove('useremail');
     userId.value = '';
@@ -147,6 +194,7 @@ class NewAuthController extends GetxController {
     }
   }
 
+  // --- FUNGSI LOGIN LENGKAP YANG SUDAH DIPERBAIKI ---
   Future<void> loginFunction(
     String email,
     String password,
@@ -165,7 +213,26 @@ class NewAuthController extends GetxController {
 
     EasyLoading.show(status: 'Authenticating...');
     try {
-      final tokenValue = _firebaseController.token ?? '';
+      // 1. Dapatkan info perangkat ini (Perangkat Baru)
+      _logger.d('Mencoba mendapatkan FCM token...');
+      final String? newToken = await _firebaseController.getValidToken();
+
+      if (newToken == null || newToken.isEmpty) {
+        EasyLoading.dismiss();
+        if (!context.mounted) return;
+        AwesomeSnackbarWidget.show(
+          context: context,
+          msg: 'Gagal mendapatkan token perangkat. Coba lagi.',
+          type: ContentType.failure,
+          top: true,
+        );
+        return;
+      }
+      _logger.d('FCM Token didapatkan.');
+      final String newDeviceId = await _getDeviceId();
+      // --- BATAS PERBAIKAN ---
+
+      // 2. Otentikasi LDAP
       final ldapResult = await authenticateWithLdap(email, password);
 
       if (ldapResult == null) {
@@ -198,42 +265,29 @@ class NewAuthController extends GetxController {
         return;
       }
 
-      if (status == 1 && message.contains('FAILED')) {
-        final userExists = await checkUserInFirestore(ldapEmail);
-
-        if (!userExists) {
-          if (!context.mounted) return;
-          AwesomeSnackbarWidget.show(
-            context: context,
-            msg: 'User belum terdaftar di aplikasi.',
-            type: ContentType.warning,
-            top: true,
-          );
-          return;
-        }
-
+      // 3. Cek apakah login valid (LDAP sukses ATAU Bypass sukses)
+      bool isLoginValid = false;
+      if (status == 0 && message.contains('SUCCESS')) {
+        isLoginValid = true;
+      } else if (status == 1 && message.contains('FAILED')) {
         final isBypassValid = await verifyBypassPassword(password);
-
-        if (!context.mounted) return;
         if (isBypassValid) {
-          await _completeLogin(
-            userName.value ?? '',
-            ldapEmail,
-            tokenValue,
-            context,
-          );
+          isLoginValid = true;
         } else {
+          if (!context.mounted) return;
           AwesomeSnackbarWidget.show(
             context: context,
             msg: 'Password salah.',
             type: ContentType.failure,
             top: true,
           );
+          return;
         }
-        return;
       }
 
-      if (status == 0 && message.contains('SUCCESS')) {
+      // 4. JIKA LOGIN VALID (BAIK LDAP ATAU BYPASS)
+      if (isLoginValid) {
+        // Cek apakah user terdaftar di 'role' dan 'active'
         final userExists = await checkUserInFirestore(ldapEmail);
         if (!context.mounted) return;
 
@@ -247,16 +301,60 @@ class NewAuthController extends GetxController {
           return;
         }
 
+        // --- LOGIKA SINGLE DEVICE LOGIN (PINDAH KE SINI) ---
+        _logger.d('Memulai validasi single device...');
+        final sessionRef = _firestore
+            .collection('auth')
+            .doc('bisi')
+            .collection('active_sessions');
+
+        // Cek apakah email ini sudah tercatat di sesi lain
+        final existingSessionQuery = await sessionRef
+            .where('email', isEqualTo: ldapEmail)
+            .limit(1)
+            .get();
+
+        if (existingSessionQuery.docs.isNotEmpty) {
+          // Email ini sudah login di perangkat lain
+          final oldSessionDoc = existingSessionQuery.docs.first;
+          final oldDeviceId = oldSessionDoc.id;
+          final oldFcmToken = oldSessionDoc.data()['fcm_token'] as String?;
+
+          if (oldDeviceId != newDeviceId) {
+            // Ini adalah perangkat BARU. Kita harus "menendang" perangkat lama.
+            _logger.w(
+              'Sesi $ldapEmail ditemukan di device $oldDeviceId. Menendang sesi lama.',
+            );
+
+            if (oldFcmToken != null && oldFcmToken.isNotEmpty) {
+              // _firebaseController.sendKickNotification(oldFcmToken);
+              _logger.d('Mengirim kick-notification ke token: $oldFcmToken');
+            }
+
+            // Hapus dokumen sesi lama
+            await oldSessionDoc.reference.delete();
+            _logger.d('Dokumen sesi lama $oldDeviceId dihapus.');
+          } else {
+            _logger.d(
+              'Device ID sama ($newDeviceId), mengizinkan login ulang.',
+            );
+          }
+        }
+        // --- BATAS LOGIKA SINGLE DEVICE ---
+
+        // 5. Selesaikan Login
         await _completeLogin(
           userName.value ?? '',
           ldapEmail,
-          tokenValue,
+          newToken, // <-- Gunakan newToken
+          newDeviceId, // <-- Kirim newDeviceId
           context,
         );
         return;
       }
-      if (!context.mounted) return;
 
+      // Jika status tidak diketahui
+      if (!context.mounted) return;
       AwesomeSnackbarWidget.show(
         context: context,
         msg: 'Terjadi kesalahan: $message',
@@ -278,10 +376,12 @@ class NewAuthController extends GetxController {
     }
   }
 
+  // --- FUNGSI _completeLogin LENGKAP YANG SUDAH DIPERBAIKI ---
   Future<void> _completeLogin(
     String username,
     String email,
     String tokenValue,
+    String deviceId, // <-- Terima Device ID
     BuildContext context,
   ) async {
     try {
@@ -291,12 +391,29 @@ class NewAuthController extends GetxController {
 
       globalVM.username.value = username;
 
-      await _firestore.collection('auth').doc('bisi').update({
-        'lastLogin': FieldValue.serverTimestamp(),
-        'lastToken': tokenValue,
+      // --- PERBAIKAN: Simpan sesi ke subkoleksi 'active_sessions' ---
+      final sessionDocRef = _firestore
+          .collection('auth')
+          .doc('bisi')
+          .collection('active_sessions')
+          .doc(deviceId); // Gunakan deviceId sebagai ID dokumen
+
+      await sessionDocRef.set({
+        'email': email,
+        'username': username,
+        'fcm_token': tokenValue,
+        'last_login': FieldValue.serverTimestamp(),
       });
 
-      _logger.i('Login sukses untuk $username ($email)');
+      // Hapus update pada 'auth/bisi' yang lama (jika masih ada)
+      // await _firestore.collection('auth').doc('bisi').update({ ... });
+      // --- BATAS PERBAIKAN ---
+
+      // --- TAMBAHKAN INI: Mulai mendengarkan sesi ---
+      await _firebaseController.startSessionListener();
+      // --- BATAS TAMBAHAN ---
+
+      _logger.i('Login sukses untuk $username ($email) di device $deviceId');
 
       if (!context.mounted) return;
       AwesomeSnackbarWidget.show(
@@ -359,6 +476,11 @@ class NewAuthController extends GetxController {
           );
         } else {
           globalVM.username.value = userid;
+
+          // --- TAMBAHKAN INI: Mulai listener saat auto-login ---
+          _firebaseController.startSessionListener();
+          // --- BATAS TAMBAHAN ---
+
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const AppBottomNavigation()),
@@ -376,5 +498,3 @@ class NewAuthController extends GetxController {
     }
   }
 }
-
-// checked

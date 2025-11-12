@@ -950,6 +950,8 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
     );
   }
 
+  // [FILE: stock_take_header.dart]
+
   void _navigateToDetail(PidDocumentModel document, int index) {
     // Buat StockTakeModel 'palsu' dari PidDocumentModel untuk navigasi
     final stockTakeModel = StockTakeModel(
@@ -958,24 +960,67 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
       created: document.createdAt?.toString() ?? '',
       isApprove: document.status == 'completed' ? 'Y' : 'N',
       lGort: (document.locatorValue != null) ? [document.locatorValue!] : [],
-      // MODIFIKASI: Kirim daftar produk dari PID document
       detail: document.products.map((pidProduct) {
-        // Konversi ke StockTakeDetailModel
+        // 'pidProduct' adalah PidDocumentDetailModel (dari Firestore)
+        // Ini berisi: productId, productSN, physicalQty, different, labst
+
+        // Cari produk asli dari list utama (widget.stocktake.detail)
+        // untuk mendapatkan maktx, insme, speme
+        StockTakeDetailModel? originalProduct;
+        try {
+          // --- PERBAIKAN UTAMA DI SINI ---
+          // Validasi harus menggunakan KEDUA productId dan productSN
+          originalProduct = widget.stocktake?.detail.firstWhere((d) {
+            bool idMatch = d.matnr == pidProduct.productId;
+            if (!idMatch) return false;
+
+            // Logika perbandingan serno yang robust (pintar)
+            String? dSerno = d.serno; // Serno dari list utama
+            String? pidSerno = pidProduct.productSN; // Serno dari dokumen PID
+
+            // 1. Cocok persis (null == null ATAU "SN008" == "SN008")
+            if (dSerno == pidSerno) return true;
+
+            // 2. Menangani kasus "---" dianggap sama dengan null
+            if ((dSerno == "---" || dSerno == null) &&
+                (pidSerno == "---" || pidSerno == null)) {
+              return true;
+            }
+            return false; // Jika tidak, berarti tidak cocok
+          });
+          // --- BATAS PERBAIKAN ---
+        } catch (e) {
+          originalProduct = null;
+        }
+
+        // Tentukan stok sistem (labst) yang akan digunakan.
+        // Prioritaskan 'labst' yang tersimpan di 'pid_document' (pidProduct.labst),
+        // karena itu adalah snapshot stok pada saat dokumen dibuat.
+        final double systemStock =
+            pidProduct.labst ?? (originalProduct?.labst ?? 0.0);
+
         return StockTakeDetailModel(
           matnr: pidProduct.productId,
-          serno: pidProduct.productSN,
-          maktx: 'Product ${pidProduct.productId}', // Default name
-          labst: pidProduct.physicalQty.toDouble(),
-          insme: 0.0,
-          speme: 0.0,
+          serno: pidProduct.productSN, // Tetap teruskan serno ASLI dari pidDoc
+          // 1. Ambil maktx dari produk asli yang cocok (unik)
+          maktx: originalProduct?.maktx ?? 'Product ${pidProduct.productId}',
+
+          // 2. Gunakan stok sistem yang sudah kita tentukan di atas
+          labst: systemStock,
+
+          // 3. Ambil tipe stok lain dari produk asli
+          insme: originalProduct?.insme ?? 0.0,
+          speme: originalProduct?.speme ?? 0.0,
           isApprove: document.status == 'completed' ? 'Y' : 'N',
+
+          // 4. Asumsikan 'UU' karena PID doc tidak menyimpan info ini
           selectedChoice: 'UU',
           checkboxValidation: ValueNotifier<bool>(false),
         );
       }).toList(),
       updated: '',
       updatedby: '',
-      doctype: 'pid_document', // Tandai asalnya PENTING UNTUK LOGIC READ-ONLY
+      doctype: 'pid_document',
       lastQuery: widget.stocktake?.lastQuery ?? '',
       countDetail: document.products.length,
       whName: document.whName ?? widget.stocktake?.whName ?? 'Warehouse',

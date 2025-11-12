@@ -86,20 +86,6 @@ class StockTakeController extends GetxController {
           .collection('stock')
           .where('_last_query', isGreaterThanOrEqualTo: firstDayOfMonth);
 
-      // Apply location filter if any locations selected
-      // if (selectedLocations.isNotEmpty) {
-      //   query = query.where('locator_value', whereIn: selectedLocations);
-      // } else {
-      //   // If no locations selected, return empty stream to avoid whereIn error
-      //   return Stream.value([]);
-      // }
-
-      // Apply approval status filter if exists in your model
-      // If you have an approval field, add it here
-      // if (approvalStatusFilter.isNotEmpty) {
-      //   query = query.where('isapprove', isEqualTo: approvalStatusFilter);
-      // }
-
       return query.snapshots().map((snapshot) {
         final List<StockTakeModel> documents = [];
         final List<StockTakeModel> uniqueDocuments = [];

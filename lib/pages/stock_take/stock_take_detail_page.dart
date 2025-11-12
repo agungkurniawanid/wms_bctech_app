@@ -1,3 +1,5 @@
+// [FILE LENGKAP: stock_take_detail.dart]
+
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
@@ -12,7 +14,6 @@ import 'package:wms_bctech/models/stock/stock_take_detail_model.dart';
 import 'package:wms_bctech/models/stock/stock_take_model.dart';
 import 'package:logger/logger.dart';
 
-// MODIFIKASI: Tambahkan impor yang diperlukan
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:wms_bctech/models/pid_document/pid_document_model.dart';
 
@@ -21,7 +22,6 @@ class StockTakeDetail extends StatefulWidget {
   final int? index;
   final String? documentno;
 
-  // MODIFIKASI: Tambahkan parameter baru
   final bool isViewMode; // Mode preview/read-only
   final bool fromDocumentList; // Dari list PID document
 
@@ -66,17 +66,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   ValueNotifier<String> selectedSection = ValueNotifier("");
   ValueNotifier<String> selectedBatch = ValueNotifier("");
 
-  // --- PERBAIKAN: Hapus semua ValueNotifier yang tidak perlu ---
-  // ValueNotifier<double> bun = ValueNotifier(0.0); // DIHAPUS
-  // ValueNotifier<int> box = ValueNotifier(0); // DIHAPUS
-  // ValueNotifier<double> localpcsvalue = ValueNotifier(0.0); // DIHAPUS
-  // ValueNotifier<int> localctnvalue = ValueNotifier(0); // DIHAPUS
-  // ValueNotifier<double> stockbun = ValueNotifier(0.0); // DIHAPUS
-  // ValueNotifier<String> totalbox = ValueNotifier(""); // DIHAPUS
-  // ValueNotifier<String> totalbun = ValueNotifier(""); // DIHAPUS
-  // ValueNotifier<double> stockbox = ValueNotifier(0.0); // DIHAPUS
-  // -----------------------------------------------------------
-
   ValueNotifier<bool> checkboxvalidation = ValueNotifier(false);
   var choicein = "".obs;
   final TextEditingController _controllerbox = TextEditingController();
@@ -94,24 +83,28 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   late bool _isViewMode;
   late bool _fromDocumentList;
 
-  // Data dummy untuk menggantikan data dari Firestore
+  // Data untuk list, BUKAN dari cache
   final List<Map<String, dynamic>> _dummyStockData = [];
-  // final List<Map<String, dynamic>> _dummyInputData = []; // MODIFIKASI: Tidak digunakan lagi, diganti _cachedPidDetails
 
   // 1. Dapatkan instance controller-nya
   final NewAuthController authController = Get.find<NewAuthController>();
   final GlobalVM globalVM = Get.find<GlobalVM>();
 
-  // MODIFIKASI: Tambahkan variabel untuk cache data dan koneksi Firestore
+  // Variabel untuk cache data (physicalQty, different, labst)
   final List<PidDocumentDetailModel> _cachedPidDetails = [];
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final Logger _logger = Logger();
+
+  // ===================================================================
+  // --- ✅ PERBAIKAN 1: Flag untuk mengatasi race condition ---
+  // ===================================================================
+  bool _isDataReady = false;
+  // ===================================================================
 
   @override
   void initState() {
     super.initState();
 
-    // MODIFIKASI: Inisialisasi mode
     _isViewMode = widget.isViewMode;
     _fromDocumentList = widget.fromDocumentList;
 
@@ -123,44 +116,85 @@ class _StockTakeDetailState extends State<StockTakeDetail>
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
 
+    // ===================================================================
+    // --- ✅ PERBAIKAN 2: Panggil fungsi init asinkron ---
+    // ===================================================================
+    _initializeData();
+    // ===================================================================
+
+    _searchQuery = TextEditingController();
+    sortListSection.value = ['A1-1', 'A1-2', 'B1-1', 'B1-2', 'C1-1'];
+    selectedSection.value = 'A1-1';
+
+    _animationController.forward();
+  }
+
+  // ===================================================================
+  // --- ✅ PERBAIKAN 3: Buat fungsi init asinkron ---
+  // ===================================================================
+  Future<void> _initializeData() async {
+    // 1. Populate _dummyStockData (ini cepat, dari data widget)
     _dummyStockData.clear();
     if (widget.stocktake?.detail != null &&
         widget.stocktake!.detail.isNotEmpty) {
       for (var productModel in widget.stocktake!.detail) {
-        var productMap = productModel.toMap();
-        productMap['checkboxValidation'] = ValueNotifier<bool>(false);
-        productMap['selectedChoice'] = 'UU';
+        // productModel adalah StockTakeDetailModel
 
-        // MODIFIKASI: Jika mode view, set selectedChoice dari data asli
-        if (_isViewMode && productModel.selectedChoice.isNotEmpty) {
-          productMap['selectedChoice'] = productModel.selectedChoice;
+        // ===================================================================
+        // --- ✅ PERBAIKAN 3.1: Buat Map secara manual ---
+        // --- Ini untuk memperbaiki bug di mana productModel.toMap() ---
+        // --- mungkin tidak menyertakan 'labst' atau 'matnr' ---
+        // ===================================================================
+        var productMap = {
+          'matnr': productModel.matnr,
+          'serno': productModel.serno,
+          'maktx': productModel.maktx,
+
+          // --- MODIFIKASI DISINI ---
+          'labst': productModel.labst, // Pastikan tidak null
+          'insme': productModel.insme, // Pastikan tidak null
+          'speme': productModel.speme, // Pastikan tidak null
+          // --- BATAS MODIFIKASI ---
+          'isApprove': productModel.isApprove,
+          'selectedChoice': productModel.selectedChoice,
+          // 'checkboxValidation' akan ditambahkan di bawah
+        };
+        // ===================================================================
+
+        productMap['checkboxValidation'] = ValueNotifier<bool>(false);
+        // Set 'selectedChoice' HANYA jika belum ada
+        if (productMap['selectedChoice'] == null ||
+            (productMap['selectedChoice'] as String).isEmpty) {
+          productMap['selectedChoice'] = 'UU';
         }
 
         _dummyStockData.add(productMap);
       }
     }
 
-    // MODIFIKASI: Jika dari document list, load data PID ke cache
+    // 2. Jika mode preview, AMBIL data cache dari Firestore
+    //    Ini adalah data 'physicalQty' dan 'different' yang asli
     if (_fromDocumentList) {
-      _loadPidDocumentDetails();
+      await _loadPidDocumentDetails(); // <-- TUNGGU (await) sampai selesai
     }
 
-    _searchQuery = TextEditingController();
-    sortListSection.value = ['A1-1', 'A1-2', 'B1-1', 'B1-2', 'C1-1'];
-    selectedSection.value = 'A1-1';
-
-    // _initializeChoiceChips();
-    _animationController.forward();
+    // 3. Setelah semua data siap, set flag untuk re-render
+    if (mounted) {
+      setState(() {
+        _isDataReady = true; // <-- Halaman siap di-build
+      });
+    }
   }
+  // ===================================================================
 
-  // MODIFIKASI: Fungsi untuk load data PID document ke cache
-
+  // ===================================================================
+  // --- ✅ PERBAIKAN 4: Ubah _loadPidDocumentDetails ---
+  // ===================================================================
   Future<void> _loadPidDocumentDetails() async {
     if (widget.documentno == null) return;
 
+    // Hapus EasyLoading dari sini
     try {
-      EasyLoading.show(status: 'Loading document...');
-
       final docSnapshot = await FirebaseFirestore.instance
           .collection('pid_document')
           .doc(widget.documentno!)
@@ -169,27 +203,24 @@ class _StockTakeDetailState extends State<StockTakeDetail>
       if (docSnapshot.exists) {
         final pidDoc = PidDocumentModel.fromFirestore(docSnapshot, null);
 
-        setState(() {
-          _cachedPidDetails.clear();
-          _cachedPidDetails.addAll(pidDoc.products);
-        });
+        // JANGAN panggil setState di sini. Cukup isi data.
+        // setState akan dipanggil oleh _initializeData()
+        _cachedPidDetails.clear();
+        _cachedPidDetails.addAll(
+          pidDoc.products,
+        ); // Ini berisi labst, physicalQty, different
+        _logger.d(
+          'Loaded ${_cachedPidDetails.length} items from cache for preview.',
+        );
       }
-
-      EasyLoading.dismiss();
     } catch (e) {
-      EasyLoading.dismiss();
       _logger.e('Error loading PID document: $e');
+      if (mounted) {
+        EasyLoading.showError('Gagal memuat detail doc');
+      }
     }
   }
-
-  // void _initializeChoiceChips() {
-  //   listchoice = [
-  //     ItemChoice(id: 1, label: 'FZ', labelName: 'Frozen'),
-  //     ItemChoice(id: 2, label: 'CH', labelName: 'Chilled'),
-  //     ItemChoice(id: 3, label: 'ALL', labelName: 'All Products'),
-  //   ];
-  //   namechoice = listchoice[0].label!;
-  // }
+  // ===================================================================
 
   @override
   void dispose() {
@@ -202,31 +233,110 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     super.dispose();
   }
 
+  // [FILE: stock_take_detail.dart]
+
   String calculTotalbun(Map<String, dynamic> item, String validation) {
-    // 1. Ambil ID produk (matnr) dari item yang sedang ditampilkan di card
     final String? currentProductId = item['matnr']?.toString();
+    final String? currentSerialNo = item['serno']?.toString();
 
     if (currentProductId == null) {
-      return "0.0"; // Jika item tidak punya ID, kembalikan 0
+      return "0.0";
     }
 
-    // 2. Cari data di dalam cache (_cachedPidDetails)
+    // Ambil data dari cache
     try {
-      // 'firstWhere' akan mencari item di cache yang productId-nya
-      // sama dengan ID produk di card ini.
-      final cachedDetail = _cachedPidDetails.firstWhere(
-        (detail) => detail.productId == currentProductId,
-      );
+      // --- MODIFIKASI DISINI ---
+      // --- MODIFIKASI DISINI ---
+      final cachedDetail = _cachedPidDetails.firstWhere((detail) {
+        bool idMatch = detail.productId == currentProductId;
+        if (!idMatch) return false;
 
-      // 3. Jika DITEMUKAN, kembalikan nilai physicalQty yang sudah disimpan
-      // Ubah ke double lalu ke string agar sesuai format
+        String? itemSerno = currentSerialNo;
+        String? cacheSerno = detail.productSN; // Data dari _cachedPidDetails
+
+        if (itemSerno == cacheSerno) return true;
+        if ((itemSerno == "---" || itemSerno == null) &&
+            (cacheSerno == "---" || cacheSerno == null)) {
+          return true;
+        }
+        return false;
+      });
+      // --- BATAS MODIFIKASI ---
+
+      // Jika ditemukan, tampilkan physicalQty yang tersimpan
       return (cachedDetail.physicalQty).toDouble().toString();
     } catch (e) {
-      // 4. Jika TIDAK DITEMUKAN ('firstWhere' melempar error),
-      // artinya item ini belum di-input. Kembalikan "0.0"
+      // Jika belum di-input (mode input), return 0.0
       return "0.0";
     }
   }
+
+  // ===================================================================
+  // --- ✅ FUNGSI INI SEKARANG AMAN KARENA _isDataReady ---
+  // ===================================================================
+  String calculTotalDifferent(Map<String, dynamic> item) {
+    // 1. Dapatkan Stok Sistem
+    String selectedChoice = item['selectedChoice'] ?? 'UU';
+    double systemStock = 0.0;
+
+    // 'item' adalah dari _dummyStockData
+    // 'labst' di sini sudah benar karena perbaikan di _initializeData
+    if (selectedChoice == "UU") {
+      systemStock = (item['labst'] as num?)?.toDouble() ?? 0.0;
+    } else if (selectedChoice == "QI") {
+      systemStock = (item['insme'] as num?)?.toDouble() ?? 0.0;
+    } else {
+      systemStock = (item['speme'] as num?)?.toDouble() ?? 0.0;
+    }
+
+    // 2. Dapatkan Kuantitas Fisik & Selisih Tersimpan (dari cache)
+    //    Karena kita 'await' _loadPidDocumentDetails, _cachedPidDetails
+    //    pasti sudah terisi di mode preview.
+    double physicalQty = 0.0;
+    double? savedDifferent; // Ini adalah selisih yang tersimpan di Firestore
+
+    final String? currentProductId = item['matnr']?.toString();
+    final String? currentSerialNo = item['serno']?.toString();
+    if (currentProductId != null) {
+      try {
+        // Cari data yang sesuai di cache
+        final cachedDetail = _cachedPidDetails.firstWhere((detail) {
+          bool idMatch = detail.productId == currentProductId;
+          if (!idMatch) return false;
+
+          String? itemSerno = currentSerialNo;
+          String? cacheSerno = detail.productSN; // Data dari _cachedPidDetails
+
+          if (itemSerno == cacheSerno) return true;
+          if ((itemSerno == "---" || itemSerno == null) &&
+              (cacheSerno == "---" || cacheSerno == null)) {
+            return true;
+          }
+          return false;
+        });
+        // Ambil data dari cache
+        physicalQty = cachedDetail.physicalQty.toDouble();
+        savedDifferent = cachedDetail.different;
+      } catch (e) {
+        // Belum ada di cache (terjadi saat mode input),
+        // jadi physicalQty tetap 0
+      }
+    }
+
+    // 3. Logika Tampilan
+    //    Jika ini mode preview (isViewMode) DAN ada nilai selisih yang tersimpan,
+    //    Tampilkan nilai yang tersimpan itu.
+    //    INILAH YANG MEMPERBAIKI BUG PREVIEW ANDA.
+    if (_isViewMode && savedDifferent != null) {
+      return savedDifferent.toString();
+    }
+
+    //    Jika ini mode input, ATAU mode preview tapi data lama (savedDifferent=null),
+    //    hitung selisihnya secara real-time.
+    final double liveDifferent = systemStock - physicalQty;
+    return liveDifferent.toString();
+  }
+  // ===================================================================
 
   String conversion(
     Map<String, dynamic> models,
@@ -328,11 +438,8 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                             ),
                           ),
                           const SizedBox(width: 12),
-                          // KODE PERBAIKAN
                           Expanded(
                             child: Text(
-                              // 1. Ubah ke 'maktx' (huruf kecil)
-                              // 2. Beri nilai default jika null
                               inmodel['maktx'] ?? 'Nama Produk Tdk Tersedia',
                               style: GoogleFonts.roboto(
                                 fontSize: 16,
@@ -346,7 +453,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                         ],
                       ),
                       const SizedBox(height: 12),
-
                       // Info Chips
                       Wrap(
                         spacing: 8,
@@ -370,11 +476,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                   ),
                 ),
                 const SizedBox(width: 12),
-
-                // Checkbox
-                // Container(
-                //  ... (Kode Checkbox Anda yang dikomentari)
-                // ),
               ],
             ),
           ),
@@ -390,6 +491,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: InkWell(
                       onTap: () {
+                        if (_isViewMode) return;
                         setState(() {
                           inmodel['selectedChoice'] = choice;
                         });
@@ -424,9 +526,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                                                 : choice == "QI"
                                                 ? Colors.orange
                                                 : Colors.red)
-                                            .withValues(
-                                              alpha: 0.3,
-                                            ), // MODIFIKASI
+                                            .withValues(alpha: 0.3),
                                     blurRadius: 8,
                                     offset: const Offset(0, 4),
                                   ),
@@ -482,6 +582,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                     ),
                   ),
 
+                  // Stock Row
                   _buildDataRow(
                     label: 'Stock',
                     labelColor: hijauGojekDark,
@@ -509,7 +610,11 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                   _buildDataRow(
                     label: 'Different',
                     labelColor: const Color.fromARGB(255, 56, 55, 55),
-                    values: ["0.0", "-", "-"],
+                    values: [
+                      calculTotalDifferent(inmodel), // <-- DIPANGGIL DI SINI
+                      "-",
+                      "-",
+                    ],
                     isEven: true,
                   ),
                 ],
@@ -532,12 +637,9 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1), // MODIFIKASI
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 1,
-        ), // MODIFIKASI
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -610,9 +712,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
             (value) => Expanded(
               flex: 2,
               child: Text(
-                (value.isEmpty || value == "null") // MODIFIKASI: Perbaikan
-                    ? "-"
-                    : value,
+                (value.isEmpty || value == "null") ? "-" : value,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.grey.shade700,
@@ -656,23 +756,30 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     Map<String, dynamic> indetail,
     List<Map<String, dynamic>> inDetailList,
   ) {
-    // Data untuk dropdown (hanya nilai default saja karena read only)
+    // Data untuk dropdown
     final List<String> sectionList = ['A'];
     final List<String> palletList = ['1'];
     final List<String> cellList = ['1'];
-
-    // ---
-    // Logika Kunci: Cek data yang sudah ada di cache
-    // ---
 
     final bool isReadOnly = _isViewMode;
 
     // Cari data yang sudah ada di cache
     PidDocumentDetailModel? existingDetail;
     try {
-      existingDetail = _cachedPidDetails.firstWhere(
-        (d) => d.productId == indetail['matnr']?.toString(),
-      );
+      existingDetail = _cachedPidDetails.firstWhere((d) {
+        bool idMatch = d.productId == indetail['matnr']?.toString();
+        if (!idMatch) return false;
+
+        String? itemSerno = indetail['serno']?.toString();
+        String? cacheSerno = d.productSN;
+
+        if (itemSerno == cacheSerno) return true;
+        if ((itemSerno == "---" || itemSerno == null) &&
+            (cacheSerno == "---" || cacheSerno == null)) {
+          return true;
+        }
+        return false;
+      });
     } catch (e) {
       existingDetail = null;
     }
@@ -715,7 +822,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
               ),
 
               // Header
-              // MODIFIKASI: Update header untuk menampilkan mode
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -733,10 +839,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: isReadOnly
-                              ? [
-                                  Colors.grey,
-                                  Colors.grey.shade700,
-                                ] // Warna berbeda untuk mode view
+                              ? [Colors.grey, Colors.grey.shade700]
                               : [hijauGojek, hijauGojekDark],
                         ),
                         borderRadius: BorderRadius.circular(12),
@@ -775,7 +878,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          // MODIFIKASI: Tambahkan badge untuk mode view
                           if (isReadOnly) ...[
                             const SizedBox(height: 4),
                             Container(
@@ -939,7 +1041,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                       Row(
                         children: [
                           Expanded(
-                            flex: 1, // Section biasanya lebih panjang
+                            flex: 1,
                             child: Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: _buildReadOnlyDropdown(
@@ -1042,7 +1144,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                       Row(
                         children: [
                           Expanded(
-                            flex: 1, // Section biasanya lebih panjang
+                            flex: 1,
                             child: Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: // Cell Dropdown (Read Only)
@@ -1162,7 +1264,31 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                               return;
                             }
 
-                            // MODIFIKASI: Ganti logika save
+                            // ===================================================================
+                            // --- ✅ PERBAIKAN 5: Simpan 'labst' ke cache ---
+                            // ===================================================================
+
+                            // 1. Dapatkan Stok Sistem
+                            String selectedChoice =
+                                indetail['selectedChoice'] ?? 'UU';
+                            double systemStock = 0.0;
+                            if (selectedChoice == "UU") {
+                              systemStock =
+                                  (indetail['labst'] as num?)?.toDouble() ??
+                                  0.0;
+                            } else if (selectedChoice == "QI") {
+                              systemStock =
+                                  (indetail['insme'] as num?)?.toDouble() ??
+                                  0.0;
+                            } else {
+                              systemStock =
+                                  (indetail['speme'] as num?)?.toDouble() ??
+                                  0.0;
+                            }
+
+                            // 2. Hitung Selisih
+                            final double different = systemStock - bunValue;
+
                             EasyLoading.show(
                               status: 'Caching...',
                               maskType: EasyLoadingMaskType.black,
@@ -1171,22 +1297,31 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                             // Buat model detail
                             final newDetail = PidDocumentDetailModel(
                               productId: indetail['matnr']?.toString() ?? 'N/A',
-                              productSN:
-                                  indetail['serno']?.toString() ??
-                                  'N/A', // Sesuai permintaan
-                              physicalQty: bunValue
-                                  .toInt(), // Hanya ambil BUN qty
+                              productSN: indetail['serno']?.toString() ?? 'N/A',
+                              physicalQty: bunValue.toInt(),
+                              different: different,
+                              labst: systemStock, // <-- ✅ INI PERBAIKANNYA
                             );
+                            // ===================================================================
 
                             // Cek apakah sudah ada di cache, jika ada, replace
-                            final existingIndex = _cachedPidDetails.indexWhere(
-                              (d) => d.productId == newDetail.productId,
-                            );
+                            final existingIndex = _cachedPidDetails.indexWhere((
+                              d,
+                            ) {
+                              bool idMatch = d.productId == newDetail.productId;
+                              if (!idMatch) return false;
 
-                            // Perbarui list di main state, bukan di modal state
-                            // Kita tidak perlu setState di dalam modal,
-                            // karena datanya akan di-refresh oleh setState
-                            // di _showProductBottomSheet setelah modal ditutup
+                              String? itemSerno = newDetail.productSN;
+                              String? cacheSerno = d.productSN;
+
+                              if (itemSerno == cacheSerno) return true;
+                              if ((itemSerno == "---" || itemSerno == null) &&
+                                  (cacheSerno == "---" || cacheSerno == null)) {
+                                return true;
+                              }
+                              return false;
+                            });
+
                             if (existingIndex != -1) {
                               _cachedPidDetails[existingIndex] =
                                   newDetail; // Replace
@@ -1201,8 +1336,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                             EasyLoading.dismiss();
                             Navigator.of(context).pop();
                             EasyLoading.showSuccess('Data cached locally!');
-
-                            // MODIFIKASI: Selesai
                           },
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1240,7 +1373,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     );
   }
 
-  // Widget untuk field read only
   Widget _buildReadOnlyField({
     required String label,
     required String value,
@@ -1287,7 +1419,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     );
   }
 
-  // Widget untuk dropdown read only
   Widget _buildReadOnlyDropdown({
     required String label,
     required String value,
@@ -1352,7 +1483,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     );
   }
 
-  // Widget untuk field input (hanya untuk field Bun)
   Widget _buildInputField({
     required String label,
     required TextEditingController controller,
@@ -1377,7 +1507,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: hijauGojek.withValues(alpha: 0.5), // MODIFIKASI
+              color: hijauGojek.withValues(alpha: 0.5),
               width: 1.5,
             ),
           ),
@@ -1410,7 +1540,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     return Container(
       height: 45,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.2), // MODIFIKASI
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(25),
       ),
       child: TextField(
@@ -1420,7 +1550,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           hintText: 'Cari produk...',
           border: InputBorder.none,
           hintStyle: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7), // MODIFIKASI
+            color: Colors.white.withValues(alpha: 0.7),
             fontSize: 15,
           ),
           prefixIcon: const Icon(
@@ -1530,17 +1660,14 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     EasyLoading.showSuccess('Barcode scanned: $barcodeScanRes');
     if (_dummyStockData.isNotEmpty) {
       final product = _dummyStockData[0];
-      // PERBAIKAN: Panggil _onProductTap agar logikanya konsisten
-      // dan meneruskan index
       _onProductTap(product, 0);
     }
   }
 
-  // MODIFIKASI: Logika untuk generate ID baru
   Future<String> _generatePidId(String orgValue) async {
     // Format: PID<orgValue><yy>
     final currentYearYY = DateTime.now().year.toString().substring(2); // '25'
-    final docPrefix = 'PID$orgValue$currentYearYY'; // 'PID276625'
+    final docPrefix = 'PID$orgValue$currentYearYY'; // 'PID276025'
 
     try {
       final generatedPidId = await _firestore.runTransaction<String>((
@@ -1562,7 +1689,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
 
         if (lastPidQuery.docs.isNotEmpty) {
           final lastPidId = lastPidQuery.docs.first.id;
-          // Ambil 4 digit terakhir sebagai sequence
           final sequenceMatch = RegExp(r'(\d{4})$').firstMatch(lastPidId);
 
           if (sequenceMatch != null) {
@@ -1571,17 +1697,14 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           }
         }
 
-        // Format sequence '0001'
         final sequenceString = nextSequence.toString().padLeft(4, '0');
-        final newPidId = '$docPrefix$sequenceString'; // 'PID2766250001'
+        final newPidId = '$docPrefix$sequenceString';
 
-        // Cek keamanan transaksi
         final existingDocSnapshot = await transaction.get(
           _firestore.collection('pid_document').doc(newPidId),
         );
 
         if (existingDocSnapshot.exists) {
-          // Jika terjadi tabrakan (sangat jarang)
           nextSequence++;
           final retrySequenceString = nextSequence.toString().padLeft(4, '0');
           final retryPidId = '$docPrefix$retrySequenceString';
@@ -1607,38 +1730,32 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     }
   }
 
-  // MODIFIKASI: Logika untuk menyimpan dokumen PID ke Firestore
   Future<void> _generateAndSavePidDocument() async {
     try {
       final orgValue = widget.stocktake?.orgValue ?? 'NA';
-      // 1. Generate ID
       final String newPidId = await _generatePidId(orgValue);
-
-      // 2. Siapkan data header
       final String createdBy = globalVM.username.value.isEmpty
           ? "Demo User"
           : globalVM.username.value;
       final String? whName = widget.stocktake?.whName;
       final String? whValue = widget.stocktake?.whValue;
       final String? orgName = widget.stocktake?.orgName;
-      final String? locatorValue =
-          widget.stocktake?.locatorValue; // Ambil locator jika ada
+      final String? locatorValue = widget.stocktake?.locatorValue;
 
-      // 3. Buat Model
       final PidDocumentModel pidDoc = PidDocumentModel(
         pidDocument: newPidId,
         createdBy: createdBy,
         createdAt: DateTime.now(),
-        status: 'completed', // Status setelah diapprove
+        status: 'completed',
         whValue: whValue,
         whName: whName,
         locatorValue: locatorValue,
         orgValue: orgValue,
         orgName: orgName,
-        products: _cachedPidDetails, // Gunakan data dari cache
+        products:
+            _cachedPidDetails, // Ini sudah berisi 'labst', 'physicalQty', dan 'different'
       );
 
-      // 4. Simpan ke Firestore
       await _firestore
           .collection('pid_document')
           .doc(newPidId)
@@ -1647,7 +1764,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
       _logger.d('✅ PID Document $newPidId saved successfully.');
     } catch (e) {
       _logger.e('❌ Error saving PID Document: $e');
-      // Lempar error agar bisa ditangkap oleh dialog
       throw Exception('Gagal menyimpan dokumen: $e');
     }
   }
@@ -1667,7 +1783,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Icon Header
               Container(
                 width: 80,
                 height: 80,
@@ -1693,8 +1808,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                 ),
               ),
               const SizedBox(height: 24),
-
-              // Title
               const Text(
                 'Confirm Save',
                 style: TextStyle(
@@ -1705,8 +1818,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                 ),
               ),
               const SizedBox(height: 12),
-
-              // Description
               Text(
                 'Are you sure to save this stock take document?',
                 textAlign: TextAlign.center,
@@ -1717,15 +1828,13 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                 ),
               ),
               const SizedBox(height: 24),
-
-              // Info Box
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: hijauGojek.withValues(alpha: 0.1), // MODIFIKASI
+                  color: hijauGojek.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: hijauGojek.withValues(alpha: 0.3), // MODIFIKASI
+                    color: hijauGojek.withValues(alpha: 0.3),
                     width: 1,
                   ),
                 ),
@@ -1751,8 +1860,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                 ),
               ),
               const SizedBox(height: 24),
-
-              // Action Buttons
               Row(
                 children: [
                   Expanded(
@@ -1788,51 +1895,28 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      // MODIFIKASI: Update logika OnPressed
                       onPressed: () async {
-                        // Cek mounted pertama sebelum async gap
                         if (!mounted) return;
-
-                        // EasyLoading.show sebelum await, jadi ini AMAN
                         EasyLoading.show(status: 'Saving Document...');
-
                         try {
-                          // Ini adalah async gap
                           await _generateAndSavePidDocument();
-
-                          // Cek mounted LAGI setelah async gap
                           if (!mounted) return;
-
-                          // --- PERBAIKAN: Tambahkan ignore di sini ---
-                          // EasyLoading menggunakan context secara internal
                           // ignore: use_build_context_synchronously
                           EasyLoading.showSuccess(
                             'Document saved successfully!',
                           );
-
-                          // --- PERBAIKAN: Tambahkan ignore di sini ---
-                          // Navigator menggunakan context secara eksplisit
                           // ignore: use_build_context_synchronously
                           Navigator.of(context).pop();
-
-                          // Kembali ke halaman sebelumnya (GetX, aman dari context)
                           Get.back();
                         } catch (e) {
                           _logger.e('Error during approve process: $e');
-
-                          // Cek mounted LAGI di dalam catch block
                           if (!mounted) return;
-
-                          // --- PERBAIKAN: Tambahkan ignore di sini ---
-                          // EasyLoading juga menggunakan context
                           // ignore: use_build_context_synchronously
                           EasyLoading.showError(
                             'Failed to save document: ${e.toString()}',
                           );
-                          // Jangan tutup dialog jika error
                         }
                       },
-                      // MODIFIKASI: Selesai
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -1881,7 +1965,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           leading: Container(
             margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2), // MODIFIKASI
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: IconButton(
@@ -1912,13 +1996,18 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                 ),
           centerTitle: false,
         ),
-        body: Column(children: [_buildHeaderSection(), _buildProductList()]),
+        // ===================================================================
+        // --- ✅ PERBAIKAN 6: Tampilkan loading jika data belum siap ---
+        // ===================================================================
+        body: !_isDataReady
+            ? Center(child: CircularProgressIndicator(color: hijauGojek))
+            : Column(children: [_buildHeaderSection(), _buildProductList()]),
+        // ===================================================================
       ),
     );
   }
 
   Widget _buildFloatingActionButtons() {
-    // MODIFIKASI: Nonaktifkan FAB di mode view
     if (!_isApproveVisible() || _isViewMode) {
       return const SizedBox.shrink();
     }
@@ -1929,7 +2018,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
       mainAxisAlignment: MainAxisAlignment.end,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        // Email Button
         FloatingActionButton(
           onPressed: _onEmailPressed,
           backgroundColor: Colors.orange.shade600,
@@ -1942,7 +2030,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           ),
         ),
         const SizedBox(height: 16),
-        // Approve Button
         FloatingActionButton.extended(
           onPressed: isApproveDisabled ? null : _onApprovePressed,
           backgroundColor: isApproveDisabled
@@ -1979,17 +2066,11 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     return (widget.stocktake?.isApprove ?? "N") == "N";
   }
 
-  // Color _getApproveButtonColor() {
-  //  return hijauGojek;
-  // }
-
   void _onEmailPressed() {
     EasyLoading.showInfo('Email sent successfully!');
   }
 
   void _onApprovePressed() {
-    // Logika ini sudah benar, panggil dialog konfirmasi
-    // Logika save yang sebenarnya sudah dipindah ke tombol "Save" di dalam dialog
     Map<String, dynamic> dummyData = {
       'documentno': widget.stocktake?.documentid ?? 'DUMMY_DOC',
       'isapprove': 'N',
@@ -2004,14 +2085,13 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   Widget _buildHeaderSection() {
     return Column(
       children: [
-        // Stats Bar
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                hijauGojek.withValues(alpha: 0.1), // MODIFIKASI
-                hijauGojekLight.withValues(alpha: 0.05), // MODIFIKASI
+                hijauGojek.withValues(alpha: 0.1),
+                hijauGojekLight.withValues(alpha: 0.05),
               ],
             ),
             border: Border(
@@ -2026,7 +2106,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: hijauGojek.withValues(alpha: 0.1), // MODIFIKASI
+                      color: hijauGojek.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -2126,9 +2206,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                  color: hijauGojek.withValues(
-                                    alpha: 0.3,
-                                  ), // MODIFIKASI
+                                  color: hijauGojek.withValues(alpha: 0.3),
                                   blurRadius: 8,
                                   offset: const Offset(0, 4),
                                 ),
@@ -2159,14 +2237,10 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   }
 
   String _getDataCountText() {
-    // MODIFIKASI: Ubah untuk menghitung data yang di-cache
+    // Fungsi ini sekarang aman karena _isDataReady
     final cachedCount = _cachedPidDetails.length;
     return '$cachedCount of ${_dummyStockData.length}';
   }
-
-  // TextStyle _getChipTextStyle() {
-  //  return const TextStyle(color: Colors.white);
-  // }
 
   void _onChipSelected(ItemChoice e) {
     setState(() {
@@ -2198,9 +2272,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
   }
 
   Future<void> _onProductTap(Map<String, dynamic> product, int index) async {
-    // MODIFIKASI: Di mode view, tetap bisa buka sheet tapi read-only
-    // if (isApproved && !_isViewMode) return; // Di-comment agar bisa buka di mode view
-
     try {
       await _showProductBottomSheet(product);
     } catch (e) {
@@ -2209,15 +2280,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     }
   }
 
-  // --- PERBAIKAN: Hapus semua fungsi state yang tidak perlu ---
-  // Future<void> _prepareProductDetail(...) // DIHAPUS
-  // void _calculateStockBun(...) // DIHAPUS
-  // Future<void> _initializeCountValues(...) // DIHAPUS
-  // Future<void> _calculateExistingCounts(...) // DIHAPUS
-  // void _updateCountValues(...) // DIHAPUS
-  // void _calculateTotalValues(...) // DIHAPUS
-  // --------------------------------------------------------
-
   Future<void> _showProductBottomSheet(Map<String, dynamic> product) async {
     await showModalBottomSheet(
       context: context,
@@ -2225,12 +2287,9 @@ class _StockTakeDetailState extends State<StockTakeDetail>
       backgroundColor: Colors.transparent,
       builder: (context) => modalBottomSheet(product, _dummyStockData),
     );
-    // ---
-    // Panggil setState di sini setelah modal ditutup
-    // ---
-    // Ini akan memaksa widget _buildFloatingActionButtons dan _getDataCountText
-    // untuk membangun ulang dirinya sendiri dan mengecek ulang
-    // `_cachedPidDetails.length`
+
+    // Panggil setState setelah modal ditutup
+    // Ini akan me-render ulang headerCard2 dan _buildFloatingActionButtons
     setState(() {});
   }
 }
