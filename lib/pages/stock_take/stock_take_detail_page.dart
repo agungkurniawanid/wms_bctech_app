@@ -246,13 +246,12 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     // Ambil data dari cache
     try {
       // --- MODIFIKASI DISINI ---
-      // --- MODIFIKASI DISINI ---
       final cachedDetail = _cachedPidDetails.firstWhere((detail) {
         bool idMatch = detail.productId == currentProductId;
         if (!idMatch) return false;
 
         String? itemSerno = currentSerialNo;
-        String? cacheSerno = detail.productSN; // Data dari _cachedPidDetails
+        String? cacheSerno = detail.productSN;
 
         if (itemSerno == cacheSerno) return true;
         if ((itemSerno == "---" || itemSerno == null) &&
@@ -305,7 +304,7 @@ class _StockTakeDetailState extends State<StockTakeDetail>
           if (!idMatch) return false;
 
           String? itemSerno = currentSerialNo;
-          String? cacheSerno = detail.productSN; // Data dari _cachedPidDetails
+          String? cacheSerno = detail.productSN;
 
           if (itemSerno == cacheSerno) return true;
           if ((itemSerno == "---" || itemSerno == null) &&
@@ -1036,7 +1035,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                         ],
                       ),
                       const SizedBox(height: 16),
-
                       // Section Dropdown (Read Only)
                       Row(
                         children: [

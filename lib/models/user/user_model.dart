@@ -5,6 +5,7 @@ class NewUserModel {
   final List<dynamic> inList;
   final String updated;
   final String updatedby;
+  String? photoUrl;
 
   NewUserModel({
     required this.username,
@@ -13,6 +14,7 @@ class NewUserModel {
     required this.inList,
     required this.updated,
     required this.updatedby,
+    this.photoUrl,
   });
 
   factory NewUserModel.fromMap(Map<String, dynamic> map) {
@@ -23,6 +25,7 @@ class NewUserModel {
       inList: (map['in'] is List) ? List<String>.from(map['in']) : [],
       updated: map['updated'] ?? '',
       updatedby: map['updatedby'] ?? '',
+      photoUrl: map['photo_url'], // <-- PERBAIKAN DI SINI
     );
   }
 }

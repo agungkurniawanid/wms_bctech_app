@@ -970,23 +970,13 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
         try {
           // --- PERBAIKAN UTAMA DI SINI ---
           // Validasi harus menggunakan KEDUA productId dan productSN
+
           originalProduct = widget.stocktake?.detail.firstWhere((d) {
-            bool idMatch = d.matnr == pidProduct.productId;
-            if (!idMatch) return false;
+            // Cek ID produk dulu
+            if (d.matnr != pidProduct.productId) return false;
 
-            // Logika perbandingan serno yang robust (pintar)
-            String? dSerno = d.serno; // Serno dari list utama
-            String? pidSerno = pidProduct.productSN; // Serno dari dokumen PID
-
-            // 1. Cocok persis (null == null ATAU "SN008" == "SN008")
-            if (dSerno == pidSerno) return true;
-
-            // 2. Menangani kasus "---" dianggap sama dengan null
-            if ((dSerno == "---" || dSerno == null) &&
-                (pidSerno == "---" || pidSerno == null)) {
-              return true;
-            }
-            return false; // Jika tidak, berarti tidak cocok
+            // Cek serial number. Ini sudah benar menangani null == null.
+            return d.serno == pidProduct.productSN;
           });
           // --- BATAS PERBAIKAN ---
         } catch (e) {

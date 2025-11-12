@@ -1,10 +1,11 @@
 // [FILE LENGKAP: auth_controller.dart]
 
 import 'dart:convert';
-import 'dart:io' show Platform; // <-- PASTIKAN IMPORT INI ADA
+import 'dart:io' show File, Platform; // <-- PASTIKAN IMPORT INI ADA
 import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:device_info_plus/device_info_plus.dart'; // <-- PASTIKAN IMPORT INI ADA
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
@@ -27,6 +28,7 @@ class NewAuthController extends GetxController {
       ConnectivityController();
   final FirebaseController _firebaseController = FirebaseController();
   final globalVM = Get.find<GlobalVM>();
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   // --- TAMBAHAN UNTUK DEVICE ID ---
   final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
@@ -37,6 +39,7 @@ class NewAuthController extends GetxController {
   var userData = Rxn<NewUserModel>();
   var userName = RxnString();
   var userEmail = RxnString();
+  var userPhotoUrl = RxnString();
 
   // --- FUNGSI BARU UNTUK MENDAPATKAN DEVICE ID ---
   Future<String> _getDeviceId() async {
@@ -61,6 +64,7 @@ class NewAuthController extends GetxController {
     final prefs = await SharedPreferences.getInstance();
     userId.value = prefs.getString('userid') ?? '';
     userEmail.value = prefs.getString('useremail') ?? '';
+    userPhotoUrl.value = prefs.getString('photo_url');
   }
 
   Future<void> logout() async {
@@ -87,8 +91,60 @@ class NewAuthController extends GetxController {
 
     await prefs.remove('userid');
     await prefs.remove('useremail');
+    await prefs.remove('photo_url');
     userId.value = '';
     userEmail.value = null;
+  }
+
+  Future<Map<String, dynamic>> uploadProfilePicture(File imageFile) async {
+    try {
+      // 1. Dapatkan username (yang kita gunakan sebagai ID unik)
+      String? username = await getUserId();
+      if (username == null || username.isEmpty) {
+        throw Exception('Pengguna tidak login');
+      }
+
+      _logger.i('Memulai upload foto untuk $username...');
+
+      // 2. Tentukan path di Firebase Storage
+      // Ini akan otomatis mereplace file lama jika ada
+      final storagePath = 'profile_pictures/$username/profile.jpg';
+      final storageRef = _storage.ref().child(storagePath);
+
+      // 3. Upload file
+      final uploadTask = await storageRef.putFile(imageFile);
+      final newUrl = await uploadTask.ref.getDownloadURL();
+      _logger.d('Foto berhasil diupload: $newUrl');
+
+      // 4. Cari Dokumen ID di 'role' berdasarkan username
+      final query = await _firestore
+          .collection('role')
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) {
+        throw Exception('Dokumen role pengguna tidak ditemukan di Firestore');
+      }
+      final docId = query.docs.first.id;
+
+      // 5. Update field 'photo_url' di Firestore
+      await _firestore.collection('role').doc(docId).update({
+        'photo_url': newUrl,
+      });
+      _logger.d('URL Foto berhasil disimpan ke Firestore');
+
+      // 6. Update state lokal dan SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('photo_url', newUrl);
+      userPhotoUrl.value = newUrl;
+      userData.value?.photoUrl = newUrl; // Update model lokal juga
+
+      return {'success': true, 'message': 'Foto profil berhasil diperbarui'};
+    } catch (e) {
+      _logger.e('Gagal upload foto profil: $e');
+      return {'success': false, 'message': 'Gagal upload foto: $e'};
+    }
   }
 
   Future<String?> getUserId() async {
@@ -457,6 +513,12 @@ class NewAuthController extends GetxController {
       userData.value = model;
       userName.value = roleData['username']?.toString() ?? '';
       userEmail.value = roleData['email']?.toString() ?? '';
+
+      // --- TAMBAHAN: Ambil photo_url ---
+      userPhotoUrl.value = roleData['photo_url']?.toString();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('photo_url', userPhotoUrl.value ?? '');
+      // --- BATAS TAMBAHAN ---
 
       return model;
     } catch (e) {

@@ -1,6 +1,12 @@
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:logger/logger.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:wms_bctech/constants/theme_constant.dart';
 import 'package:wms_bctech/helpers/text_helper.dart';
 import 'package:wms_bctech/pages/auth/login_page.dart';
@@ -17,6 +23,9 @@ class _ProfilePageState extends State<ProfilePage> {
   final NewAuthController _authController = Get.find<NewAuthController>();
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
+  // --- TAMBAHAN: Untuk Image Picker ---
+  final ImagePicker _picker = ImagePicker();
+  // --- BATAS TAMBAHAN ---
 
   @override
   void initState() {
@@ -53,16 +62,47 @@ class _ProfilePageState extends State<ProfilePage> {
     _refreshIndicatorKey.currentState?.show();
   }
 
+  // [FILE: profile_page.dart]
+  // GANTI SELURUH fungsi _buildProfileHeader dengan kode ini
+
   Widget _buildProfileHeader(double fem, double ffem) {
     return Obx(() {
       final username =
           _authController.userName.value ?? _authController.userId.value;
       final email = _authController.userEmail.value ?? '';
       final isActive = _authController.userData.value?.active == 'Y';
+      final photoUrl = _authController.userPhotoUrl.value; // URL foto profil
 
       final String firstLetter = username.isNotEmpty
           ? username[0].toUpperCase()
           : 'U';
+
+      // Tentukan isi avatar (foto atau inisial)
+      Widget profileContent;
+      if (photoUrl != null && photoUrl.isNotEmpty) {
+        // Jika ada URL foto, tampilkan foto profil
+        profileContent = CachedNetworkImage(
+          imageUrl: photoUrl,
+          fit: BoxFit.cover,
+          placeholder: (context, url) =>
+              Center(child: CircularProgressIndicator(color: Colors.white)),
+          errorWidget: (context, url, error) =>
+              Center(child: Icon(Icons.error, color: Colors.white)),
+        );
+      } else {
+        // Jika tidak ada foto, tampilkan huruf inisial
+        profileContent = Center(
+          child: Text(
+            firstLetter,
+            style: TextStyle(
+              fontFamily: 'MonaSans',
+              fontSize: 42 * ffem,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        );
+      }
 
       return Container(
         width: double.infinity,
@@ -93,49 +133,58 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
             ),
-
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 120 * fem,
-                    height: 120 * fem,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3 * fem),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 8 * fem,
-                          offset: Offset(0, 4 * fem),
-                        ),
-                      ],
-                    ),
-                    child: Stack(
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          height: double.infinity,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: hijauGojek,
+                  // --- ⭐️ AVATAR (foto atau inisial) ---
+                  Stack(
+                    children: [
+                      Container(
+                        width: 120 * fem,
+                        height: 120 * fem,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: hijauGojek,
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 3 * fem,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 8 * fem,
+                              offset: Offset(0, 4 * fem),
+                            ),
+                          ],
                         ),
-                        Center(
-                          child: Text(
-                            firstLetter,
-                            style: TextStyle(
-                              fontFamily: 'MonaSans',
-                              fontSize: 42 * ffem,
-                              fontWeight: FontWeight.w600,
+                        child: ClipOval(child: profileContent),
+                      ),
+                      // Tombol Edit (ikon pensil)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: _showImageSourceActionSheet,
+                          child: Container(
+                            width: 36 * fem,
+                            height: 36 * fem,
+                            decoration: BoxDecoration(
                               color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: hijauGojek, width: 2),
+                            ),
+                            child: Icon(
+                              Icons.edit_rounded,
+                              color: hijauGojek,
+                              size: 20 * fem,
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+                  // --- ⭐️ BLOK DUPLIKAT SUDAH DIHAPUS ---
                   SizedBox(height: 16 * fem),
                   Text(
                     TextHelper.formatUserName(username),
@@ -828,5 +877,101 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       ),
     );
+  }
+
+  void _showImageSourceActionSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(
+                Icons.photo_library_rounded,
+                color: hijauGojek,
+              ),
+              title: const Text('Pilih dari Galeri'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded, color: hijauGojek),
+              title: const Text('Ambil Foto'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _pickImage(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- ⭐️ FUNGSI BARU: Mengambil dan Meng-upload gambar ⭐️ ---
+  Future<void> _pickImage(ImageSource source) async {
+    // 1. Minta Izin
+    PermissionStatus status;
+    if (source == ImageSource.camera) {
+      status = await Permission.camera.request();
+    } else {
+      status = await Permission.storage.request();
+    }
+
+    if (!status.isGranted) {
+      Get.snackbar(
+        'Izin Ditolak',
+        'Izin ${source == ImageSource.camera ? "kamera" : "galeri"} diperlukan.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    try {
+      // 2. Ambil Gambar
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        imageQuality: 50, // Kompresi gambar
+        maxWidth: 800, // Resize gambar
+      );
+
+      if (pickedFile != null) {
+        final File imageFile = File(pickedFile.path);
+
+        // 3. Tampilkan Loading
+        EasyLoading.show(status: 'Mengupload foto...');
+
+        // 4. Panggil Controller untuk Upload
+        final result = await _authController.uploadProfilePicture(imageFile);
+
+        EasyLoading.dismiss();
+
+        if (result['success'] == true) {
+          Get.snackbar(
+            'Sukses',
+            result['message'] ?? 'Foto profil berhasil diperbarui',
+            backgroundColor: Colors.green,
+            colorText: Colors.white,
+          );
+        } else {
+          throw Exception(result['message']);
+        }
+      }
+    } catch (e) {
+      EasyLoading.dismiss();
+      Logger().e("Gagal mengambil gambar: $e");
+      Get.snackbar(
+        'Error',
+        'Gagal memproses gambar: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 }
