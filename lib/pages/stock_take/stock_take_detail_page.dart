@@ -247,18 +247,9 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     try {
       // --- MODIFIKASI DISINI ---
       final cachedDetail = _cachedPidDetails.firstWhere((detail) {
-        bool idMatch = detail.productId == currentProductId;
-        if (!idMatch) return false;
-
-        String? itemSerno = currentSerialNo;
-        String? cacheSerno = detail.productSN;
-
-        if (itemSerno == cacheSerno) return true;
-        if ((itemSerno == "---" || itemSerno == null) &&
-            (cacheSerno == "---" || cacheSerno == null)) {
-          return true;
-        }
-        return false;
+        if (detail.productId != currentProductId) return false;
+        // Perbandingan ini (null == null) akan menghasilkan true
+        return detail.productSN == currentSerialNo;
       });
       // --- BATAS MODIFIKASI ---
 
@@ -300,18 +291,9 @@ class _StockTakeDetailState extends State<StockTakeDetail>
       try {
         // Cari data yang sesuai di cache
         final cachedDetail = _cachedPidDetails.firstWhere((detail) {
-          bool idMatch = detail.productId == currentProductId;
-          if (!idMatch) return false;
-
-          String? itemSerno = currentSerialNo;
-          String? cacheSerno = detail.productSN;
-
-          if (itemSerno == cacheSerno) return true;
-          if ((itemSerno == "---" || itemSerno == null) &&
-              (cacheSerno == "---" || cacheSerno == null)) {
-            return true;
-          }
-          return false;
+          if (detail.productId != currentProductId) return false;
+          // Perbandingan ini (null == null) akan menghasilkan true
+          return detail.productSN == currentSerialNo;
         });
         // Ambil data dari cache
         physicalQty = cachedDetail.physicalQty.toDouble();
@@ -765,19 +747,11 @@ class _StockTakeDetailState extends State<StockTakeDetail>
     // Cari data yang sudah ada di cache
     PidDocumentDetailModel? existingDetail;
     try {
+      String? itemSerno = indetail['serno']?.toString();
       existingDetail = _cachedPidDetails.firstWhere((d) {
-        bool idMatch = d.productId == indetail['matnr']?.toString();
-        if (!idMatch) return false;
-
-        String? itemSerno = indetail['serno']?.toString();
-        String? cacheSerno = d.productSN;
-
-        if (itemSerno == cacheSerno) return true;
-        if ((itemSerno == "---" || itemSerno == null) &&
-            (cacheSerno == "---" || cacheSerno == null)) {
-          return true;
-        }
-        return false;
+        if (d.productId != indetail['matnr']?.toString()) return false;
+        // Perbandingan ini (null == null) akan menghasilkan true
+        return d.productSN == itemSerno;
       });
     } catch (e) {
       existingDetail = null;
@@ -1294,11 +1268,17 @@ class _StockTakeDetailState extends State<StockTakeDetail>
 
                             // Buat model detail
                             final newDetail = PidDocumentDetailModel(
+                              // --- PERBAIKAN DI SINI ---
+                              // 'productId' tidak boleh null, jadi 'N/A' adalah fallback
+                              // 'productSN' HARUS null jika datanya null.
                               productId: indetail['matnr']?.toString() ?? 'N/A',
-                              productSN: indetail['serno']?.toString() ?? 'N/A',
+                              productSN:
+                                  indetail['serno'], // <-- Cukup teruskan nilainya (bisa String atau null)
+
+                              // --- BATAS PERBAIKAN ---
                               physicalQty: bunValue.toInt(),
                               different: different,
-                              labst: systemStock, // <-- ✅ INI PERBAIKANNYA
+                              labst: systemStock,
                             );
                             // ===================================================================
 
@@ -1306,18 +1286,10 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                             final existingIndex = _cachedPidDetails.indexWhere((
                               d,
                             ) {
-                              bool idMatch = d.productId == newDetail.productId;
-                              if (!idMatch) return false;
-
-                              String? itemSerno = newDetail.productSN;
-                              String? cacheSerno = d.productSN;
-
-                              if (itemSerno == cacheSerno) return true;
-                              if ((itemSerno == "---" || itemSerno == null) &&
-                                  (cacheSerno == "---" || cacheSerno == null)) {
-                                return true;
-                              }
-                              return false;
+                              if (d.productId != newDetail.productId)
+                                return false;
+                              // Perbandingan ini (null == null) akan menghasilkan true
+                              return d.productSN == newDetail.productSN;
                             });
 
                             if (existingIndex != -1) {

@@ -17,6 +17,7 @@ import 'package:wms_bctech/pages/splash_screen_page.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
 import 'package:logger/logger.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +26,12 @@ void main() async {
   try {
     await Firebase.initializeApp();
     Logger().i('Firebase initialized successfully');
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.playIntegrity,
+      // Jika Play Integrity belum siap, gunakan SafetyNet sebagai fallback
+      // androidProvider: AndroidProvider.safetyNet,
+    );
+    Logger().i('Firebase App Check Activated');
   } catch (e) {
     Logger().e('Firebase initialization error: $e');
   }

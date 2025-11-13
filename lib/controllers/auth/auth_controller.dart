@@ -34,6 +34,8 @@ class NewAuthController extends GetxController {
   final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
   // --- BATAS TAMBAHAN ---
 
+  var isLoggingOut = false.obs;
+
   var isLoading = false.obs;
   var userId = ''.obs;
   var userData = Rxn<NewUserModel>();
@@ -68,6 +70,7 @@ class NewAuthController extends GetxController {
   }
 
   Future<void> logout() async {
+    isLoggingOut.value = true;
     final prefs = await SharedPreferences.getInstance();
 
     // --- PERBAIKAN LOGOUT: Hapus sesi dari Firestore ---
@@ -200,6 +203,58 @@ class NewAuthController extends GetxController {
     } catch (e) {
       _logger.e('LDAP authentication error: $e');
       return {'status': -1, 'message': 'Connection error'};
+    }
+  }
+
+  Future<Map<String, dynamic>> deleteProfilePicture() async {
+    try {
+      // 1. Dapatkan username
+      String? username = await getUserId();
+      if (username == null || username.isEmpty) {
+        throw Exception('Pengguna tidak login');
+      }
+      _logger.i('Menghapus foto profil untuk $username...');
+
+      // 2. Hapus file dari Firebase Storage
+      final storagePath = 'profile_pictures/$username/profile.jpg';
+      final storageRef = _storage.ref().child(storagePath);
+
+      try {
+        await storageRef.delete();
+        _logger.d('Foto di Storage $storagePath berhasil dihapus.');
+      } catch (e) {
+        // Jika file tidak ada di storage, jangan setop proses.
+        // Tetap lanjutkan untuk menghapus URL dari Firestore.
+        _logger.w('Gagal hapus foto di Storage (mungkin sudah tidak ada): $e');
+      }
+
+      // 3. Hapus URL dari Firestore (set ke null)
+      final query = await _firestore
+          .collection('role')
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) {
+        throw Exception('Dokumen role pengguna tidak ditemukan');
+      }
+      final docId = query.docs.first.id;
+
+      await _firestore.collection('role').doc(docId).update({
+        'photo_url': null, // Set ke null akan menghapus field/mengosongkannya
+      });
+      _logger.d('URL Foto berhasil dihapus dari Firestore');
+
+      // 4. Hapus dari SharedPreferences dan state lokal
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('photo_url');
+      userPhotoUrl.value = null; // Set RxnString ke null
+      userData.value?.photoUrl = null; // Update model lokal
+
+      return {'success': true, 'message': 'Foto profil berhasil dihapus'};
+    } catch (e) {
+      _logger.e('Gagal hapus foto profil: $e');
+      return {'success': false, 'message': 'Gagal menghapus foto: $e'};
     }
   }
 
@@ -441,6 +496,7 @@ class NewAuthController extends GetxController {
     BuildContext context,
   ) async {
     try {
+      isLoggingOut.value = false;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('userid', username);
       await prefs.setString('useremail', email);
@@ -538,6 +594,7 @@ class NewAuthController extends GetxController {
           );
         } else {
           globalVM.username.value = userid;
+          isLoggingOut.value = false;
 
           // --- TAMBAHKAN INI: Mulai listener saat auto-login ---
           _firebaseController.startSessionListener();

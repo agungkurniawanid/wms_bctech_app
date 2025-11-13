@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:logger/logger.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -882,30 +883,123 @@ class _ProfilePageState extends State<ProfilePage> {
   void _showImageSourceActionSheet() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(
-                Icons.photo_library_rounded,
-                color: hijauGojek,
-              ),
-              title: const Text('Pilih dari Galeri'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _pickImage(ImageSource.gallery);
-              },
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(25),
+            topRight: Radius.circular(25),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              spreadRadius: 2,
             ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt_rounded, color: hijauGojek),
-              title: const Text('Ambil Foto'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _pickImage(ImageSource.camera);
-              },
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Ubah Foto Profil',
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: Colors.grey.shade600,
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Options
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildOptionItem(
+                    icon: Icons.camera_alt_rounded,
+                    title: 'Ambil Foto dengan Kamera',
+                    subtitle: 'Foto selfie atau gambar baru',
+                    color: const Color(0xFF4CAF50),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _pickImage(ImageSource.camera);
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  _buildOptionItem(
+                    icon: Icons.photo_library_rounded,
+                    title: 'Pilih dari Galeri',
+                    subtitle: 'Pilih foto dari perangkat Anda',
+                    color: const Color(0xFF2196F3),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _pickImage(ImageSource.gallery);
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Hapus foto (jika ada foto profil)
+                  if (_authController.userPhotoUrl.value != null &&
+                      _authController.userPhotoUrl.value!.isNotEmpty)
+                    _buildOptionItem(
+                      icon: Icons.delete_rounded,
+                      title: 'Hapus Foto Profil',
+                      subtitle: 'Kembali ke foto default',
+                      color: const Color(0xFFF44336),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        _showDeleteConfirmation();
+                      },
+                    ),
+                ],
+              ),
+            ),
+
+            // Footer
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.grey.shade200, width: 1),
+                ),
+              ),
+              child: Text(
+                'Pilih salah satu opsi di atas',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'MonaSans',
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
             ),
           ],
         ),
@@ -913,62 +1007,496 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // --- ⭐️ FUNGSI BARU: Mengambil dan Meng-upload gambar ⭐️ ---
+  Widget _buildOptionItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: color.withOpacity(0.2), width: 1),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+
+              const SizedBox(width: 16),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'MonaSans',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontFamily: 'MonaSans',
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: Colors.grey.shade400,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---  Mengambil dan Meng-upload gambar ⭐️ ---
   Future<void> _pickImage(ImageSource source) async {
-    // 1. Minta Izin
-    PermissionStatus status;
-    if (source == ImageSource.camera) {
-      status = await Permission.camera.request();
-    } else {
-      status = await Permission.storage.request();
-    }
-
-    if (!status.isGranted) {
-      Get.snackbar(
-        'Izin Ditolak',
-        'Izin ${source == ImageSource.camera ? "kamera" : "galeri"} diperlukan.',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-      return;
-    }
-
     try {
+      // 1. Minta Izin
+      PermissionStatus status;
+      if (source == ImageSource.camera) {
+        status = await Permission.camera.request();
+      } else {
+        status = await Permission.storage.request();
+      }
+
+      if (!status.isGranted) {
+        Get.snackbar(
+          'Izin Ditolak',
+          'Izin ${source == ImageSource.camera ? "kamera" : "galeri"} diperlukan.',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
       // 2. Ambil Gambar
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        imageQuality: 50, // Kompresi gambar
-        maxWidth: 800, // Resize gambar
+        imageQuality: 80,
+        maxWidth: 1920,
+        maxHeight: 1920,
       );
 
       if (pickedFile != null) {
-        final File imageFile = File(pickedFile.path);
-
-        // 3. Tampilkan Loading
-        EasyLoading.show(status: 'Mengupload foto...');
-
-        // 4. Panggil Controller untuk Upload
-        final result = await _authController.uploadProfilePicture(imageFile);
-
-        EasyLoading.dismiss();
-
-        if (result['success'] == true) {
-          Get.snackbar(
-            'Sukses',
-            result['message'] ?? 'Foto profil berhasil diperbarui',
-            backgroundColor: Colors.green,
-            colorText: Colors.white,
-          );
-        } else {
-          throw Exception(result['message']);
-        }
+        // 3. Tampilkan Preview & Edit Options
+        await _showImagePreviewAndEdit(File(pickedFile.path));
       }
     } catch (e) {
-      EasyLoading.dismiss();
       Logger().e("Gagal mengambil gambar: $e");
       Get.snackbar(
         'Error',
-        'Gagal memproses gambar: $e',
+        'Gagal mengambil gambar: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> _showImagePreviewAndEdit(File imageFile) async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(25),
+            topRight: Radius.circular(25),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 25,
+              spreadRadius: 5,
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Preview & Edit Foto',
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: Colors.grey.shade600,
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Image Preview
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(15),
+                  child: Image.file(
+                    imageFile,
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                ),
+              ),
+            ),
+
+            // Edit Options
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.grey.shade200, width: 1),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildEditOption(
+                    icon: Icons.crop_rotate_rounded,
+                    label: 'Crop & Rotate',
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await _cropImage(imageFile);
+                    },
+                  ),
+                  _buildEditOption(
+                    icon: Icons.rotate_right_rounded,
+                    label: 'Rotate',
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await _rotateImage(imageFile);
+                    },
+                  ),
+                  _buildEditOption(
+                    icon: Icons.check_rounded,
+                    label: 'Gunakan',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _uploadImage(imageFile);
+                    },
+                    isPrimary: true,
+                  ),
+                ],
+              ),
+            ),
+
+            // Cancel Button
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey.shade700,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  child: Text(
+                    'Batal',
+                    style: TextStyle(
+                      fontFamily: 'MonaSans',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _uploadImage(File imageFile) async {
+    try {
+      EasyLoading.show(status: 'Mengupload foto...');
+
+      final result = await _authController.uploadProfilePicture(imageFile);
+
+      EasyLoading.dismiss();
+
+      if (result['success'] == true) {
+        Get.snackbar(
+          'Sukses',
+          result['message'] ?? 'Foto profil berhasil diperbarui',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+      } else {
+        throw Exception(result['message']);
+      }
+    } catch (e) {
+      EasyLoading.dismiss();
+      Logger().e("Gagal upload gambar: $e");
+      Get.snackbar(
+        'Error',
+        'Gagal mengupload gambar: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Widget _buildEditOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isPrimary = false,
+  }) {
+    return Column(
+      children: [
+        Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: isPrimary ? hijauGojek : Colors.grey.shade100,
+            shape: BoxShape.circle,
+            boxShadow: isPrimary
+                ? [
+                    BoxShadow(
+                      color: hijauGojek.withOpacity(0.3),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : null,
+          ),
+          child: IconButton(
+            onPressed: onTap,
+            icon: Icon(
+              icon,
+              color: isPrimary ? Colors.white : hijauGojek,
+              size: 24,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'MonaSans',
+            fontSize: 12,
+            color: isPrimary ? hijauGojek : Colors.grey.shade700,
+            fontWeight: isPrimary ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _cropImage(File imageFile) async {
+    try {
+      EasyLoading.show(status: 'Memproses gambar...');
+
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Edit Foto',
+            toolbarColor: hijauGojek,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+            activeControlsWidgetColor: hijauGojek,
+          ),
+          IOSUiSettings(
+            title: 'Edit Foto',
+            aspectRatioLockEnabled: true,
+            aspectRatioPickerButtonHidden: true,
+            resetButtonHidden: false,
+            rotateButtonsHidden: false,
+          ),
+        ],
+      );
+
+      EasyLoading.dismiss();
+
+      if (croppedFile != null) {
+        await _showImagePreviewAndEdit(File(croppedFile.path));
+      }
+    } catch (e) {
+      EasyLoading.dismiss();
+      Logger().e("Gagal crop gambar: $e");
+      Get.snackbar(
+        'Error',
+        'Gagal mengedit gambar: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> _rotateImage(File imageFile) async {
+    try {
+      EasyLoading.show(status: 'Memutar gambar...');
+
+      // Implementasi rotasi gambar sederhana
+      // Untuk rotasi yang lebih advanced, Anda bisa menggunakan package image
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        compressQuality: 80,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Rotate Foto',
+            toolbarColor: hijauGojek,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+        ],
+      );
+
+      EasyLoading.dismiss();
+
+      if (croppedFile != null) {
+        await _showImagePreviewAndEdit(File(croppedFile.path));
+      }
+    } catch (e) {
+      EasyLoading.dismiss();
+      Logger().e("Gagal rotate gambar: $e");
+      Get.snackbar(
+        'Error',
+        'Gagal memutar gambar: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  void _showDeleteConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Hapus Foto Profil?',
+          style: TextStyle(
+            fontFamily: 'MonaSans',
+            fontWeight: FontWeight.w700,
+            color: Colors.grey.shade800,
+          ),
+        ),
+        content: Text(
+          'Foto profil akan dihapus dan diganti dengan inisial nama Anda.',
+          style: TextStyle(fontFamily: 'MonaSans', color: Colors.grey.shade600),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Batal',
+              style: TextStyle(
+                fontFamily: 'MonaSans',
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _deleteProfilePicture();
+            },
+            child: Text(
+              'Hapus',
+              style: TextStyle(
+                fontFamily: 'MonaSans',
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteProfilePicture() async {
+    try {
+      EasyLoading.show(status: 'Menghapus foto...');
+
+      // ⭐️ Panggil controller untuk hapus foto (DI SINI PERBAIKANNYA) ⭐️
+      final result = await _authController.deleteProfilePicture();
+
+      // Cek apakah ada error dari controller
+      if (result['success'] == false) {
+        throw Exception(result['message']);
+      }
+
+      EasyLoading.dismiss();
+      Get.snackbar(
+        'Sukses',
+        result['message'] ?? 'Foto profil berhasil dihapus',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      EasyLoading.dismiss();
+      Get.snackbar(
+        'Error',
+        'Gagal menghapus foto: $e',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );

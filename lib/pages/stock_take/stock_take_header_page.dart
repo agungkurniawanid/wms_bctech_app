@@ -1304,7 +1304,13 @@ class _ProductSelectionBottomSheetState
 
   void _toggleProductSelection(Map<String, dynamic> product) {
     final matnr = product['matnr']?.toString() ?? 'NO_MATNR';
-    final serno = product['serno']?.toString() ?? 'NO_SERNO';
+    // --- PERUBAHAN: Logika untuk 'serno' saat membuat key ---
+    // Kita ganti '?? 'NO_SERNO'' menjadi '?? '''
+    // Ini memastikan bahwa 'serno' yang null akan menjadi string kosong (""),
+    // yang membuatnya unik dan berbeda dari serial number lain.
+    // (matnr: "A", serno: null)  -> key "A|"
+    // (matnr: "A", serno: "123") -> key "A|123"
+    final serno = product['serno']?.toString() ?? '';
     final String productKey = '$matnr|$serno';
 
     setState(() {
@@ -1615,8 +1621,7 @@ class _ProductSelectionBottomSheetState
                           final product = _displayedProducts[index];
                           final matnr =
                               product['matnr']?.toString() ?? 'NO_MATNR';
-                          final serno =
-                              product['serno']?.toString() ?? 'NO_SERNO';
+                          final serno = product['serno']?.toString() ?? '';
 
                           // Gunakan kombinasi matnr|serno agar selalu unik
                           final String productKey = '$matnr|$serno';
@@ -1799,7 +1804,7 @@ class _ProductSelectionBottomSheetState
                             child: Row(
                               children: [
                                 Text(
-                                  'SKU: ${product['matnr'] ?? 'N/A'}',
+                                  'SKU: ${product['matnr'] ?? ''}',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: Colors.grey.shade700,

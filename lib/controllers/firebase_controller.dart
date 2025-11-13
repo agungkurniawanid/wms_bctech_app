@@ -145,6 +145,14 @@ class FirebaseController {
     if (Get.isRegistered<NewAuthController>()) {
       final NewAuthController authController = Get.find<NewAuthController>();
       // Panggil logout HANYA jika pengguna masih login
+      if (authController.isLoggingOut.value == true) {
+        _logger.i('Session kick diabaikan karena sedang proses logout manual.');
+        // (Opsional) Panggil logout lagi untuk pastikan clear data lokal
+        if (authController.userId.value.isNotEmpty) {
+          authController.logout();
+        }
+        return;
+      }
       if (authController.userId.value.isNotEmpty) {
         authController.logout(); // Hapus data login lokal
         _logger.i('Logout lokal dipicu oleh session kick.');
