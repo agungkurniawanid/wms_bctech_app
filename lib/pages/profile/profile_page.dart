@@ -894,7 +894,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withValues(alpha: 0.2),
               blurRadius: 20,
               spreadRadius: 2,
             ),
@@ -1022,9 +1022,9 @@ class _ProfilePageState extends State<ProfilePage> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.05),
+            color: color.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: color.withOpacity(0.2), width: 1),
+            border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
           ),
           child: Row(
             children: [
@@ -1032,7 +1032,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: color, size: 24),
@@ -1080,7 +1080,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // ---  Mengambil dan Meng-upload gambar ⭐️ ---
   Future<void> _pickImage(ImageSource source) async {
     try {
       // 1. Minta Izin
@@ -1088,7 +1087,7 @@ class _ProfilePageState extends State<ProfilePage> {
       if (source == ImageSource.camera) {
         status = await Permission.camera.request();
       } else {
-        status = await Permission.storage.request();
+        status = await Permission.photos.request();
       }
 
       if (!status.isGranted) {
@@ -1139,7 +1138,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               blurRadius: 25,
               spreadRadius: 5,
             ),
@@ -1315,7 +1314,7 @@ class _ProfilePageState extends State<ProfilePage> {
             boxShadow: isPrimary
                 ? [
                     BoxShadow(
-                      color: hijauGojek.withOpacity(0.3),
+                      color: hijauGojek.withValues(alpha: 0.3),
                       blurRadius: 8,
                       spreadRadius: 2,
                     ),

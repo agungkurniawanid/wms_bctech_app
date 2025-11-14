@@ -33,9 +33,6 @@ class HistoryModel extends StockDetail implements ImmobileItem {
   String? recordId;
   String? createdAt;
 
-  @override
-  set inventoryGroup(String? value) => super.inventoryGroup = value;
-
   String? _location;
   String? locationName;
   String? deliveryDate;
@@ -48,12 +45,6 @@ class HistoryModel extends StockDetail implements ImmobileItem {
   String? documentNo;
 
   String? color;
-
-  @override
-  set formattedUpdatedAt(String? value) => super.formattedUpdatedAt = value;
-
-  @override
-  set updatedAt(String? value) => super.updatedAt = value;
 
   List<StockDetail>? detailStockCheck;
   String? postingDate;

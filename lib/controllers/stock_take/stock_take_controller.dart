@@ -77,14 +77,7 @@ class StockTakeController extends GetxController {
   /// Fetch stocktake document list filtered by month, approval, and location
   Stream<List<StockTakeModel>> fetchDocumentStream() {
     try {
-      final String firstDayOfMonth = DateFormat(
-        'yyyy-MM-dd',
-      ).format(DateTime(DateTime.now().year, DateTime.now().month, 1));
-
-      // Build base query
-      Query query = FirebaseFirestore.instance
-          .collection('stock')
-          .where('_last_query', isGreaterThanOrEqualTo: firstDayOfMonth);
+      Query query = FirebaseFirestore.instance.collection('stock');
 
       return query.snapshots().map((snapshot) {
         final List<StockTakeModel> documents = [];

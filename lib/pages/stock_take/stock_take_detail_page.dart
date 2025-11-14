@@ -1274,7 +1274,6 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                               productId: indetail['matnr']?.toString() ?? 'N/A',
                               productSN:
                                   indetail['serno'], // <-- Cukup teruskan nilainya (bisa String atau null)
-
                               // --- BATAS PERBAIKAN ---
                               physicalQty: bunValue.toInt(),
                               different: different,
@@ -1286,8 +1285,9 @@ class _StockTakeDetailState extends State<StockTakeDetail>
                             final existingIndex = _cachedPidDetails.indexWhere((
                               d,
                             ) {
-                              if (d.productId != newDetail.productId)
+                              if (d.productId != newDetail.productId) {
                                 return false;
+                              }
                               // Perbandingan ini (null == null) akan menghasilkan true
                               return d.productSN == newDetail.productSN;
                             });

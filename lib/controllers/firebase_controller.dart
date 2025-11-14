@@ -46,11 +46,9 @@ class FirebaseController {
 
     try {
       await _firebaseMessaging.requestPermission();
-      await _getFirebaseToken(); // Panggil fungsi internal untuk mengisi token
+      await _getFirebaseToken();
       _isInitialized = true;
       _logger.i("Firebase Messaging initialized successfully");
-
-      // Listener untuk notifikasi saat aplikasi di foreground
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         _logger.d('Pesan diterima di foreground: ${message.data}');
         // Jika Anda mengimplementasikan push notif untuk "kick"
@@ -71,11 +69,10 @@ class FirebaseController {
       _logger.i("Firebase Token: $token");
     } catch (e) {
       _logger.e("Error getting Firebase token: $e");
-      token = null; // Pastikan null jika gagal
+      token = null;
     }
   }
 
-  // --- FUNGSI HELPER UNTUK DEVICE ID ---
   Future<String?> _getDeviceId() async {
     try {
       if (Platform.isAndroid) {

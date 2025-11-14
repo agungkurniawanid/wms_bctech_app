@@ -303,64 +303,56 @@ class _StockTakeHeaderState extends State<StockTakeHeader>
 
   void _createNewDocumentWithProducts(
     List<Map<String, dynamic>> selectedProducts,
-  ) async {
-    // ... (Logika fungsi ini TIDAK SAYA UBAH, masih menyimpan ke 'stock' collection)
-    try {
-      EasyLoading.show(status: 'Membuat dokumen...');
+  ) {
+    // 1. Buat Model "Sementara" (Transient Model)
+    // Tidak perlu 'async' atau 'EasyLoading' karena kita tidak menyimpan apa-apa
+    final stockTakeModel = StockTakeModel(
+      // Beri ID kosong. Halaman detail akan tahu
+      // ini adalah dokumen baru yang perlu DIBUAT saat di-save.
+      documentid: '',
+      // (misal: Get.find<GlobalVM>().username.value)
+      createdBy: 'Demo User',
+      created: DateTime.now().toString(),
+      isApprove: 'N', // Dokumen baru pasti belum diapprove
+      // Ambil data dari warehouse/lokator saat ini
+      lGort: widget.stocktake?.lGort ?? ['WH-NEW'],
+      whName: widget.stocktake?.whName ?? 'New Warehouse',
+      whValue: widget.stocktake?.whValue ?? '',
+      locatorValue: widget.stocktake?.locatorValue ?? '',
+      orgValue: widget.stocktake?.orgValue ?? '',
+      orgName: widget.stocktake?.orgName ?? '',
+      lastQuery: widget.stocktake?.lastQuery ?? '',
 
-      final newDocRef = FirebaseFirestore.instance.collection('stock').doc();
-      final newDocId = newDocRef.id;
+      // Masukkan list produk yang tadi dipilih
+      detail: selectedProducts
+          .map((p) => StockTakeDetailModel.fromJson(p))
+          .toList(),
+      countDetail: selectedProducts.length,
 
-      final newDocument = {
-        'documentid': newDocId,
-        'createdby': 'Demo User',
-        'created': DateTime.now().toString(),
-        'isapprove': 'N',
-        'lGORT': widget.stocktake?.lGort ?? ['WH-NEW'],
-        'detail': selectedProducts,
-        'totalItems': selectedProducts.length,
-        'documentno': 'DOC${DateTime.now().millisecondsSinceEpoch}',
-        'whName': widget.stocktake?.whName ?? 'New Warehouse',
-      };
+      // Beri doctype unik agar halaman detail tahu ini ADALAH PID BARU
+      // yang harus disimpan ke koleksi 'pid_document'
+      doctype: 'pid_document_NEW',
 
-      await newDocRef.set(newDocument);
+      updated: '',
+      updatedby: '',
+    );
 
-      EasyLoading.dismiss();
+    // 2. Navigasi ke Halaman Detail
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => StockTakeDetail(
+          stocktake: stockTakeModel,
 
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => StockTakeDetail(
-            stocktake: StockTakeModel(
-              documentid: newDocId,
-              createdBy: 'Demo User',
-              created: DateTime.now().toString(),
-              isApprove: 'N',
-              lGort: widget.stocktake?.lGort ?? ['WH-NEW'],
-              detail: selectedProducts
-                  .map((p) => StockTakeDetailModel.fromJson(p))
-                  .toList(),
-              updated: '',
-              updatedby: '',
-              doctype: 'stocktake',
-              lastQuery: widget.stocktake?.lastQuery ?? '',
-              countDetail: selectedProducts.length,
-              whName: widget.stocktake?.whName ?? 'New Warehouse',
-              whValue: widget.stocktake?.whValue ?? '',
-              locatorValue: widget.stocktake?.locatorValue ?? '',
-              orgValue: widget.stocktake?.orgValue ?? '',
-              orgName: widget.stocktake?.orgName ?? '',
-            ),
-          ),
+          // PENTING: Set ke false. Ini adalah mode input, bukan lihat saja.
+          isViewMode: false,
+
+          // Flag ini memberi tahu halaman detail bahwa ini adalah
+          // dokumen PID baru, bukan dari list 'stock'
+          fromDocumentList: true,
         ),
-      );
-
-      EasyLoading.showSuccess('Dokumen berhasil dibuat!');
-    } catch (e) {
-      EasyLoading.dismiss();
-      EasyLoading.showError('Gagal membuat dokumen: $e');
-    }
+      ),
+    );
   }
 
   Widget _buildSearchField() {

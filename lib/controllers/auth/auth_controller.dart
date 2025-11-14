@@ -72,13 +72,10 @@ class NewAuthController extends GetxController {
   Future<void> logout() async {
     isLoggingOut.value = true;
     final prefs = await SharedPreferences.getInstance();
-
-    // --- PERBAIKAN LOGOUT: Hapus sesi dari Firestore ---
     final deviceId = await _getDeviceId();
     if (deviceId != 'device_error' && deviceId != 'unknown_platform') {
       try {
-        await _firebaseController
-            .stopSessionListener(); // Hentikan listener dulu
+        await _firebaseController.stopSessionListener();
         await _firestore
             .collection('auth')
             .doc('bisi')
@@ -90,8 +87,6 @@ class NewAuthController extends GetxController {
         _logger.e('Gagal menghapus sesi saat logout: $e');
       }
     }
-    // --- BATAS PERBAIKAN ---
-
     await prefs.remove('userid');
     await prefs.remove('useremail');
     await prefs.remove('photo_url');
@@ -281,6 +276,8 @@ class NewAuthController extends GetxController {
       userName.value = roleData['username']?.toString() ?? '';
       userEmail.value = email;
 
+      userPhotoUrl.value = roleData['photo_url']?.toString();
+
       return true;
     } catch (e) {
       _logger.e('Error checking user in Firestore: $e');
@@ -451,14 +448,14 @@ class NewAuthController extends GetxController {
             );
           }
         }
-        // --- BATAS LOGIKA SINGLE DEVICE ---
 
-        // 5. Selesaikan Login
+        if (!context.mounted) return;
+
         await _completeLogin(
           userName.value ?? '',
           ldapEmail,
-          newToken, // <-- Gunakan newToken
-          newDeviceId, // <-- Kirim newDeviceId
+          newToken,
+          newDeviceId,
           context,
         );
         return;
@@ -500,6 +497,7 @@ class NewAuthController extends GetxController {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('userid', username);
       await prefs.setString('useremail', email);
+      await prefs.setString('photo_url', userPhotoUrl.value ?? '');
 
       globalVM.username.value = username;
 

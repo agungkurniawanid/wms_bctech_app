@@ -28,13 +28,10 @@ class _StockTakePageState extends State<StockTakePage> {
   @override
   void initState() {
     super.initState();
-
-    // Listen to real-time updates
     _setupListeners();
   }
 
   void _setupListeners() {
-    // Listen untuk perubahan data real-time
     ever(_stockTakeController.documentListUnique, (
       List<StockTakeModel> documents,
     ) {
@@ -46,7 +43,6 @@ class _StockTakePageState extends State<StockTakePage> {
       }
     });
 
-    // Listen untuk loading state
     ever(_stockTakeController.isLoading, (bool loading) {
       if (mounted) {
         setState(() {});
